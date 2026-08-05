@@ -114,13 +114,13 @@ function ProjectRow({
           </button>
         )}
 
-        {isResponsableGlobal && (
-          <button type="button" className="icon-action-btn" onClick={handleEdit} title="Modifier">
+        {canArchive && isResponsable && (
+          <button type="button" className="icon-action-btn" onClick={handleEdit} title="Editer le titre">
             <Pencil size={16} />
           </button>
         )}
 
-        {canArchive && (
+        {isResponsable && canArchive && (
           <button
             type="button"
             className="icon-action-btn"
@@ -132,7 +132,7 @@ function ProjectRow({
           </button>
         )}
 
-        {canArchive && (
+        {isResponsable && (
           <button
             type="button"
             className="icon-action-btn is-danger"
