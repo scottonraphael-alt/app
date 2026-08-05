@@ -4168,30 +4168,27 @@ body {
 }
 
 .casier-type-badge {
-  border-radius: 999px;
   display: inline-flex;
-  font: 700 10px "IBM Plex Sans", sans-serif;
+  align-items: center;
+  border-radius: 999px;
+  font: 600 10px "IBM Plex Sans", sans-serif;
   letter-spacing: 0.04em;
-  padding: 3px 9px;
+  padding: 2px 8px;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .casier-type-badge.is-avertissement {
   background: #fdf3e0;
-  border: 1px solid rgba(196, 120, 56, 0.22);
   color: #b8860b;
 }
 
 .casier-type-badge.is-kick {
   background: var(--clay-soft);
-  border: 1px solid rgba(196, 120, 56, 0.22);
   color: #8a4a2f;
 }
 
 .casier-type-badge.is-bannissement {
   background: rgba(161, 53, 68, 0.12);
-  border: 1px solid rgba(196, 120, 56, 0.22);
   color: #a13544;
 }
 
@@ -4203,6 +4200,31 @@ body {
   background: #fbe3cf;
   border: 1px solid rgba(196, 120, 56, 0.22);
   color: #b56a2e;
+}
+
+.casier-status-badge.is-prevention {
+  background: var(--clay-soft);
+  border: 1px solid rgba(194, 125, 101, 0.3);
+  color: var(--clay);
+}
+
+.casier-manual-toggle {
+  background: none;
+  border: none;
+  color: var(--sage);
+  cursor: pointer;
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-top: 2px;
+  padding: 2px 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.casier-manual-toggle:hover {
+  color: var(--ink);
 }
 @media (max-width: 980px) {
   .dashboard-page .dashboard-grid {
