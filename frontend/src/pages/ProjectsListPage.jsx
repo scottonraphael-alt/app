@@ -26,6 +26,7 @@ function ProjectRow({
   project,
   helper,
   isResponsableGlobal,
+  isResponsable,
   onJoin,
   joiningId,
   onArchive,
