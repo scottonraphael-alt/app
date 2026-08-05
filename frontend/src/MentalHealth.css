@@ -1149,15 +1149,7 @@
   }
 }
 
-.project-card { display: flex; flex-direction: column; gap: 10px; }
 .project-card-archived { opacity: 0.65; }
-.project-card-top { display: flex; justify-content: space-between; align-items: center; }
-.project-card-title { margin: 4px 0 0; }
-.project-card-description { color: var(--muted); font-size: 14px; flex: 1; }
-.project-card-footer { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
-.project-card-dates { display: flex; align-items: center; gap: 4px; }
-.project-card-actions { display: flex; gap: 8px; margin-top: 8px; }
-.project-archive-btn { font-size: 13px; }
 
 .project-member-stack { display: flex; }
 .project-member-avatar {
@@ -1169,97 +1161,148 @@
 .project-member-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .project-member-extra { font-size: 10px; font-weight: 600; }
 
-/* ---------- Redesign des cartes projet (inspirÃ© du casier) ---------- */
+/* ---------- Vue liste des projets (inspirÃ©e du casier) ---------- */
 
-.project-grid {
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 22px;
-}
-
-.resource-card.project-card {
-  min-height: auto;
-  padding: 22px;
-  border-radius: 16px;
+.project-list {
+  background: var(--surface);
   border: 1px solid var(--line);
+  border-radius: 16px;
   box-shadow: 0 8px 30px rgba(58, 90, 64, 0.06);
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
 }
 
-.resource-card.project-card:hover {
-  box-shadow: 0 14px 34px rgba(58, 90, 64, 0.12);
-  transform: translateY(-3px);
+.project-list-row {
+  align-items: center;
+  border-radius: 12px;
+  color: inherit;
+  display: flex;
+  gap: 16px;
+  padding: 14px 16px;
+  text-decoration: none;
+  transition: background-color 160ms ease;
 }
 
-.resource-card.project-card .project-card-title {
-  font: 600 17px "Manrope", sans-serif;
-  color: var(--ink);
-  margin: 4px 0 0;
-  white-space: normal;
-  overflow: hidden;
-  text-overflow: initial;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.project-list-row:hover {
+  background: var(--sage-soft);
 }
 
-.resource-card.project-card > p.project-card-description {
-  font-size: 13.5px;
-  line-height: 1.55;
-  -webkit-line-clamp: 3;
-  margin: 0;
+.project-list-row.project-card-archived {
+  opacity: 0.6;
 }
 
-.project-card-footer {
+.project-list-row + .project-list-row {
   border-top: 1px solid var(--line);
-  padding-top: 12px;
+}
+
+.project-list-icon {
+  align-items: center;
+  background: var(--sage-soft);
+  border-radius: 10px;
+  color: var(--sage);
+  display: flex;
+  flex-shrink: 0;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.project-list-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.project-list-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.project-list-heading strong {
+  color: var(--ink);
+  font: 600 15px "Manrope", sans-serif;
+}
+
+.project-list-description {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-list-meta {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
   margin-top: 2px;
 }
 
-.project-card-actions {
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.project-card-actions .calm-primary-button.is-secondary {
-  min-height: 38px;
-  padding: 0 16px;
-  font-size: 13px;
-}
-
-.project-edit-btn,
-.project-archive-btn {
+.project-list-dates {
   align-items: center;
-  display: inline-flex;
-  gap: 6px;
-  min-height: 38px;
-  padding: 0 14px;
-  font-size: 13px;
+  display: flex;
+  gap: 4px;
 }
 
-.project-delete-btn {
+.project-list-actions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.icon-action-btn {
   align-items: center;
   background: transparent;
-  border: 1px solid rgba(161, 53, 68, 0.28);
-  border-radius: 10px;
-  color: #a13544;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
   cursor: pointer;
   display: inline-flex;
-  font-size: 13px;
-  font-weight: 500;
-  min-height: 38px;
-  padding: 0 14px;
-  transition: background-color 160ms ease, border-color 160ms ease;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
-.project-delete-btn:hover {
-  background: rgba(161, 53, 68, 0.08);
-  border-color: rgba(161, 53, 68, 0.45);
+.icon-action-btn:hover {
+  background: var(--sage-soft);
+  border-color: #cadccf;
 }
 
-.resource-card.project-card .project-member-avatar {
-  width: 30px;
-  height: 30px;
+.icon-action-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.icon-action-btn.is-danger {
+  color: #a13544;
+}
+
+.icon-action-btn.is-danger:hover {
+  background: rgba(161, 53, 68, 0.1);
+  border-color: rgba(161, 53, 68, 0.35);
+}
+
+@media (max-width: 760px) {
+  .project-list-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .project-list-actions {
+    margin-left: 54px;
+    width: 100%;
+  }
 }
 
 .status-archived { background: #ececec; color: #6b6b6b; }
