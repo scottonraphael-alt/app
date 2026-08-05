@@ -23,14 +23,15 @@ import ProjectCalendarPage from "./pages/ProjectCalendarPage";
 import ResponsableAuthLogsPage from "./pages/ResponsableAuthLogsPage";
 import ModerationCasierPage from "./pages/ModerationCasierPage";
 
-function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable, isAnimateur }) {
+function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable,isOperateur, isAnimateur }) {
   const [tickets, setTickets] = useState([]);
   const [stats, setStats] = useState({ active_count: 0, archived_count: 0, total_messages: 0 });
 
   const canSeeHelper = isResponsable || isAdmin || isHelper;
   const canSeeAdmin = isResponsable || isAdmin;
-  const canSeeStaff = isResponsable || isAdmin || isHelper || isStaff;
+  const canSeeStaff = isResponsable || isAdmin || isHelper || isStaff || isOperateur;
   const canSeeAnimateur = isAnimateur || isResponsable;
+  const canSeeOperateur = isOperateur || isResponsable;
 
   const refreshDashboard = async () => {
     const [ticketsResponse, statsResponse] = await Promise.all([api.get("/tickets"), api.get("/tickets/stats")]);
@@ -77,6 +78,7 @@ function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable, i
       isHelper={isHelper}
       isStaff={isStaff}
       isAnimateur={isAnimateur}
+      isOperateur={isOperateur}
     >
       <Routes>
         <Route
@@ -136,7 +138,10 @@ function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable, i
 <Route path="/responsable/auth-logs" element={<ResponsableAuthLogsPage />} />
             
 
-            <Route path="/moderation/casiers" element={<ModerationCasierPage />} />
+            <Route
+  path="/moderation/casiers"
+  element={canSeeOperateur ? <ModerationCasierPage /> : <Navigate to={defaultRoute} replace />}
+/>
       <Route path="/animateur/projects" element={canSeeAnimateur ? <ProjectsListPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable}/> : <Navigate to="/" replace />} />
         <Route path="/animateur/projects/:projectId" element={canSeeAnimateur ? (<ProjectDetailPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable} />) : (<Navigate to="/" replace />)}/>
         <Route
@@ -186,6 +191,7 @@ function App() {
             isHelper={session.is_helper}
             isResponsable={session.is_responsable}
             isAnimateur={session.is_animateur}
+            isOperateur={session.is_operateur}
           />
         ) : (
           <LoginPage />
