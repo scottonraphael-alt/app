@@ -205,6 +205,18 @@ async def is_animateur_helper(helper_id: str) -> bool:
         return False
     return await DiscordService().member_has_role(helper_id, DISCORD_ANIMATEUR_ROLE_ID)
 
+async def is_operateur_helper(helper_id: str) -> bool:
+    discord = DiscordService()
+
+    if DISCORD_OPERATEUR_ROLE_ID:
+        if await discord.member_has_role(helper_id, DISCORD_OPERATEUR_ROLE_ID):
+            return True
+
+    if DISCORD_OPERATEUR_ROLE2_ID:
+        if await discord.member_has_role(helper_id, DISCORD_OPERATEUR_ROLE2_ID):
+            return True
+
+    return False
 
 async def has_any_access(helper_id: str) -> bool:
     if await has_iris_access(helper_id):
