@@ -34,6 +34,7 @@ class MemberSearchResult(BaseModel):
 
 class CreateCasierPayload(BaseModel):
     discord_id: str = Field(..., min_length=17, max_length=21)
+    username: str | None = Field(default=None, min_length=1, max_length=80)
 
 
 class CasierResponse(BaseModel):
@@ -101,8 +102,10 @@ class CasierListItem(BaseModel):
     last_sanction_at: str | None = None
     last_sanction_label: str | None = None
     created_at: str
-    sanctions_summary: dict[str, int]  
-    
+    sanctions_summary: dict[str, int]
+    is_prevention: bool = False
+
+
 class CasierDetailResponse(BaseModel):
     id: str
     member: CasierMember
@@ -111,7 +114,8 @@ class CasierDetailResponse(BaseModel):
     sanctions_count: int
     sanctions: list[Sanction]
     fiches_s: list[FicheS]
-    sanctions_summary: dict[str, int] 
+    sanctions_summary: dict[str, int]
+    is_prevention: bool = False
 
 
 def object_id_or_400(value: str) -> ObjectId:
@@ -208,22 +212,24 @@ def member_from_snapshot(snapshot: dict) -> CasierMember:
     )
 
 
-async def resolve_member(discord_id: str, snapshot: dict | None) -> CasierMember:
+async def resolve_member(discord_id: str, snapshot: dict | None) -> tuple[CasierMember, bool | None]:
     guild_member = await fetch_guild_member(discord_id)
 
     if guild_member:
         fresh_snapshot = snapshot_from_guild_member(guild_member)
+        update = {}
         if fresh_snapshot != snapshot:
-            await db.casiers.update_one(
-                {"discord_id": discord_id},
-                {"$set": {"discord_member_snapshot": fresh_snapshot}},
-            )
-        return CasierMember(**fresh_snapshot)
+            update["discord_member_snapshot"] = fresh_snapshot
+        update["is_prevention"] = False
+        await db.casiers.update_one({"discord_id": discord_id}, {"$set": update})
+        return CasierMember(**fresh_snapshot), False
 
+    # Lookup failed (not on the server, or Discord API unavailable) — keep whatever
+    # is_prevention value is already stored rather than guessing.
     if snapshot:
-        return member_from_snapshot(snapshot)
+        return member_from_snapshot(snapshot), None
 
-    return CasierMember(id=discord_id, username=discord_id, display_name=discord_id, avatar_url=None)
+    return CasierMember(id=discord_id, username=discord_id, display_name=discord_id, avatar_url=None), None
 
 
 def build_sanctions(casier: dict) -> list[Sanction]:
@@ -262,7 +268,8 @@ def build_fiches_s(casier: dict) -> list[FicheS]:
 
 async def build_detail_response(casier: dict) -> CasierDetailResponse:
     discord_id = casier.get("discord_id")
-    member = await resolve_member(discord_id, casier.get("discord_member_snapshot"))
+    member, resolved_is_prevention = await resolve_member(discord_id, casier.get("discord_member_snapshot"))
+    is_prevention = casier.get("is_prevention", False) if resolved_is_prevention is None else resolved_is_prevention
 
     sanctions = build_sanctions(casier)
     fiches_s = build_fiches_s(casier)
@@ -277,6 +284,7 @@ async def build_detail_response(casier: dict) -> CasierDetailResponse:
         sanctions=sanctions,
         fiches_s=fiches_s,
         sanctions_summary=summary,
+        is_prevention=is_prevention,
     )
 
 def build_sanctions_summary(casier: dict) -> dict[str, int]:
@@ -334,6 +342,7 @@ async def list_casiers(
                 last_sanction_label=latest.get("reason") if latest else "Aucune sanction enregistrée.",
                 created_at=casier.get("created_at", ""),
                 sanctions_summary=summary,
+                is_prevention=bool(casier.get("is_prevention", False)),
             )
         )
 
@@ -346,10 +355,7 @@ async def create_casier(
     staff=Depends(current_staff),
 ):
     discord_id = payload.discord_id.strip()
-
-    guild_member = await fetch_guild_member(discord_id)
-    if not guild_member:
-        raise HTTPException(status_code=404, detail="Membre introuvable sur le serveur Discord.")
+    username = (payload.username or "").strip()
 
     existing = await db.casiers.find_one({"discord_id": discord_id})
     if existing:
@@ -358,8 +364,27 @@ async def create_casier(
             detail="Un casier existe déjà pour ce membre.",
         )
 
-    snapshot = snapshot_from_guild_member(guild_member)
+    guild_member = await fetch_guild_member(discord_id)
+
+    if guild_member:
+        snapshot = snapshot_from_guild_member(guild_member)
+        is_prevention = False
+    else:
+        if not username:
+            raise HTTPException(
+                status_code=404,
+                detail="Membre introuvable sur le serveur Discord. Renseigne un pseudo pour créer un casier en prévention.",
+            )
+        snapshot = {
+            "id": discord_id,
+            "username": username,
+            "display_name": username,
+            "avatar_url": None,
+        }
+        is_prevention = True
+
     casier = await get_or_create_casier(discord_id, snapshot, staff_to_author(staff))
+    await db.casiers.update_one({"_id": casier["_id"]}, {"$set": {"is_prevention": is_prevention}})
 
     return CasierResponse(
         id=str(casier["_id"]),
