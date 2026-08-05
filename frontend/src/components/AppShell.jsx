@@ -17,7 +17,7 @@ function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isStaff, isHelp
 
 export default function AppShell({
   children, helper, tickets, onLogout,
-  isAdmin, isStaff, isResponsable, isAnimateur, isHelper,
+  isAdmin, isStaff, isResponsable, isAnimateur,isOperateur, isHelper,
 }) {
     const [isResponsableMenuOpen, setIsResponsableMenuOpen] = useState(true);
   const [isHelperMenuOpen, setIsHelperMenuOpen] = useState(true);
@@ -86,7 +86,7 @@ export default function AppShell({
     </div>
   </div>
 )}
-{(isResponsable) && (
+{(isOperateur || isResponsable) && (
   <div className="menu-group" data-testid="staff-menu-group">
     <button
       className="helper-menu-trigger"
