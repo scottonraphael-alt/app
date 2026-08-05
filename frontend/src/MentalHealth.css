@@ -1169,6 +1169,99 @@
 .project-member-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .project-member-extra { font-size: 10px; font-weight: 600; }
 
+/* ---------- Redesign des cartes projet (inspirÃ© du casier) ---------- */
+
+.project-grid {
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+.resource-card.project-card {
+  min-height: auto;
+  padding: 22px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(58, 90, 64, 0.06);
+  gap: 12px;
+}
+
+.resource-card.project-card:hover {
+  box-shadow: 0 14px 34px rgba(58, 90, 64, 0.12);
+  transform: translateY(-3px);
+}
+
+.resource-card.project-card .project-card-title {
+  font: 600 17px "Manrope", sans-serif;
+  color: var(--ink);
+  margin: 4px 0 0;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: initial;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.resource-card.project-card > p.project-card-description {
+  font-size: 13.5px;
+  line-height: 1.55;
+  -webkit-line-clamp: 3;
+  margin: 0;
+}
+
+.project-card-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 2px;
+}
+
+.project-card-actions {
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.project-card-actions .calm-primary-button.is-secondary {
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.project-edit-btn,
+.project-archive-btn {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.project-delete-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(161, 53, 68, 0.28);
+  border-radius: 10px;
+  color: #a13544;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 38px;
+  padding: 0 14px;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.project-delete-btn:hover {
+  background: rgba(161, 53, 68, 0.08);
+  border-color: rgba(161, 53, 68, 0.45);
+}
+
+.resource-card.project-card .project-member-avatar {
+  width: 30px;
+  height: 30px;
+}
+
 .status-archived { background: #ececec; color: #6b6b6b; }
 
 .project-view-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
