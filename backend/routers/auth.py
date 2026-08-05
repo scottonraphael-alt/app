@@ -15,6 +15,7 @@ from services.auth_service import (
     exchange_code,
     has_iris_access,
     is_admin_helper,
+    is_operateur_helper,
     is_responsable_helper,
     is_staff_helper,
     is_animateur_helper,
@@ -116,6 +117,7 @@ async def session(request: Request, response: Response) -> AuthSession:
         is_staff=False,
         is_helper=False,
         is_responsable=False,
+        is_operateur=False,
         is_animateur=False,
     )
 
@@ -136,6 +138,7 @@ async def session(request: Request, response: Response) -> AuthSession:
     is_helper = False
     is_responsable = False
     is_animateur = False
+    is_operateur = False
 
     if helper:
         try:
@@ -143,6 +146,7 @@ async def session(request: Request, response: Response) -> AuthSession:
             is_staff = await is_staff_helper(helper.id)
             is_responsable = await is_responsable_helper(helper.id)
             is_animateur = await is_animateur_helper(helper.id)
+            is_operateur = await is_operateur_helper(helper.id)
 
             if not has_access and not is_staff and not is_responsable and not is_animateur:
                 await log_auth_event(
@@ -177,6 +181,7 @@ async def session(request: Request, response: Response) -> AuthSession:
         is_staff=is_staff,
         is_helper=is_helper,
         is_responsable=is_responsable,
+        is_operateur=is_operateur,
         is_animateur=is_animateur,
     )
 
@@ -200,6 +205,8 @@ async def logout(request: Request, response: Response) -> AuthSession:
         helper=None,
         is_admin=False,
         is_staff=False,
+        is_operateur=False,
+        is_animateur=False,
         is_helper=False,
         is_responsable=False,
         is_animateur=False,
