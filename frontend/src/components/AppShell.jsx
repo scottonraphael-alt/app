@@ -9,6 +9,7 @@ import logo from "../assets/logo.png";
 function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isStaff, isHelper }) {
   if (isResponsable) return "Responsable";
   if (isAdmin) return "Coordinateur";
+  if (isOperateur) return "Opérateur";
   if (isAnimateur) return "Animateur";
   if (isHelper) return "Helper";
   if (isStaff) return "Staff";
