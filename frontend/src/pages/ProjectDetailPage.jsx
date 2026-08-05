@@ -1,210 +1,159 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  ArrowLeft, Calendar, CheckCircle2, ClipboardList, Download, FileUp,
-  Pencil, Plus, Save, Trash2, UserMinus, UserPlus, Users, X,
-} from "lucide-react";
+import { Archive, ArchiveRestore, Calendar, FolderKanban, Pencil, Plus, Users, X } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
-import TiptapSummaryEditor from "../components/TiptapSummaryEditor";
-import AddMemberModal from "../components/AddMemberModal";
-import SummaryReader from "../components/SummaryReader";
+const STATUS_LABELS = { en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
+const STATUS_CLASSES = { en_cours: "status-pending", termine: "status-done", archive: "status-archived" };
 
-const TASK_STATUS_LABELS = { a_faire: "À faire", en_cours: "En cours", rendu: "Rendue", valide: "Validée" };
-
-function MemberAvatar({ member, size = 26 }) {
-  const label = member?.display_name || member?.username || "";
+function MemberStack({ members }) {
+  const visible = members.slice(0, 4);
+  const extra = members.length - visible.length;
   return (
-    <span className="absence-avatar" style={{ width: size, height: size }} title={label}>
-      {member?.avatar_url ? <img src={member.avatar_url} alt="" /> : <Users size={Math.round(size * 0.55)} />}
-    </span>
+    <div className="project-member-stack">
+      {visible.map((member) => (
+        <span key={member.id} className="project-member-avatar" title={member.display_name || member.username}>
+          {member.avatar_url ? <img src={member.avatar_url} alt="" /> : <Users size={12} />}
+        </span>
+      ))}
+      {extra > 0 && <span className="project-member-avatar project-member-extra">+{extra}</span>}
+    </div>
   );
 }
 
-function TaskCard({ task, currentHelperId, isResponsable, onSubmit, onValidate, onDelete }) {
-  const [note, setNote] = useState(task.submission_note || "");
-  const [file, setFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const isAssignee = task.assignee.id === currentHelperId;
+function ProjectCard({
+  project,
+  helper,
+  isResponsableGlobal,
+  onJoin,
+  joiningId,
+  onArchive,
+  archivingId,
+  onDelete,
+  onEdit,
+}) {
+  const isMember = project.members.some((member) => member.id === helper?.id);
+  const isJoining = joiningId === project.id;
+  const isArchiving = archivingId === project.id;
+  const isArchived = project.status === "archive";
+  const canArchive = isResponsableGlobal || project.created_by?.id === helper?.id;
 
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    try {
-      await onSubmit(task.id, note, file);
-      setFile(null);
-    } finally {
-      setSubmitting(false);
-    }
+  const handleJoin = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onJoin(project.id);
+  };
+
+  const handleArchive = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onArchive(project, !isArchived);
+  };
+
+  const handleDelete = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onDelete(project);
+  };
+
+  const handleEdit = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onEdit(project);
   };
 
   return (
-    <div className="meeting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <MemberAvatar member={task.assignee} size={22} />
-            <strong>{task.title}</strong>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-            <Calendar size={14} /> <span>{task.due_date}</span>
-          </div>
-          {task.description && <p style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0 0" }}>{task.description}</p>}
-        </div>
-        <span className={`status-badge ${task.status === "valide" ? "status-done" : "status-pending"}`}>
-          {TASK_STATUS_LABELS[task.status]}
+    <Link
+      to={`/animateur/projects/${project.id}`}
+      className={`resource-card project-card ${isArchived ? "project-card-archived" : ""}`}
+      style={{ textDecoration: "none" }}
+    >
+      <div className="project-card-top">
+        <span className="resource-type">
+          <FolderKanban size={18} />
+        </span>
+        <span className={`status-badge ${STATUS_CLASSES[project.status]}`}>
+          {STATUS_LABELS[project.status]}
         </span>
       </div>
 
-      {task.status === "rendu" && (
-        <div style={{ fontSize: 13, color: "var(--muted)", background: "#f7faf7", padding: 10, borderRadius: 8 }}>
-          {task.submission_note && <SummaryReader content={task.submission_note} />}
-          {task.submission_file && (
-            <a
-              href={`/api/animateur/tasks/${task.id}/submission/download`}
-              onClick={(e) => e.stopPropagation()}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6 }}
-            >
-              <FileUp size={14} /> {task.submission_file.original_filename}
-            </a>
-          )}
-        </div>
-      )}
+      <h2 className="project-card-title">{project.title}</h2>
+      <p className="project-card-description">
+        {project.description || "Aucune description."}
+      </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {isAssignee && (task.status === "a_faire" || task.status === "en_cours") && (
-          <>
-            <TiptapSummaryEditor
-              value={note}
-              onChange={setNote}
-              placeholder="Décrire le rendu, tapez / pour les commandes"
-            />
-            <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-            <button
-              type="button"
-              className="calm-primary-button is-secondary"
-              onClick={handleSubmit}
-              disabled={submitting}
-              style={{ alignSelf: "flex-start" }}
-            >
-              <FileUp size={15} /> {submitting ? "Envoi…" : "Rendre la tâche"}
-            </button>
-          </>
-        )}
-        {isResponsable && task.status === "rendu" && (
-          <button type="button" className="calm-primary-button" onClick={() => onValidate(task.id)}>
-            <CheckCircle2 size={15} /> Valider
+      <div className="project-card-footer">
+        <MemberStack members={project.members} />
+        <span className="project-card-dates">
+          <Calendar size={13} /> {project.start_date} → {project.end_date || "…"}
+        </span>
+      </div>
+
+      <div className="project-card-actions">
+        {!isMember && !isArchived && (
+          <button
+            type="button"
+            className="calm-primary-button is-secondary"
+            onClick={handleJoin}
+            disabled={isJoining}
+          >
+            {isJoining ? "Inscription…" : "S'inscrire"}
           </button>
         )}
-        {isResponsable && (
-          <button type="button" className="icon-btn-danger" onClick={() => onDelete(task.id)} aria-label="Supprimer">
-            <Trash2 size={15} />
+
+        {isResponsableGlobal && (
+          <button
+            type="button"
+            className="btn-ghost project-edit-btn"
+            onClick={handleEdit}
+          >
+            <Pencil size={15} /> Modifier
+          </button>
+        )}
+
+        {canArchive && (
+          <button
+            type="button"
+            className="btn-ghost project-archive-btn"
+            onClick={handleArchive}
+            disabled={isArchiving}
+          >
+            {isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+            {isArchiving ? "…" : isArchived ? "Désarchiver" : "Archiver"}
+          </button>
+        )}
+
+        {canArchive && (
+          <button
+            type="button"
+            className="project-delete-btn"
+            onClick={handleDelete}
+          >
+            Supprimer
           </button>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
-
-function ValidatedTaskRow({ task }) {
-  return (
-    <div className="meeting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <MemberAvatar member={task.assignee} size={22} />
-            <strong>{task.title}</strong>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-            <Calendar size={14} />
-            <span>Rendu par {task.assignee.display_name || task.assignee.username} · échéance {task.due_date}</span>
-          </div>
-        </div>
-        <span className="status-badge status-done">Validée</span>
-      </div>
-
-      {task.submission_note && (
-        <div style={{ fontSize: 13, color: "var(--muted)", background: "#f7faf7", padding: 10, borderRadius: 8 }}>
-          <SummaryReader content={task.submission_note} />
-        </div>
-      )}
-
-      {task.submission_file && (
-        <a
-          href={`/api/animateur/tasks/${task.id}/submission/download`}
-          onClick={(e) => e.stopPropagation()}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}
-        >
-          <FileUp size={14} /> {task.submission_file.original_filename}
-        </a>
-      )}
-    </div>
-  );
-}
-
-export default function ProjectDetailPage({ helper, isResponsableGlobal }) {
-  const { projectId } = useParams();
-  const navigate = useNavigate();
-
-  const [project, setProject] = useState(null);
-  const [tasks, setTasks] = useState([]);
-  const [resources, setResources] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isEditingContent, setIsEditingContent] = useState(false);
-  const [content, setContent] = useState("");
+function EditProjectModal({ project, onClose, onSaved }) {
+  const [title, setTitle] = useState(project.title || "");
+  const [description, setDescription] = useState(project.description || "");
   const [saving, setSaving] = useState(false);
-  const [showAddMember, setShowAddMember] = useState(false);
 
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDescription, setTaskDescription] = useState("");
-  const [taskAssigneeId, setTaskAssigneeId] = useState("");
-  const [taskDueDate, setTaskDueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [creatingTask, setCreatingTask] = useState(false);
-
-  const [resourceTitle, setResourceTitle] = useState("");
-  const [resourceFile, setResourceFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [downloadingId, setDownloadingId] = useState(null);
-
-  const isResponsable = isResponsableGlobal || project?.created_by?.id === helper?.id;
-
-  const activeTasks = tasks.filter((task) => task.status !== "valide");
-  const validatedTasks = tasks.filter((task) => task.status === "valide");
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [projectResponse, tasksResponse, resourcesResponse] = await Promise.all([
-        api.get(`/animateur/projects/${projectId}`),
-        api.get(`/animateur/projects/${projectId}/tasks`),
-        api.get(`/animateur/projects/${projectId}/resources`),
-      ]);
-      setProject(projectResponse.data);
-      setContent(projectResponse.data.content_markdown || "");
-      setTasks(tasksResponse.data);
-      setResources(resourcesResponse.data);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setLoading(false);
+  const handleSave = async () => {
+    if (!title.trim()) {
+      toast.error("Le titre est requis.");
+      return;
     }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
-
-  const saveContent = async () => {
     setSaving(true);
     try {
-      const response = await api.put(`/animateur/projects/${projectId}`, {
-        title: project.title,
-        description: project.description,
-        content_markdown: content,
-        end_date: project.end_date,
+      const response = await api.patch(`/animateur/projects/${project.id}/details`, {
+        title: title.trim(),
+        description: description.trim(),
       });
-      setProject(response.data);
-      setIsEditingContent(false);
+      onSaved(response.data);
       toast.success("Projet mis à jour.");
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -212,377 +161,272 @@ export default function ProjectDetailPage({ helper, isResponsableGlobal }) {
       setSaving(false);
     }
   };
-const downloadTaskFile = async (taskId, submissionFile) => {
-  setDownloadingTaskFileId(taskId);
+
+  return createPortal(
+    <div className="modal-backdrop" role="presentation" onClick={() => (!saving ? onClose() : null)}>
+      <div
+        className="modal-panel moderation-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-project-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="moderation-modal-header">
+          <div>
+            <p className="eyebrow">ESPACE ANIMATEUR</p>
+            <h2 id="edit-project-title">Modifier le projet</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Fermer" disabled={saving}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="moderation-modal-body">
+          <div className="moderation-field">
+            <label htmlFor="edit-project-title-input">Titre</label>
+            <input
+              id="edit-project-title-input"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={160}
+              autoFocus
+            />
+          </div>
+
+          <div className="moderation-field">
+            <label htmlFor="edit-project-description-input">Description</label>
+            <textarea
+              id="edit-project-description-input"
+              className="meeting-inline-textarea"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={4}
+              maxLength={4000}
+            />
+          </div>
+
+          <div className="moderation-modal-actions">
+            <button type="button" className="calm-primary-button is-secondary" onClick={onClose} disabled={saving}>
+              Annuler
+            </button>
+            <button type="button" className="calm-primary-button" onClick={handleSave} disabled={saving}>
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export default function ProjectsListPage({ helper, isResponsableGlobal, isResponsable }) {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [joiningId, setJoiningId] = useState(null);
+  const [archivingId, setArchivingId] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
+  const [viewMode, setViewMode] = useState("actifs");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState("");
+
+  const load = () => {
+    setLoading(true);
+    api
+      .get("/animateur/projects")
+      .then((response) => setProjects(response.data))
+      .catch((error) => toast.error(getErrorMessage(error)))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setStartDate(new Date().toISOString().slice(0, 10));
+    setEndDate("");
+    setShowForm(false);
+  };
+
+  const createProject = async (event) => {
+    event.preventDefault();
+    if (!title.trim()) {
+      toast.error("Ajoutez au moins un titre.");
+      return;
+    }
+    setCreating(true);
+    try {
+      const response = await api.post("/animateur/projects", {
+        title, description, start_date: startDate, end_date: endDate || null,
+      });
+      setProjects((current) => [response.data, ...current]);
+      toast.success("Projet créé.");
+      resetForm();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const joinProject = async (projectId) => {
+    if (!helper?.id) {
+      toast.error("Impossible d'identifier votre profil.");
+      return;
+    }
+    setJoiningId(projectId);
+    try {
+      const response = await api.post(`/animateur/projects/${projectId}/members`, { member_id: helper.id });
+      setProjects((current) => current.map((project) => (project.id === projectId ? response.data : project)));
+      toast.success("Vous avez rejoint le projet.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  const archiveProject = async (project, archive) => {
+    setArchivingId(project.id);
+    try {
+      const response = await api.put(`/animateur/projects/${project.id}`, {
+        title: project.title,
+        description: project.description,
+        content_markdown: project.content_markdown,
+        end_date: project.end_date,
+        status: archive ? "archive" : "en_cours",
+      });
+      setProjects((current) => current.map((p) => (p.id === project.id ? response.data : p)));
+      toast.success(archive ? "Projet archivé." : "Projet désarchivé.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setArchivingId(null);
+    }
+  };
+const deleteProject = async (project) => {
+  const confirmed = window.confirm(`Supprimer définitivement "${project.title}" ?`);
+  if (!confirmed) return;
+
   try {
-    const response = await api.get(`/animateur/tasks/${taskId}/submission/download`, {
-      responseType: "blob",
-    });
-    const url = window.URL.createObjectURL(response.data);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = submissionFile.original_filename || "fichier";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    await api.delete(`/animateur/projects/${project.id}`, { withCredentials: true });
+    setProjects((current) => current.filter((item) => item.id !== project.id));
+    toast.success("Projet supprimé.");
   } catch (error) {
     toast.error(getErrorMessage(error));
-  } finally {
-    setDownloadingTaskFileId(null);
   }
 };
-  const createTask = async (event) => {
-    event.preventDefault();
-    if (!taskTitle.trim() || !taskAssigneeId) {
-      toast.error("Titre et membre assigné requis.");
-      return;
-    }
-    setCreatingTask(true);
-    try {
-      const response = await api.post(`/animateur/projects/${projectId}/tasks`, {
-        project_id: projectId,
-        assignee_id: taskAssigneeId,
-        title: taskTitle,
-        description: taskDescription,
-        due_date: taskDueDate,
-      });
-      setTasks((current) => [...current, response.data]);
-      setTaskTitle("");
-      setTaskDescription("");
-      setTaskAssigneeId("");
-      toast.success("Tâche ajoutée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setCreatingTask(false);
-    }
-  };
-
-  const submitTask = async (taskId, note, file) => {
-    try {
-      const formData = new FormData();
-      formData.append("submission_content", note);
-      if (file) formData.append("file", file);
-      const response = await api.put(`/animateur/tasks/${taskId}/submit`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setTasks((current) => current.map((task) => (task.id === taskId ? response.data : task)));
-      toast.success("Tâche rendue.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const validateTask = async (taskId) => {
-    try {
-      const response = await api.put(`/animateur/tasks/${taskId}/validate`);
-      setTasks((current) => current.map((task) => (task.id === taskId ? response.data : task)));
-      toast.success("Tâche validée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const deleteTask = async (taskId) => {
-    try {
-      await api.delete(`/animateur/tasks/${taskId}`);
-      setTasks((current) => current.filter((task) => task.id !== taskId));
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const uploadResource = async (event) => {
-    event.preventDefault();
-    if (!resourceFile) {
-      toast.error("Choisissez un fichier.");
-      return;
-    }
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("title", resourceTitle || resourceFile.name);
-      formData.append("file", resourceFile);
-      const response = await api.post(`/animateur/projects/${projectId}/resources`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setResources((current) => [response.data, ...current]);
-      setResourceTitle("");
-      setResourceFile(null);
-      toast.success("Ressource ajoutée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const downloadResource = async (resource) => {
-    setDownloadingId(resource.id);
-    try {
-      const response = await api.get(`/animateur/resources/${resource.id}/download`, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = resource.original_filename || resource.title;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  const removeMember = async (memberId) => {
-    try {
-      const response = await api.delete(`/animateur/projects/${projectId}/members/${memberId}`);
-      setProject(response.data);
-      toast.success("Membre retiré du projet.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  if (loading) {
-    return (
-      <section className="page-content dashboard-page">
-        <p className="dashboard-loading">Chargement…</p>
-      </section>
-    );
-  }
-  if (!project) return null;
-
+const filteredProjects = projects.filter((project) =>
+  viewMode === "archives" ? project.status === "archive" : project.status !== "archive"
+);
   return (
-    <section className="page-content dashboard-page" data-testid="project-detail-page">
+    <section className="page-content resources-page" data-testid="projects-list-page">
       <header className="page-header">
         <div>
           <p className="eyebrow">ESPACE ANIMATEUR</p>
-          <h1>{project.title}</h1>
-          <p style={{ color: "var(--muted)", marginTop: 6 }}>{project.description}</p>
+          <h1>Projets d'Events</h1>
         </div>
         <div className="dashboard-actions">
-          <button type="button" className="btn-ghost" onClick={() => navigate("/animateur/projects")}>
-            <ArrowLeft size={17} /> Retour
-          </button>
+          {!showForm ? (
+            <button type="button" className="calm-primary-button" onClick={() => setShowForm(true)} data-testid="new-project-button">
+              <Plus size={17} /> Nouveau projet
+            </button>
+          ) : (
+            <button type="button" className="calm-primary-button is-cancel" onClick={resetForm}>
+              <X size={17} /> Annuler
+            </button>
+          )}
         </div>
       </header>
 
-      <div className="workspace-grid" style={{ padding: 0 }}>
-        <div className="workspace-column">
-          <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>CONTENU DU PROJET</span>
-            {!isEditingContent ? (
-              <button type="button" className="btn-ghost" onClick={() => setIsEditingContent(true)}>
-                <Pencil size={15} /> Éditer
-              </button>
-            ) : (
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={() => {
-                    setContent(project.content_markdown || "");
-                    setIsEditingContent(false);
-                  }}
-                >
-                  <X size={15} /> Annuler
-                </button>
-                <button type="button" className="btn-primary" onClick={saveContent} disabled={saving}>
-                  <Save size={15} /> {saving ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </div>
-            )}
-          </div>
-          <div style={{ padding: 20 }}>
-            {isEditingContent ? (
-              <TiptapSummaryEditor
-                value={content}
-                onChange={setContent}
-                placeholder="Décrire le projet, tapez / pour les commandes"
-                autoFocus
-              />
-            ) : project.content_markdown ? (
-              <SummaryReader content={project.content_markdown} />
-            ) : (
-              <p className="resources-empty">Aucun contenu pour l'instant.</p>
-            )}
-          </div>
-
-          <div className="section-heading">
-            <span>TÂCHES INTERNES</span>
-          </div>
-          <div style={{ padding: "0 20px 20px" }}>
-            {isResponsable && (
-              <form onSubmit={createTask} className="meeting-inline-form" style={{ marginBottom: 20 }}>
-                <div className="meeting-inline-form-header">
-                  <span>Assigner une tâche</span>
-                </div>
-                <input
-                  className="meeting-inline-input"
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  placeholder="Titre de la tâche"
-                  maxLength={160}
-                />
-                <textarea
-                  className="meeting-inline-textarea"
-                  value={taskDescription}
-                  onChange={(e) => setTaskDescription(e.target.value)}
-                  placeholder="Description (optionnel)"
-                  rows={2}
-                />
-                <select
-                  className="meeting-inline-input"
-                  value={taskAssigneeId}
-                  onChange={(e) => setTaskAssigneeId(e.target.value)}
-                >
-                  <option value="">Choisir un membre</option>
-                  {project.members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.display_name || member.username}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="date"
-                  className="meeting-inline-input"
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                />
-                <button type="submit" className="meeting-inline-submit" disabled={creatingTask}>
-                  <Plus size={16} /> {creatingTask ? "Ajout…" : "Ajouter la tâche"}
-                </button>
-              </form>
-            )}
-            {activeTasks.length === 0 ? (
-              <p className="resources-empty">Aucune tâche en cours pour ce projet.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {activeTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    currentHelperId={helper?.id}
-                    isResponsable={isResponsable}
-                    onSubmit={submitTask}
-                    onValidate={validateTask}
-                    onDelete={deleteTask}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="intelligence-panel">
-          <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>MEMBRES DU PROJET</span>
-            {isResponsable && (
-              <button type="button" className="btn-ghost" onClick={() => setShowAddMember(true)}>
-                <UserPlus size={15} /> Ajouter
-              </button>
-            )}
-          </div>
-          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-            {project.members.map((member) => (
-              <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <MemberAvatar member={member} size={30} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <strong style={{ display: "block", fontSize: 13 }}>{member.display_name || member.username}</strong>
-                  <small style={{ color: "var(--muted)" }}>
-                    {member.role === "responsable" ? "Responsable" : "Membre"}
-                  </small>
-                </div>
-                {isResponsable && member.id !== project.created_by.id && (
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => removeMember(member.id)}
-                    aria-label="Retirer"
-                  >
-                    <UserMinus size={15} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="section-heading">
-            <span>RESSOURCES ANNEXES</span>
-          </div>
-          <div style={{ padding: 16 }}>
-            <form onSubmit={uploadResource} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-              <input
-                className="meeting-inline-input"
-                value={resourceTitle}
-                onChange={(e) => setResourceTitle(e.target.value)}
-                placeholder="Titre du document"
-              />
-              <input type="file" onChange={(e) => setResourceFile(e.target.files[0])} />
-              <button type="submit" className="calm-primary-button is-secondary" disabled={uploading}>
-                <FileUp size={15} /> {uploading ? "Envoi…" : "Déposer la ressource"}
-              </button>
-            </form>
-            {resources.length === 0 ? (
-              <p className="resources-empty">Aucune ressource déposée.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {resources.map((resource) => (
-                  <div
-                    key={resource.id}
-                    onClick={() => downloadResource(resource)}
-                    role="button"
-                    tabIndex={0}
-                    className="absence-meeting-row"
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, padding: 10,
-                      borderRadius: 8, background: "#f7faf7", cursor: "pointer",
-                      opacity: downloadingId === resource.id ? 0.6 : 1,
-                    }}
-                  >
-                    <ClipboardList size={16} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <strong style={{ display: "block", fontSize: 13 }}>{resource.title}</strong>
-                      <small style={{ color: "var(--muted)" }}>{resource.original_filename}</small>
-                    </div>
-                    <Download size={15} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+      <div className="project-view-tabs">
+        <button
+          type="button"
+          className={`project-view-tab ${viewMode === "actifs" ? "is-active" : ""}`}
+          onClick={() => setViewMode("actifs")}
+        >
+          Actifs
+        </button>
+        <button
+          type="button"
+          className={`project-view-tab ${viewMode === "archives" ? "is-active" : ""}`}
+          onClick={() => setViewMode("archives")}
+        >
+          <Archive size={14} /> Archivés
+        </button>
       </div>
 
-      <div className="dashboard-card" style={{ marginTop: 24, padding: 0 }}>
-        <div className="section-heading">
-          <span>TÂCHES VALIDÉES</span>
-        </div>
-        <div style={{ padding: "0 20px 20px" }}>
-          {validatedTasks.length === 0 ? (
-            <p className="resources-empty">Aucune tâche validée pour l'instant.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {validatedTasks.map((task) => (
-                <ValidatedTaskRow key={task.id} task={task} />
-              ))}
+      {showForm && (
+        <form onSubmit={createProject} className="meeting-inline-form" style={{ marginBottom: 28 }}>
+          <div className="meeting-inline-form-header"><span>Nouveau projet</span></div>
+          <input
+            className="meeting-inline-input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Titre du projet"
+            maxLength={160}
+          />
+          <textarea
+            className="meeting-inline-textarea"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Description du projet"
+            rows={3}
+          />
+          <div className="case-form-grid">
+            <div>
+              <label>Date de début</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
-          )}
-        </div>
-      </div>
+            <div>
+              <label>Date de fin (optionnel)</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+          </div>
+          <button type="submit" className="meeting-inline-submit" disabled={creating}>
+            <Plus size={16} /> {creating ? "Création…" : "Créer le projet"}
+          </button>
+        </form>
+      )}
 
-      {showAddMember && (
-        <AddMemberModal
-          projectId={projectId}
-          existingIds={project.members.map((m) => m.id)}
-          onAdded={(updatedProject) => setProject(updatedProject)}
-          onClose={() => setShowAddMember(false)}
+      {loading ? (
+        <p className="resources-empty">Chargement…</p>
+      ) : filteredProjects.length === 0 ? (
+        <p className="resources-empty">
+          {viewMode === "archives" ? "Aucun projet archivé." : "Aucun projet pour l'instant."}
+        </p>
+      ) : (
+        <div className="resource-grid project-grid">
+          {filteredProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              helper={helper}
+              isResponsableGlobal={isResponsableGlobal}
+              onJoin={joinProject}
+              joiningId={joiningId}
+              onArchive={archiveProject}
+              archivingId={archivingId}
+              onDelete={deleteProject}
+              onEdit={setEditingProject}
+            />
+          ))}
+        </div>
+      )}
+
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSaved={(updated) => {
+            setProjects((current) => current.map((p) => (p.id === updated.id ? updated : p)));
+            setEditingProject(null);
+          }}
         />
       )}
     </section>
