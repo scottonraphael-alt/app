@@ -225,6 +225,8 @@ async def has_any_access(helper_id: str) -> bool:
         return True
     if await is_animateur_helper(helper_id):
         return True
+    if await is_operateur_helper(helper_id):
+        return True
     return await is_responsable_helper(helper_id)
 
 
