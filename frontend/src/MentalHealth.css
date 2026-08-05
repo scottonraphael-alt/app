@@ -774,6 +774,45 @@
   padding: 18px 22px 20px;
 }
 
+.moderation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.moderation-field label {
+  display: block;
+  color: var(--ink);
+  font: 700 12px "IBM Plex Sans", sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.moderation-field input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 0.95rem "Manrope", sans-serif;
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.moderation-field input::placeholder {
+  color: #9aa39c;
+}
+
+.moderation-field input:focus {
+  border-color: #7d1e5e;
+  box-shadow: 0 0 0 3px rgba(125, 30, 94, 0.12);
+}
+
 /* Champ de recherche */
 
 .casier-search-wrap {
