@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Archive, ArchiveRestore, Calendar, FolderKanban, Pencil, Plus, Users, X } from "lucide-react";
+import { Archive, ArchiveRestore, Calendar, FolderKanban, Pencil, Plus, Trash2, UserPlus, Users, X } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
 const STATUS_LABELS = { en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
 const STATUS_CLASSES = { en_cours: "status-pending", termine: "status-done", archive: "status-archived" };
@@ -22,7 +22,7 @@ function MemberStack({ members }) {
   );
 }
 
-function ProjectCard({
+function ProjectRow({
   project,
   helper,
   isResponsableGlobal,
@@ -66,71 +66,67 @@ function ProjectCard({
   return (
     <Link
       to={`/animateur/projects/${project.id}`}
-      className={`resource-card project-card ${isArchived ? "project-card-archived" : ""}`}
-      style={{ textDecoration: "none" }}
+      className={`project-list-row ${isArchived ? "project-card-archived" : ""}`}
     >
-      <div className="project-card-top">
-        <span className="resource-type">
-          <FolderKanban size={18} />
-        </span>
-        <span className={`status-badge ${STATUS_CLASSES[project.status]}`}>
-          {STATUS_LABELS[project.status]}
-        </span>
+      <span className="project-list-icon">
+        <FolderKanban size={17} />
+      </span>
+
+      <div className="project-list-copy">
+        <div className="project-list-heading">
+          <strong>{project.title}</strong>
+          <span className={`status-badge ${STATUS_CLASSES[project.status]}`}>
+            {STATUS_LABELS[project.status]}
+          </span>
+        </div>
+        <p className="project-list-description">{project.description || "Aucune description."}</p>
+        <div className="project-list-meta">
+          <MemberStack members={project.members} />
+          <span className="project-list-dates">
+            <Calendar size={12} /> {project.start_date} → {project.end_date || "…"}
+          </span>
+        </div>
       </div>
 
-      <h2 className="project-card-title">{project.title}</h2>
-      <p className="project-card-description">
-        {project.description || "Aucune description."}
-      </p>
-
-      <div className="project-card-footer">
-        <MemberStack members={project.members} />
-        <span className="project-card-dates">
-          <Calendar size={13} /> {project.start_date} → {project.end_date || "…"}
-        </span>
-      </div>
-
-      <div className="project-card-actions">
+      <div className="project-list-actions">
         {!isMember && !isArchived && (
           <button
             type="button"
-            className="calm-primary-button is-secondary"
+            className="icon-action-btn"
             onClick={handleJoin}
             disabled={isJoining}
+            title="S'inscrire"
           >
-            {isJoining ? "Inscription…" : "S'inscrire"}
+            <UserPlus size={16} />
           </button>
         )}
 
         {isResponsableGlobal && (
-          <button
-            type="button"
-            className="btn-ghost project-edit-btn"
-            onClick={handleEdit}
-          >
-            <Pencil size={15} /> Modifier
+          <button type="button" className="icon-action-btn" onClick={handleEdit} title="Modifier">
+            <Pencil size={16} />
           </button>
         )}
 
         {canArchive && (
           <button
             type="button"
-            className="btn-ghost project-archive-btn"
+            className="icon-action-btn"
             onClick={handleArchive}
             disabled={isArchiving}
+            title={isArchived ? "Désarchiver" : "Archiver"}
           >
-            {isArchived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
-            {isArchiving ? "…" : isArchived ? "Désarchiver" : "Archiver"}
+            {isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
           </button>
         )}
 
         {canArchive && (
           <button
             type="button"
-            className="project-delete-btn"
+            className="icon-action-btn is-danger"
             onClick={handleDelete}
+            title="Supprimer"
           >
-            Supprimer
+            <Trash2 size={16} />
           </button>
         )}
       </div>
@@ -401,9 +397,9 @@ const filteredProjects = projects.filter((project) =>
           {viewMode === "archives" ? "Aucun projet archivé." : "Aucun projet pour l'instant."}
         </p>
       ) : (
-        <div className="resource-grid project-grid">
+        <div className="project-list">
           {filteredProjects.map((project) => (
-            <ProjectCard
+            <ProjectRow
               key={project.id}
               project={project}
               helper={helper}
