@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Archive, ArchiveRestore, Calendar, FolderKanban, Pencil, Plus, Trash2, UserPlus, Users, X } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
@@ -38,6 +38,16 @@ function ProjectRow({
   const isArchiving = archivingId === project.id;
   const isArchived = project.status === "archive";
   const canArchive = isResponsableGlobal || project.created_by?.id === helper?.id;
+  const navigate = useNavigate();
+
+  const goToProject = () => navigate(`/animateur/projects/${project.id}`);
+
+  const handleRowKeyDown = (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      goToProject();
+    }
+  };
 
   const handleJoin = (event) => {
     event.preventDefault();
@@ -64,9 +74,12 @@ function ProjectRow({
   };
 
   return (
-    <Link
-      to={`/animateur/projects/${project.id}`}
+    <div
       className={`project-list-row ${isArchived ? "project-card-archived" : ""}`}
+      onClick={goToProject}
+      onKeyDown={handleRowKeyDown}
+      role="link"
+      tabIndex={0}
     >
       <span className="project-list-icon">
         <FolderKanban size={17} />
@@ -130,7 +143,7 @@ function ProjectRow({
           </button>
         )}
       </div>
-    </Link>
+    </div>
   );
 }
 function EditProjectModal({ project, onClose, onSaved }) {
