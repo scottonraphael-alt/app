@@ -227,7 +227,7 @@ const filteredProjects = projects.filter((project) =>
       <header className="page-header">
         <div>
           <p className="eyebrow">ESPACE ANIMATEUR</p>
-          <h1>Projets.</h1>
+          <h1>Projets d'Events</h1>
         </div>
         <div className="dashboard-actions">
           {!showForm ? (
