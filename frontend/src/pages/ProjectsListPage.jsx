@@ -414,17 +414,18 @@ const filteredProjects = projects.filter((project) =>
         <div className="project-list">
           {filteredProjects.map((project) => (
             <ProjectRow
-              key={project.id}
-              project={project}
-              helper={helper}
-              isResponsableGlobal={isResponsableGlobal}
-              onJoin={joinProject}
-              joiningId={joiningId}
-              onArchive={archiveProject}
-              archivingId={archivingId}
-              onDelete={deleteProject}
-              onEdit={setEditingProject}
-            />
+  key={project.id}
+  project={project}
+  helper={helper}
+  isResponsableGlobal={isResponsableGlobal}
+  isResponsable={isResponsable}   // <-- ligne à ajouter
+  onJoin={joinProject}
+  joiningId={joiningId}
+  onArchive={archiveProject}
+  archivingId={archivingId}
+  onDelete={deleteProject}
+  onEdit={setEditingProject}
+/>
           ))}
         </div>
       )}
