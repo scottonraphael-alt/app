@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, status
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 from config import DISCORD_ANIMATEUR_ROLE_ID
 from database import db
@@ -43,6 +44,11 @@ def _helper_identity(helper: AuthenticatedHelper) -> dict:
         "display_name": getattr(helper, "global_name", None) or getattr(helper, "display_name", helper.username),
         "avatar_url": getattr(helper, "avatar_url", None),
     }
+
+
+class ProjectDetailsPayload(BaseModel):
+    title: str = Field(..., min_length=1, max_length=160)
+    description: str = Field(default="", max_length=4000)
 
 
 async def current_project_editor(request: Request) -> AuthenticatedHelper:
@@ -141,6 +147,59 @@ async def create_project(
     )
 
     return Project(**project)
+
+
+@router.patch("/{project_id}/details", response_model=Project)
+async def update_project_details(
+    project_id: str,
+    payload: ProjectDetailsPayload,
+    request: Request,
+    helper: AuthenticatedHelper = Depends(current_responsable),
+) -> Project:
+    """Modifie uniquement le titre et la description d'un projet. Réservé au rôle Responsable."""
+    existing = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Projet introuvable.")
+
+    title_after = payload.title.strip()
+    description_after = payload.description.strip()
+
+    if not title_after:
+        raise HTTPException(status_code=422, detail="Le titre est requis.")
+
+    previous_title = existing.get("title", "")
+    previous_description = existing.get("description", "")
+    updated_at = _now()
+
+    await db.projects.update_one(
+        {"id": project_id},
+        {
+            "$set": {
+                "title": title_after,
+                "description": description_after,
+                "updated_at": updated_at,
+            }
+        },
+    )
+
+    updated = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Projet introuvable après mise à jour.")
+
+    if previous_title != title_after or previous_description != description_after:
+        await log_auth_event(
+            "project.details.updated",
+            request,
+            helper=helper,
+            status_code=200,
+            details={
+                "project_id": project_id,
+                "before": {"title": previous_title, "description": previous_description},
+                "after": {"title": title_after, "description": description_after},
+            },
+        )
+
+    return Project(**updated)
 
 
 @router.put("/{project_id}", response_model=Project)
