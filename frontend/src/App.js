@@ -137,17 +137,8 @@ function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable, i
             
 
             <Route path="/moderation/casiers" element={<ModerationCasierPage />} />
-      <Route path="/animateur/projects" element={canSeeAnimateur ? <ProjectsListPage helper={helper} /> : <Navigate to="/" replace />} />
-        <Route
-          path="/animateur/projects/:projectId"
-          element={
-            canSeeAnimateur ? (
-              <ProjectDetailPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable} />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
+      <Route path="/animateur/projects" element={canSeeAnimateur ? <ProjectsListPage isResponsable={isResponsable} helper={helper} /> : <Navigate to="/" replace />} />
+        <Route path="/animateur/projects/:projectId" element={canSeeAnimateur ? (<ProjectDetailPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable} />) : (<Navigate to="/" replace />)}/>
         <Route
           path="/animateur/calendrier"
           element={
