@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import logo from "../assets/logo.png";
 
-function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isStaff, isHelper }) {
+function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isOperateur, isStaff, isHelper }) {
   if (isResponsable) return "Responsable";
   if (isAdmin) return "Coordinateur";
   if (isOperateur) return "Opérateur";
@@ -18,7 +18,7 @@ function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isStaff, isHelp
 
 export default function AppShell({
   children, helper, tickets, onLogout,
-  isAdmin, isStaff, isResponsable, isAnimateur,isOperateur, isHelper,
+  isAdmin, isStaff, isResponsable, isAnimateur, isOperateur, isHelper,
 }) {
     const [isResponsableMenuOpen, setIsResponsableMenuOpen] = useState(true);
   const [isHelperMenuOpen, setIsHelperMenuOpen] = useState(true);
