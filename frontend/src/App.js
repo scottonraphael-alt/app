@@ -39,11 +39,11 @@ function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable,is
     setStats(statsResponse.data);
   };
 
-  useEffect(() => {
-    if (canSeeHelper) {
-      refreshDashboard().catch(() => undefined);
-    }
-  }, [canSeeHelper]);
+useEffect(() => {
+  if (!canSeeHelper) return;
+
+  refreshDashboard().catch(() => undefined);
+}, [canSeeHelper]);
 
   const updateTicket = (ticket) => {
     setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
