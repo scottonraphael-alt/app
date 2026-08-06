@@ -206,7 +206,6 @@ async def logout(request: Request, response: Response) -> AuthSession:
         is_admin=False,
         is_staff=False,
         is_operateur=False,
-        is_animateur=False,
         is_helper=False,
         is_responsable=False,
         is_animateur=False,
