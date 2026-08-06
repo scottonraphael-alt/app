@@ -57,6 +57,11 @@ function HelperAvatar({ helper, size = 20 }) {
           width: size,
           height: size,
           lineHeight: `${size}px`,
+          borderRadius: "50%",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
         }}
         title={label}
       >
@@ -72,6 +77,12 @@ function HelperAvatar({ helper, size = 20 }) {
       width={size}
       height={size}
       className="helper-avatar-image"
+      style={{
+        borderRadius: "50%",
+        objectFit: "cover",
+        display: "block",
+        overflow: "hidden",
+      }}
       onError={() => setImageError(true)}
     />
   );
