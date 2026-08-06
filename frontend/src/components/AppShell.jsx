@@ -153,7 +153,7 @@ export default function AppShell({
               <NavLink className="nav-link" to="/resources" data-testid="sidebar-resources-link" title="Ressources">
                 <BookOpenText size={18} /> <span>Ressources</span>
               </NavLink>
-              {isAdmin && (
+              {(isAdmin || isResponsable) &&(
                 <NavLink className="nav-link" to="/admin" data-testid="admin-panel-link" title="Vue administrateur">
                   <LayoutDashboard size={18} /> <span>Coordination</span>
                 </NavLink>
