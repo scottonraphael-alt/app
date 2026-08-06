@@ -66,7 +66,11 @@ useEffect(() => {
     window.location.assign("/");
   };
 
-  const defaultRoute = canSeeHelper ? "/" : "/staff/calendrier";
+  const defaultRoute = isResponsable
+  ? "/responsable/auth-logs"
+  : isHelper
+    ? "/"
+    : "/staff/calendrier";
 
   return (
     <AppShell
