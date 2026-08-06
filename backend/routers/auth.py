@@ -13,12 +13,7 @@ from services.auth_service import (
     create_session,
     create_state,
     exchange_code,
-    has_iris_access,
-    is_admin_helper,
-    is_operateur_helper,
-    is_responsable_helper,
-    is_staff_helper,
-    is_animateur_helper,
+    get_helper_role_flags,
     parse_session,
 )
 
@@ -50,6 +45,7 @@ async def discord_login(request: Request) -> RedirectResponse:
         samesite="lax",
         domain=COOKIE_DOMAIN,
     )
+
     return response
 
 
@@ -99,6 +95,7 @@ async def discord_callback(code: str, state: str, request: Request) -> RedirectR
         samesite="lax",
         domain=COOKIE_DOMAIN,
     )
+
     response.delete_cookie(STATE_COOKIE, domain=COOKIE_DOMAIN)
     return response
 
@@ -107,6 +104,7 @@ async def discord_callback(code: str, state: str, request: Request) -> RedirectR
 async def session(request: Request, response: Response) -> AuthSession:
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     response.headers["Pragma"] = "no-cache"
+
     raw_session = request.cookies.get(SESSION_COOKIE)
     helper = parse_session(raw_session)
 
@@ -142,13 +140,21 @@ async def session(request: Request, response: Response) -> AuthSession:
 
     if helper:
         try:
-            has_access = await has_iris_access(helper.id)
-            is_staff = await is_staff_helper(helper.id)
-            is_responsable = await is_responsable_helper(helper.id)
-            is_animateur = await is_animateur_helper(helper.id)
-            is_operateur = await is_operateur_helper(helper.id)
+            flags = await get_helper_role_flags(helper.id)
+            is_admin = flags["is_admin"]
+            is_staff = flags["is_staff"]
+            is_helper = flags["is_helper"]
+            is_responsable = flags["is_responsable"]
+            is_animateur = flags["is_animateur"]
+            is_operateur = flags["is_operateur"]
 
-            if not has_access and not is_staff and not is_responsable and not is_animateur:
+            if (
+                not is_helper
+                and not is_staff
+                and not is_responsable
+                and not is_animateur
+                and not is_operateur
+            ):
                 await log_auth_event(
                     "authz.forbidden",
                     request,
@@ -160,8 +166,6 @@ async def session(request: Request, response: Response) -> AuthSession:
                 response.delete_cookie(SESSION_COOKIE)
                 return empty
 
-            is_admin = await is_admin_helper(helper.id)
-            is_helper = has_access
         except HTTPException as error:
             await log_auth_event(
                 "auth.session.check_failed",
