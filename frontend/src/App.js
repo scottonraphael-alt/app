@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "@/App.css";
 import "@/MentalHealth.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
@@ -23,9 +23,22 @@ import ProjectCalendarPage from "./pages/ProjectCalendarPage";
 import ResponsableAuthLogsPage from "./pages/ResponsableAuthLogsPage";
 import ModerationCasierPage from "./pages/ModerationCasierPage";
 
-function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable,isOperateur, isAnimateur }) {
+function AuthenticatedApp({
+  helper,
+  isAdmin,
+  isStaff,
+  isHelper,
+  isResponsable,
+  isOperateur,
+  isAnimateur,
+  onSessionRefresh,
+}) {
   const [tickets, setTickets] = useState([]);
-  const [stats, setStats] = useState({ active_count: 0, archived_count: 0, total_messages: 0 });
+  const [stats, setStats] = useState({
+    active_count: 0,
+    archived_count: 0,
+    total_messages: 0,
+  });
 
   const canSeeHelper = isResponsable || isAdmin || isHelper;
   const canSeeAdmin = isResponsable || isAdmin;
@@ -33,20 +46,25 @@ function AuthenticatedApp({ helper, isAdmin, isStaff, isHelper, isResponsable,is
   const canSeeAnimateur = isAnimateur || isResponsable;
   const canSeeOperateur = isOperateur || isResponsable;
 
-  const refreshDashboard = async () => {
-    const [ticketsResponse, statsResponse] = await Promise.all([api.get("/tickets"), api.get("/tickets/stats")]);
+  const refreshDashboard = useCallback(async () => {
+    const [ticketsResponse, statsResponse] = await Promise.all([
+      api.get("/tickets"),
+      api.get("/tickets/stats"),
+    ]);
     setTickets(ticketsResponse.data);
     setStats(statsResponse.data);
-  };
+  }, []);
 
-useEffect(() => {
-  if (!canSeeHelper) return;
-
-  refreshDashboard().catch(() => undefined);
-}, [canSeeHelper]);
+  useEffect(() => {
+    if (!canSeeHelper) return;
+    refreshDashboard().catch(() => undefined);
+  }, [canSeeHelper, refreshDashboard]);
 
   const updateTicket = (ticket) => {
-    setTickets((current) => [ticket, ...current.filter((item) => item.id !== ticket.id)]);
+    setTickets((current) => [
+      ticket,
+      ...current.filter((item) => item.id !== ticket.id),
+    ]);
     api
       .get("/tickets/stats")
       .then((response) => setStats(response.data))
@@ -67,121 +85,272 @@ useEffect(() => {
   };
 
   const defaultRoute = isResponsable
-  ? "/responsable/auth-logs"
-  : isHelper
-    ? "/"
-    : "/staff/calendrier";
+    ? "/responsable/auth-logs"
+    : isHelper
+      ? "/"
+      : "/staff/calendrier";
 
   return (
     <AppShell
       helper={helper}
       tickets={tickets}
       onLogout={logout}
-      isResponsable={isResponsable}
       isAdmin={isAdmin}
-      isHelper={isHelper}
       isStaff={isStaff}
+      isResponsable={isResponsable}
       isAnimateur={isAnimateur}
       isOperateur={isOperateur}
+      isHelper={isHelper}
     >
       <Routes>
         <Route
           path="/"
-          element={canSeeHelper ? <DashboardPage stats={stats} tickets={tickets} /> : <Navigate to="/staff/calendrier" replace />}
+          element={
+            canSeeHelper ? (
+              <DashboardPage stats={stats} tickets={tickets} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
         />
+
         <Route
           path="/new"
-          element={canSeeHelper ? <NewTicketPage onCreated={updateTicket} /> : <Navigate to="/staff/calendrier" replace />}
+          element={
+            canSeeHelper ? (
+              <NewTicketPage onCreated={updateTicket} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
         />
-        <Route
-          path="/staff/taches"
-          element={isStaff ? <QuarterlyTasksPage isResponsable={isResponsable} /> : <Navigate to="/" replace />}
-        />
+
         <Route
           path="/tickets/:ticketId"
           element={
             canSeeHelper ? (
-              <TicketWorkspacePage onTicketUpdate={updateTicket} onTicketDeleted={deleteTicket} isAdmin={isAdmin} helper={helper} />
+              <TicketWorkspacePage
+                onTicketUpdate={updateTicket}
+                onTicketDeleted={deleteTicket}
+                isAdmin={isAdmin}
+                helper={helper}
+              />
             ) : (
-              <Navigate to="/staff/calendrier" replace />
+              <Navigate to={defaultRoute} replace />
             )
           }
         />
+
         <Route
           path="/archives"
           element={
             canSeeHelper ? (
-              <DashboardPage stats={stats} tickets={tickets.filter((ticket) => ticket.status === "archived")} />
+              <DashboardPage
+                stats={stats}
+                tickets={tickets.filter((ticket) => ticket.status === "archived")}
+              />
             ) : (
-              <Navigate to="/staff/calendrier" replace />
+              <Navigate to={defaultRoute} replace />
             )
           }
         />
-        <Route path="/admin" element={canSeeAdmin ? <AdminDashboardPage /> : <Navigate to={defaultRoute} replace />} />
+
+        <Route
+          path="/admin"
+          element={
+            canSeeAdmin ? (
+              <AdminDashboardPage />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
         <Route path="/profile" element={<HelperProfilePage helper={helper} />} />
+
         <Route
           path="/resources"
-          element={canSeeHelper ? <ResourcesPage isAdmin={isAdmin} /> : <Navigate to="/staff/calendrier" replace />}
+          element={
+            canSeeHelper ? (
+              <ResourcesPage isAdmin={isAdmin} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
         />
+
         <Route
           path="/staff/calendrier"
-          element={canSeeStaff ? <AbsenceCalendarPage isResponsable={isResponsable} /> : <Navigate to={defaultRoute} replace />}
+          element={
+            canSeeStaff ? (
+              <AbsenceCalendarPage isResponsable={isResponsable} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
         />
+
         <Route
           path="/staff/meetings"
-          element={canSeeStaff ? <MeetingSummariesPage isResponsable={isResponsable} /> : <Navigate to={defaultRoute} replace />}
+          element={
+            canSeeStaff ? (
+              <MeetingSummariesPage isResponsable={isResponsable} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
         />
+
         <Route
           path="/staff/meetings/new"
-          element={canSeeStaff && isResponsable ? <MeetingSummaryEditorPage /> : <Navigate to="/staff/meetings" replace />}
+          element={
+            canSeeStaff && isResponsable ? (
+              <MeetingSummaryEditorPage />
+            ) : (
+              <Navigate to="/staff/meetings" replace />
+            )
+          }
         />
+
         <Route
           path="/staff/meetings/:meetingId"
-          element={canSeeStaff ? <MeetingSummaryEditorPage isResponsable={isResponsable} /> : <Navigate to={defaultRoute} replace />}
+          element={
+            canSeeStaff ? (
+              <MeetingSummaryEditorPage isResponsable={isResponsable} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
         />
-<Route path="/responsable/auth-logs" element={<ResponsableAuthLogsPage />} />
-            
 
-            <Route
-  path="/moderation/casiers"
-  element={canSeeOperateur ? <ModerationCasierPage /> : <Navigate to={defaultRoute} replace />}
-/>
-      <Route path="/animateur/projects" element={canSeeAnimateur ? <ProjectsListPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable}/> : <Navigate to="/" replace />} />
-        <Route path="/animateur/projects/:projectId" element={canSeeAnimateur ? (<ProjectDetailPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable} />) : (<Navigate to="/" replace />)}/>
+        <Route
+          path="/staff/taches"
+          element={
+            canSeeStaff ? (
+              <QuarterlyTasksPage isResponsable={isResponsable} />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
+        <Route
+          path="/responsable/auth-logs"
+          element={
+            isResponsable ? (
+              <ResponsableAuthLogsPage />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
+        <Route
+          path="/moderation/casiers"
+          element={
+            canSeeOperateur ? (
+              <ModerationCasierPage />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
+        <Route
+          path="/animateur/projects"
+          element={
+            canSeeAnimateur ? (
+              <ProjectsListPage
+                helper={helper}
+                isResponsable={isResponsable}
+                isResponsableGlobal={isResponsable}
+              />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
+        <Route
+          path="/animateur/projects/:projectId"
+          element={
+            canSeeAnimateur ? (
+              <ProjectDetailPage
+                helper={helper}
+                isResponsable={isResponsable}
+                isResponsableGlobal={isResponsable}
+              />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
         <Route
           path="/animateur/calendrier"
           element={
             canSeeAnimateur ? (
-              <ProjectCalendarPage isResponsable={isResponsable} helper={helper} isResponsableGlobal={isResponsable} />
+              <ProjectCalendarPage
+                helper={helper}
+                isResponsable={isResponsable}
+                isResponsableGlobal={isResponsable}
+              />
             ) : (
-              <Navigate to="/" replace />
+              <Navigate to={defaultRoute} replace />
             )
           }
         />
 
-            
+        <Route path="*" element={<Navigate to={defaultRoute} replace />} />
       </Routes>
     </AppShell>
   );
 }
 
-function App() {
+export default function App() {
   const [session, setSession] = useState(null);
 
-  useEffect(() => {
-    document.documentElement.removeAttribute("data-theme");
-    localStorage.removeItem("iris-theme");
+  const loadSession = useCallback(async () => {
+    const response = await api.get("/auth/session", {
+      params: { refresh: Date.now() },
+    });
+    setSession(response.data);
+    return response.data;
   }, []);
 
   useEffect(() => {
-    api
-      .get("/auth/session")
-      .then((response) => setSession(response.data))
-      .catch(() => setSession({ authenticated: false }));
-  }, []);
+    loadSession().catch(() => {
+      setSession({ authenticated: false });
+    });
+  }, [loadSession]);
+
+  useEffect(() => {
+    if (!session?.authenticated) return undefined;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        loadSession().catch(() => undefined);
+      }
+    };
+
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadSession().catch(() => undefined);
+      }
+    }, 5 * 60 * 1000);
+
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
+  }, [session?.authenticated, loadSession]);
 
   if (!session) {
-    return <div className="app-loading" data-testid="application-loading">Initialisation d'Iris</div>;
+    return <div className="app-loading">Initialisation d’Iris</div>;
   }
 
   return (
@@ -194,16 +363,15 @@ function App() {
             isStaff={session.is_staff}
             isHelper={session.is_helper}
             isResponsable={session.is_responsable}
-            isAnimateur={session.is_animateur}
             isOperateur={session.is_operateur}
+            isAnimateur={session.is_animateur}
+            onSessionRefresh={loadSession}
           />
         ) : (
           <LoginPage />
         )}
-        <Toaster theme="light" position="bottom-right" />
       </BrowserRouter>
+      <Toaster theme="light" position="bottom-right" />
     </div>
   );
 }
-
-export default App;
