@@ -10,6 +10,7 @@ from config import (
     DISCORD_TICKET_CATEGORY_ID,
     missing_discord_bot_settings,
 )
+
 from models.ticket import (
     DiscordAttachment,
     DiscordAuthor,
@@ -57,27 +58,27 @@ class DiscordService:
                 params=params,
             )
 
-        if response.status_code == 429:
-            retry_after = response.json().get("retry_after", 1)
-            await asyncio.sleep(float(retry_after))
-            return await self._get(path, params)
+            if response.status_code == 429:
+                retry_after = response.json().get("retry_after", 1)
+                await asyncio.sleep(float(retry_after))
+                return await self._get(path, params)
 
-        if response.status_code == 404:
-            raise HTTPException(status_code=404, detail="Ressource Discord introuvable.")
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Ressource Discord introuvable.")
 
-        if response.status_code == 403:
-            raise HTTPException(
-                status_code=403,
-                detail="Le bot ne peut pas accéder à cette ressource Discord.",
-            )
+            if response.status_code == 403:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Le bot ne peut pas accéder à cette ressource Discord.",
+                )
 
-        if response.is_error:
-            raise HTTPException(
-                status_code=502,
-                detail="Discord n’a pas pu traiter la demande. Réessayez dans un instant.",
-            )
+            if response.is_error:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Discord n’a pas pu traiter la demande. Réessayez dans un instant.",
+                )
 
-        return response.json()
+            return response.json()
 
     async def fetch_member(self, member_id: str) -> DiscordMember:
         payload = await self._get(f"/guilds/{DISCORD_GUILD_ID}/members/{member_id}")
@@ -90,9 +91,13 @@ class DiscordService:
             joined_at=payload.get("joined_at"),
         )
 
-    async def member_has_role(self, member_id: str, role_id: str) -> bool:
+    async def fetch_member_role_ids(self, member_id: str) -> set[str]:
         payload = await self._get(f"/guilds/{DISCORD_GUILD_ID}/members/{member_id}")
-        return role_id in payload.get("roles", [])
+        return set(payload.get("roles", []))
+
+    async def member_has_role(self, member_id: str, role_id: str) -> bool:
+        role_ids = await self.fetch_member_role_ids(member_id)
+        return role_id in role_ids
 
     async def fetch_helpers(self, role_id: str) -> list[HelperIdentity]:
         helpers: list[HelperIdentity] = []
@@ -133,15 +138,6 @@ class DiscordService:
 
         if channel.get("guild_id") != DISCORD_GUILD_ID:
             raise HTTPException(status_code=403, detail="Ce salon n’appartient pas au serveur Iris.")
-
-        # if channel.get("parent_id") != DISCORD_TICKET_CATEGORY_ID:
-        #     raise HTTPException(
-        #         status_code=403,
-        #         detail="Ce salon n’appartient pas à la catégorie de tickets autorisée.",
-        #     )
-
-        # if channel.get("type") not in {0, 5, 15}:
-        #     raise HTTPException(status_code=422, detail="L’identifiant doit désigner un salon textuel.")
 
         return channel
 
