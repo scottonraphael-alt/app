@@ -26,7 +26,7 @@ export default function AppShell({
   const [isAnimateurMenuOpen, setIsAnimateurMenuOpen] = useState(true);
    const [isOpMenuOpen, setIsOpMenuOpen] = useState(true);
 
-  const roleLabel = highestRoleLabel({ isAdmin, isStaff, isResponsable, isAnimateur, isHelper });
+  const roleLabel = highestRoleLabel({ isAdmin, isStaff, isOperateur, isResponsable, isAnimateur, isHelper });
 
   return (
     <div className="app-shell" data-testid="iris-application">
