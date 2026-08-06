@@ -224,9 +224,9 @@ function TaskCard({
 }) {
   return (
     <div
-      className={`meeting-row task-card ${taskAccent(task)}`}
-      style={{ flexDirection: "column", alignItems: "stretch", gap: "10px" }}
-    >
+  className="meeting-row task-card"
+  style={{ flexDirection: "column", alignItems: "stretch", gap: "10px" }}
+>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
