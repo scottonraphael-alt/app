@@ -130,7 +130,7 @@ export default function AppShell({
               </div>
             </div>
           )}
-
+{(isHelper || isResponsable) && (
           <div className="menu-group" data-testid="helper-menu-group">
             <button
               className="helper-menu-trigger"
@@ -160,6 +160,7 @@ export default function AppShell({
               )}
             </div>
           </div>
+  )}
         </nav>
 
         <div className="sidebar-bottom">
