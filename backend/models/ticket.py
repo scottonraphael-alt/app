@@ -147,6 +147,7 @@ class AuthSession(BaseModel):
     is_helper: bool = False
     is_responsable: bool = False
     is_animateur: bool = False
+    is_operateur: bool = False
 
 
 class AdminHelperOverview(BaseModel):
