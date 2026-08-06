@@ -72,8 +72,61 @@ def _helper_identity(helper: AuthenticatedHelper) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.get("/calendrier", response_model=list[AbsenceEntry])
-async def list_absences(_: AuthenticatedHelper = Depends(current_staff)) -> list[AbsenceEntry]:
-    return await db.absences.find({}, {"_id": 0}).sort("start_date", 1).to_list(1000)
+async def list_absences(
+    _: AuthenticatedHelper = Depends(current_staff),
+) -> list[AbsenceEntry]:
+    absences = await db.absences.find(
+        {},
+        {"_id": 0},
+    ).sort("start_date", 1).to_list(1000)
+
+    if not absences:
+        return []
+
+    discord = DiscordService()
+
+    helper_ids = {
+        entry.get("helper", {}).get("id")
+        for entry in absences
+        if entry.get("helper", {}).get("id")
+    }
+
+    async def refresh_helper(helper_id: str):
+        try:
+            member = await discord.fetch_member(helper_id)
+            return helper_id, member
+        except Exception:
+            return helper_id, None
+
+    refreshed_helpers = dict(
+        await asyncio.gather(
+            *(refresh_helper(helper_id) for helper_id in helper_ids)
+        )
+    )
+
+    for entry in absences:
+        helper = entry.get("helper", {})
+        helper_id = helper.get("id")
+        member = refreshed_helpers.get(helper_id)
+
+        if not member:
+            continue
+
+        updated_helper = {
+            "id": member.id,
+            "username": member.username,
+            "display_name": member.display_name,
+            "avatar_url": member.avatar_url,
+        }
+
+        entry["helper"] = updated_helper
+
+        await db.absences.update_one(
+            {"id": entry["id"]},
+            {"$set": {"helper": updated_helper}},
+        )
+
+    return absences
 
 
 @router.post("/calendrier", response_model=AbsenceEntry, status_code=status.HTTP_201_CREATED)
