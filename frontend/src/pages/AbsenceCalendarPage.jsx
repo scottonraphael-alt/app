@@ -45,11 +45,35 @@ function capitalize(text) {
 
 
 function HelperAvatar({ helper, size = 20 }) {
+  const [imageError, setImageError] = useState(false);
   const label = helper?.display_name || helper?.username || "?";
+  const avatarUrl = helper?.avatar_url;
+
+  if (!avatarUrl || imageError) {
+    return (
+      <span
+        className="helper-avatar-fallback"
+        style={{
+          width: size,
+          height: size,
+          lineHeight: `${size}px`,
+        }}
+        title={label}
+      >
+        {label.charAt(0).toUpperCase()}
+      </span>
+    );
+  }
+
   return (
-    <span className="absence-avatar" style={{ width: size, height: size }} title={label}>
-      {helper?.avatar_url ? <img src={helper.avatar_url} alt="" /> : <RadioTower size={Math.round(size * 0.55)} />}
-    </span>
+    <img
+      src={avatarUrl}
+      alt={label}
+      width={size}
+      height={size}
+      className="helper-avatar-image"
+      onError={() => setImageError(true)}
+    />
   );
 }
 
