@@ -21,6 +21,8 @@ import ProjectsListPage from "./pages/ProjectsListPage";
 import ProjectDetailPage from "./pages/ProjectDetailPage";
 import ProjectCalendarPage from "./pages/ProjectCalendarPage";
 import ResponsableAuthLogsPage from "./pages/ResponsableAuthLogsPage";
+import ResponsableChannelArchivesPage from "./pages/ResponsableChannelArchivesPage";
+import ChannelArchiveWorkspacePage from "./pages/ChannelArchiveWorkspacePage";
 import ModerationCasierPage from "./pages/ModerationCasierPage";
 
 function AuthenticatedApp({
@@ -239,6 +241,28 @@ function AuthenticatedApp({
           element={
             isResponsable ? (
               <ResponsableAuthLogsPage />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
+        <Route
+          path="/responsable/archives-salons"
+          element={
+            isResponsable ? (
+              <ResponsableChannelArchivesPage />
+            ) : (
+              <Navigate to={defaultRoute} replace />
+            )
+          }
+        />
+
+        <Route
+          path="/responsable/archives-salons/:archiveId"
+          element={
+            isResponsable ? (
+              <ChannelArchiveWorkspacePage />
             ) : (
               <Navigate to={defaultRoute} replace />
             )
