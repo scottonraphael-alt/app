@@ -1,6 +1,6 @@
-import { FileDown, ImageOff, LoaderCircle, MessagesSquare, RefreshCw, Trash2 } from "lucide-react";
+import { FileDown, Filter, ImageOff, LoaderCircle, MessagesSquare, RefreshCw, Search, Trash2, User, X } from "lucide-react";
 import { ChevronLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -15,6 +15,32 @@ const formatTime = (timestamp) => new Date(timestamp).toLocaleString("fr-FR", { 
 const attachmentSrc = (attachment) =>
   attachment.local_url ? `${api.defaults?.baseURL || "/api"}${attachment.local_url}` : attachment.url;
 
+const FILE_TYPE_OPTIONS = [
+  { value: "all", label: "Tous types de fichier" },
+  { value: "image", label: "Images" },
+  { value: "video", label: "Vidéos" },
+  { value: "audio", label: "Audio" },
+  { value: "document", label: "Documents" },
+  { value: "archive", label: "Archives (zip…)" },
+  { value: "other", label: "Autres" },
+];
+
+const EXTENSION_CATEGORIES = {
+  image: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"],
+  video: ["mp4", "mov", "webm", "avi", "mkv"],
+  audio: ["mp3", "wav", "ogg", "m4a", "flac"],
+  document: ["pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "csv"],
+  archive: ["zip", "rar", "7z", "tar", "gz"],
+};
+
+const categorizeFilename = (filename) => {
+  const extension = filename.includes(".") ? filename.split(".").pop().toLowerCase() : "";
+  for (const [category, extensions] of Object.entries(EXTENSION_CATEGORIES)) {
+    if (extensions.includes(extension)) return category;
+  }
+  return "other";
+};
+
 
 export default function ChannelArchiveWorkspacePage() {
   const { archiveId } = useParams();
@@ -23,6 +49,12 @@ export default function ChannelArchiveWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+
+  const [searchText, setSearchText] = useState("");
+  const [searchAuthor, setSearchAuthor] = useState("");
+  const [searchFileType, setSearchFileType] = useState("all");
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const highlightTimeoutRef = useRef(null);
 
   useEffect(() => {
     const load = async () => {
@@ -39,6 +71,50 @@ export default function ChannelArchiveWorkspacePage() {
     };
     load();
   }, [archiveId]);
+
+  useEffect(() => () => {
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+  }, []);
+
+  const normalizedText = searchText.trim().toLowerCase();
+  const normalizedAuthor = searchAuthor.trim().toLowerCase();
+  const hasActiveSearch = Boolean(normalizedText || normalizedAuthor || searchFileType !== "all");
+
+  const searchResults = useMemo(() => {
+    if (!archive || !hasActiveSearch) return [];
+    return archive.transcript.filter((message) => {
+      if (normalizedText && !message.content.toLowerCase().includes(normalizedText)) return false;
+
+      if (normalizedAuthor) {
+        const authorName = `${message.author.display_name || ""} ${message.author.username || ""}`.toLowerCase();
+        if (!authorName.includes(normalizedAuthor)) return false;
+      }
+
+      if (searchFileType !== "all") {
+        const hasMatchingFile = message.attachments.some(
+          (attachment) => categorizeFilename(attachment.filename) === searchFileType
+        );
+        if (!hasMatchingFile) return false;
+      }
+
+      return true;
+    });
+  }, [archive, hasActiveSearch, normalizedText, normalizedAuthor, searchFileType]);
+
+  const clearSearch = () => {
+    setSearchText("");
+    setSearchAuthor("");
+    setSearchFileType("all");
+  };
+
+  const jumpToMessage = (messageId) => {
+    const target = document.getElementById(`transcript-message-${messageId}`);
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    setHighlightedMessageId(messageId);
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 2500);
+  };
 
   const sync = async () => {
     setSyncing(true);
@@ -94,10 +170,114 @@ export default function ChannelArchiveWorkspacePage() {
       <div className="workspace-grid">
         <section className="workspace-column transcript-column" data-testid="channel-archive-transcript-panel">
           <div className="column-header"><span><MessagesSquare size={16} /> HISTORIQUE COMPLET</span><b>{archive.message_count}</b></div>
+
+          <div
+            data-testid="channel-archive-search-panel"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              padding: "12px 14px",
+              margin: "0 0 14px",
+              border: "1px solid rgba(0,0,0,0.08)",
+              borderRadius: "12px",
+              background: "rgba(0,0,0,0.02)",
+            }}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
+                <Search size={14} />
+                <input
+                  type="text"
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Contient…"
+                  data-testid="search-text-input"
+                  style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.15)", fontSize: "13px" }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
+                <User size={14} />
+                <input
+                  type="text"
+                  value={searchAuthor}
+                  onChange={(event) => setSearchAuthor(event.target.value)}
+                  placeholder="Pseudo…"
+                  data-testid="search-author-input"
+                  style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.15)", fontSize: "13px" }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px" }}>
+                <Filter size={14} />
+                <select
+                  value={searchFileType}
+                  onChange={(event) => setSearchFileType(event.target.value)}
+                  data-testid="search-filetype-select"
+                  style={{ padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.15)", fontSize: "13px" }}
+                >
+                  {FILE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              {hasActiveSearch && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  data-testid="clear-search-button"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.15)", background: "transparent", cursor: "pointer", fontSize: "13px" }}
+                >
+                  <X size={14} /> Effacer
+                </button>
+              )}
+            </div>
+
+            {hasActiveSearch && (
+              <div data-testid="channel-archive-search-results">
+                <p className="admin-empty">
+                  {searchResults.length} message{searchResults.length > 1 ? "s" : ""} trouvé{searchResults.length > 1 ? "s" : ""}
+                </p>
+                {searchResults.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "260px", overflowY: "auto" }}>
+                    {searchResults.map((message) => (
+                      <button
+                        type="button"
+                        key={message.id}
+                        onClick={() => jumpToMessage(message.id)}
+                        data-testid={`search-result-${message.id}`}
+                        style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left", padding: "8px 10px", borderRadius: "10px", border: "1px solid rgba(0,0,0,0.08)", background: "white", cursor: "pointer" }}
+                      >
+                        <span style={{ display: "flex", justifyContent: "space-between", gap: "10px", fontSize: "12px", opacity: 0.7 }}>
+                          <strong>{message.author.display_name || message.author.username}</strong>
+                          <span>{formatTime(message.timestamp)}</span>
+                        </span>
+                        <span style={{ fontSize: "13px" }}>
+                          {message.content
+                            ? message.content.slice(0, 140)
+                            : (message.attachments[0]?.filename || "(message sans texte)")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="transcript-scroll">
             {archive.transcript.length === 0 && <p className="empty-transcript" data-testid="channel-archive-empty-transcript">Aucun message dans ce salon.</p>}
             {archive.transcript.map((message) => (
-              <article className="transcript-message member-message" key={message.id} data-testid={`channel-archive-message-${message.id}`}>
+              <article
+                className="transcript-message member-message"
+                key={message.id}
+                id={`transcript-message-${message.id}`}
+                data-testid={`channel-archive-message-${message.id}`}
+                style={{
+                  backgroundColor: message.id === highlightedMessageId ? "#fef3c7" : "transparent",
+                  borderRadius: "10px",
+                  transition: "background-color 1.2s ease",
+                }}
+              >
                 <img src={message.author.avatar_url} alt="" />
                 <div>
                   <div className="message-line"><strong>{message.author.display_name || message.author.username}</strong><time>{formatTime(message.timestamp)}</time></div>
