@@ -76,6 +76,22 @@ export default function ChannelArchiveWorkspacePage() {
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
   }, []);
 
+  // Tant que l'archive est en cours d'import (création initiale ou resynchronisation), on
+  // réinterroge régulièrement pour suivre la progression sans que l'utilisateur ait à
+  // recharger la page.
+  useEffect(() => {
+    if (!archive || archive.status !== "importing") return undefined;
+    const interval = setInterval(async () => {
+      try {
+        const response = await api.get(`/channel-archives/${archiveId}`);
+        setArchive(response.data);
+      } catch {
+        // erreur transitoire de polling, on retentera au prochain tick
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [archive?.status, archiveId]);
+
   const normalizedText = searchText.trim().toLowerCase();
   const normalizedAuthor = searchAuthor.trim().toLowerCase();
   const hasActiveSearch = Boolean(normalizedText || normalizedAuthor || searchFileType !== "all");
@@ -121,7 +137,7 @@ export default function ChannelArchiveWorkspacePage() {
     try {
       const response = await api.post(`/channel-archives/${archiveId}/sync`);
       setArchive(response.data);
-      toast.success("Salon resynchronisé.");
+      toast.success("Resynchronisation lancée en arrière-plan.");
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
     } finally {
@@ -130,7 +146,7 @@ export default function ChannelArchiveWorkspacePage() {
   };
 
   const deleteArchive = async () => {
-    if (!window.confirm("Supprimer définitivement cette archive de salon et ses images ? Cette action est irréversible.")) return;
+    if (!window.confirm("Supprimer définitivement cette archive de salon et ses fichiers ? Cette action est irréversible.")) return;
     try {
       await api.delete(`/channel-archives/${archiveId}`);
       toast.success("Archive supprimée.");
@@ -153,8 +169,8 @@ export default function ChannelArchiveWorkspacePage() {
           </div>
         </div>
         <div className="workspace-actions">
-          <button className="secondary-button" disabled={syncing} onClick={sync} type="button" data-testid="sync-channel-archive-button">
-            {syncing ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} Synchroniser
+          <button className="secondary-button" disabled={syncing || archive.status === "importing"} onClick={sync} type="button" data-testid="sync-channel-archive-button">
+            {syncing || archive.status === "importing" ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />} Synchroniser
           </button>
           <button className="danger-button" onClick={deleteArchive} type="button" data-testid="delete-channel-archive-button"><Trash2 size={16} /> Supprimer</button>
         </div>
@@ -170,6 +186,53 @@ export default function ChannelArchiveWorkspacePage() {
       <div className="workspace-grid">
         <section className="workspace-column transcript-column" data-testid="channel-archive-transcript-panel">
           <div className="column-header"><span><MessagesSquare size={16} /> HISTORIQUE COMPLET</span><b>{archive.message_count}</b></div>
+
+          {archive.status === "importing" && (
+            <div
+              data-testid="channel-archive-import-banner"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                padding: "10px 14px",
+                margin: "0 0 14px",
+                border: "1px solid rgba(47,111,79,0.25)",
+                borderRadius: "12px",
+                background: "rgba(47,111,79,0.06)",
+              }}
+            >
+              {archive.phase === "mirroring_files" ? (
+                <>
+                  <span style={{ fontSize: "13px" }}>
+                    Copie des fichiers en cours… {archive.local_attachment_count}/{archive.files_total ?? "?"}
+                  </span>
+                  <div style={{ height: "6px", borderRadius: "4px", background: "rgba(0,0,0,0.08)", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${archive.files_total ? Math.min(100, Math.round((archive.local_attachment_count / archive.files_total) * 100)) : 100}%`,
+                        background: "#2f6f4f",
+                        transition: "width 0.4s ease",
+                      }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <span style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}>
+                  <LoaderCircle className="spin" size={14} /> Récupération des messages… {archive.message_count} importés pour l’instant.
+                </span>
+              )}
+            </div>
+          )}
+
+          {archive.status === "failed" && (
+            <div
+              data-testid="channel-archive-import-error-banner"
+              style={{ padding: "10px 14px", margin: "0 0 14px", border: "1px solid rgba(185,28,28,0.3)", borderRadius: "12px", background: "rgba(185,28,28,0.06)", color: "#b91c1c", fontSize: "13px" }}
+            >
+              Le dernier import a échoué{archive.error_message ? ` : ${archive.error_message}` : "."} Cliquez sur « Synchroniser » pour réessayer.
+            </div>
+          )}
 
           <div
             data-testid="channel-archive-search-panel"
