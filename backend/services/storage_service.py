@@ -20,6 +20,14 @@ def put_object_from_file(path: str, file_path: str, content_type: str) -> dict:
     return {"path": path, "size": size}
 
 
+def put_object_from_bytes(path: str, data: bytes, content_type: str) -> dict:
+    init_storage()
+    destination = STORAGE_ROOT / path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
+    return {"path": path, "size": len(data)}
+
+
 def get_object(path: str) -> tuple[bytes, str]:
     source = STORAGE_ROOT / path
     if not source.exists():
@@ -30,6 +38,10 @@ def get_object(path: str) -> tuple[bytes, str]:
 
 def resource_path(resource_id: str, extension: str) -> str:
     return f"{APP_NAME}/resources/{resource_id}.{extension.lower()}"
+
+
+def channel_archive_attachment_path(archive_id: str, message_id: str, attachment_id: str, extension: str) -> str:
+    return f"{APP_NAME}/channel_archives/{archive_id}/{message_id}/{attachment_id}.{extension.lower()}"
 
 
 def extension_from_filename(filename: str) -> str:
