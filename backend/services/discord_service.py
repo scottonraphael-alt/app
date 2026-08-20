@@ -229,7 +229,7 @@ class DiscordService:
         merged_content = "\n\n".join(dict.fromkeys(text_parts)).strip()
 
         if not merged_content:
-            merged_content = "[Message Discord sans contenu textuel exploitable]"
+            merged_content = "[Message contenant un fichier"
 
         return TranscriptMessage(
             id=raw_message["id"],
