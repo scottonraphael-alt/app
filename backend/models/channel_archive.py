@@ -39,9 +39,12 @@ class ChannelArchiveSummary(BaseModel):
     title: str
     channel_id: str
     channel_name: str
-    status: str
+    status: str  # "importing" | "archived" | "failed"
+    phase: str | None = None  # "fetching_messages" | "mirroring_files" | "done" | None
     message_count: int
     local_attachment_count: int
+    files_total: int | None = None
+    error_message: str | None = None
     created_by: str
     created_at: str
     updated_at: str
