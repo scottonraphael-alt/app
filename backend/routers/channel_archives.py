@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import mimetypes
 from datetime import datetime, timezone
 from io import BytesIO
@@ -23,10 +24,28 @@ from services.storage_service import channel_archive_attachment_path, get_object
 
 
 router = APIRouter(prefix="/channel-archives", tags=["channel-archives"])
+logger = logging.getLogger(__name__)
+
+# Garde une référence forte sur les imports en cours : sans ça, asyncio peut garbage-collecter
+# une tâche de fond dont plus rien ne référence l'objet Task avant qu'elle ne se termine.
+_background_import_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_import(archive_id: str, channel_id: str) -> None:
+    task = asyncio.create_task(_run_import(archive_id, channel_id))
+    _background_import_tasks.add(task)
+    task.add_done_callback(_background_import_tasks.discard)
 
 # Taille max par pièce jointe mirrorée, pour éviter qu'un fichier énorme (vidéo, zip...)
 # ne bloque l'import complet du salon.
 MAX_ATTACHMENT_SIZE = 200 * 1024 * 1024
+
+# Téléchargements de pièces jointes en parallèle pendant la phase de mirroring.
+ATTACHMENT_CONCURRENCY = 6
+
+# Fréquence minimale (en secondes) entre deux écritures de progression en base, pour ne
+# pas spammer Mongo sur un salon de plusieurs milliers de messages/fichiers.
+PROGRESS_FLUSH_INTERVAL = 1.0
 
 
 def now_iso() -> str:
@@ -69,34 +88,128 @@ async def _mirror_attachment(archive_id: str, message_id: str, attachment: dict)
     )
 
 
-async def _build_transcript(archive_id: str, channel_id: str) -> list[ChannelArchiveMessage]:
+async def _run_import(archive_id: str, channel_id: str) -> None:
+    """Récupère l'historique complet du salon et mirrore ses pièces jointes en arrière-plan,
+    en mettant à jour la progression en base au fur et à mesure (voir ChannelArchiveSummary :
+    phase, message_count, local_attachment_count, files_total)."""
     discord = DiscordService()
-    raw_messages = await discord.fetch_channel_history(channel_id)
 
-    messages: list[ChannelArchiveMessage] = []
-    for raw_message in raw_messages:
-        raw = raw_message.model_dump()
-        mirrored_attachments = await asyncio.gather(
-            *[_mirror_attachment(archive_id, raw["id"], attachment) for attachment in raw.get("attachments", [])]
+    try:
+        await db.channel_archives.update_one(
+            {"id": archive_id},
+            {"$set": {
+                "status": "importing",
+                "phase": "fetching_messages",
+                "error_message": None,
+                "updated_at": now_iso(),
+            }},
         )
-        messages.append(
-            ChannelArchiveMessage(
-                id=raw["id"],
-                content=raw["content"],
-                timestamp=raw["timestamp"],
-                author=raw["author"],
-                attachments=list(mirrored_attachments),
-                embeds=raw.get("embeds", []),
-                components=raw.get("components", []),
-                application_id=raw.get("application_id"),
-                webhook_id=raw.get("webhook_id"),
+
+        # --- Phase 1 : récupération paginée des messages ---
+        all_messages = []
+        last_flush = 0.0
+        async for page in discord.iter_channel_history(channel_id):
+            all_messages.extend(page)
+            loop_time = asyncio.get_event_loop().time()
+            if loop_time - last_flush > PROGRESS_FLUSH_INTERVAL:
+                await db.channel_archives.update_one(
+                    {"id": archive_id},
+                    {"$set": {"message_count": len(all_messages), "updated_at": now_iso()}},
+                )
+                last_flush = loop_time
+
+        all_messages.reverse()  # ordre chronologique, comme fetch_channel_history
+        raw_messages = [message.model_dump() for message in all_messages]
+
+        attachment_jobs = [
+            (message["id"], attachment)
+            for message in raw_messages
+            for attachment in message.get("attachments", [])
+        ]
+        files_total = len(attachment_jobs)
+
+        await db.channel_archives.update_one(
+            {"id": archive_id},
+            {"$set": {
+                "phase": "mirroring_files",
+                "message_count": len(raw_messages),
+                "local_attachment_count": 0,
+                "files_total": files_total,
+                "updated_at": now_iso(),
+            }},
+        )
+
+        # --- Phase 2 : copie locale des pièces jointes, en parallèle limité ---
+        mirrored_by_id: dict[tuple[str, str], ChannelArchiveAttachment] = {}
+        mirrored_count = 0
+        last_flush = 0.0
+        semaphore = asyncio.Semaphore(ATTACHMENT_CONCURRENCY)
+
+        async def mirror_job(message_id: str, attachment: dict) -> None:
+            nonlocal mirrored_count, last_flush
+            async with semaphore:
+                result = await _mirror_attachment(archive_id, message_id, attachment)
+            mirrored_by_id[(message_id, attachment["id"])] = result
+            mirrored_count += 1
+            loop_time = asyncio.get_event_loop().time()
+            if loop_time - last_flush > PROGRESS_FLUSH_INTERVAL or mirrored_count == files_total:
+                await db.channel_archives.update_one(
+                    {"id": archive_id},
+                    {"$set": {"local_attachment_count": mirrored_count, "updated_at": now_iso()}},
+                )
+                last_flush = loop_time
+
+        if attachment_jobs:
+            await asyncio.gather(*[mirror_job(message_id, attachment) for message_id, attachment in attachment_jobs])
+
+        # --- Assemblage final du transcript ---
+        transcript: list[ChannelArchiveMessage] = []
+        for message in raw_messages:
+            attachments = [
+                mirrored_by_id[(message["id"], attachment["id"])]
+                for attachment in message.get("attachments", [])
+            ]
+            transcript.append(
+                ChannelArchiveMessage(
+                    id=message["id"],
+                    content=message["content"],
+                    timestamp=message["timestamp"],
+                    author=message["author"],
+                    attachments=attachments,
+                    embeds=message.get("embeds", []),
+                    components=message.get("components", []),
+                    application_id=message.get("application_id"),
+                    webhook_id=message.get("webhook_id"),
+                )
             )
+
+        timestamp = now_iso()
+        await db.channel_archives.update_one(
+            {"id": archive_id},
+            {"$set": {
+                "status": "archived",
+                "phase": "done",
+                "transcript": [item.model_dump() for item in transcript],
+                "message_count": len(transcript),
+                "local_attachment_count": mirrored_count,
+                "files_total": files_total,
+                "last_synced_at": timestamp,
+                "updated_at": timestamp,
+                "error_message": None,
+            }},
         )
-    return messages
-
-
-def _count_local_attachments(transcript: list[ChannelArchiveMessage]) -> int:
-    return sum(1 for message in transcript for attachment in message.attachments if attachment.local_url)
+    except Exception as error:
+        logger.exception("Échec de l'import de l'archive de salon %s", archive_id)
+        message = getattr(error, "detail", None) or str(error) or "Erreur inconnue pendant l'import."
+        await db.channel_archives.update_one(
+            {"id": archive_id},
+            {"$set": {
+                "status": "failed",
+                "phase": None,
+                "error_message": str(message)[:500],
+                "updated_at": now_iso(),
+            }},
+        )
 
 
 async def archive_or_404(archive_id: str) -> dict:
@@ -126,24 +239,30 @@ async def create_channel_archive(
     channel = await discord.fetch_text_channel(input_data.channel_id)
 
     archive_id = str(uuid4())
-    transcript = await _build_transcript(archive_id, input_data.channel_id)
     timestamp = now_iso()
 
+    # On crée l'archive immédiatement avec un statut "importing" et on répond tout de suite :
+    # l'import (potentiellement long sur un gros salon) se poursuit en arrière-plan pendant
+    # que le frontend interroge la progression via GET /channel-archives ou /{id}/progress.
     archive = ChannelArchiveDetail(
         id=archive_id,
         title=input_data.title or f"#{channel.get('name', input_data.channel_id)}",
         channel_id=input_data.channel_id,
         channel_name=channel.get("name", input_data.channel_id),
-        status="archived",
-        message_count=len(transcript),
-        local_attachment_count=_count_local_attachments(transcript),
-        transcript=transcript,
+        status="importing",
+        phase="fetching_messages",
+        message_count=0,
+        local_attachment_count=0,
+        files_total=None,
+        error_message=None,
+        transcript=[],
         created_by=helper.id,
         created_at=timestamp,
         updated_at=timestamp,
         last_synced_at=timestamp,
     )
     await db.channel_archives.insert_one(archive.model_dump())
+    _spawn_import(archive_id, input_data.channel_id)
     return archive
 
 
@@ -155,22 +274,32 @@ async def get_channel_archive(
     return await archive_or_404(archive_id)
 
 
+@router.get("/{archive_id}/progress", response_model=ChannelArchiveSummary)
+async def get_channel_archive_progress(
+    archive_id: str,
+    _: AuthenticatedHelper = Depends(current_responsable),
+) -> ChannelArchiveSummary:
+    """Version allégée (sans le transcript) pour un polling fréquent pendant un import long."""
+    archive = await db.channel_archives.find_one({"id": archive_id}, {"_id": 0, "transcript": 0})
+    if not archive:
+        raise HTTPException(status_code=404, detail="Archive de salon introuvable.")
+    return archive
+
+
 @router.post("/{archive_id}/sync", response_model=ChannelArchiveDetail)
 async def sync_channel_archive(
     archive_id: str,
     _: AuthenticatedHelper = Depends(current_responsable),
 ) -> ChannelArchiveDetail:
     archive = await archive_or_404(archive_id)
-    transcript = await _build_transcript(archive_id, archive["channel_id"])
-    timestamp = now_iso()
-    updates = {
-        "transcript": [message.model_dump() for message in transcript],
-        "message_count": len(transcript),
-        "local_attachment_count": _count_local_attachments(transcript),
-        "last_synced_at": timestamp,
-        "updated_at": timestamp,
-    }
-    await db.channel_archives.update_one({"id": archive_id}, {"$set": updates})
+    if archive.get("status") == "importing":
+        raise HTTPException(status_code=409, detail="Un import est déjà en cours pour cette archive.")
+
+    await db.channel_archives.update_one(
+        {"id": archive_id},
+        {"$set": {"status": "importing", "phase": "fetching_messages", "error_message": None, "updated_at": now_iso()}},
+    )
+    _spawn_import(archive_id, archive["channel_id"])
     return await archive_or_404(archive_id)
 
 
