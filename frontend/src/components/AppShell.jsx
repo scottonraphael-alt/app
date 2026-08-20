@@ -1,5 +1,5 @@
 import {
-  Archive, BookOpenText, CalendarDays, ChevronDown, FileStack,
+  Archive, BookOpenText, CalendarDays, ChevronDown, FileStack, FolderArchive,
   FolderKanban, Grid2X2, ClipboardList, LayoutDashboard, LogOut, RadioTower, Users,
 } from "lucide-react";
 import { useState } from "react";
@@ -54,6 +54,9 @@ export default function AppShell({
     <div className={`helper-menu-links ${isResponsableMenuOpen ? "is-open" : ""}`} data-testid="responsable-menu-links">
       <NavLink className="nav-link" to="/responsable/auth-logs" data-testid="responsable-logs" title="Logs">
         <FileStack size={18} /> <span>Logs</span>
+      </NavLink>
+      <NavLink className="nav-link" to="/responsable/archives-salons" data-testid="responsable-channel-archives" title="Archives de salons">
+        <FolderArchive size={18} /> <span>Archives salons</span>
       </NavLink>
     </div>
   </div>
