@@ -34,3 +34,8 @@ async def initialize_indexes() -> None:
     await db.auth_logs.create_index([("event_type", 1), ("created_at", -1)])
 
     await db.casiers.create_index([("sanctions.source.message_id", 1)], name="sanctions_source_message_id")
+
+    await db.channel_archives.create_index("id", unique=True)
+    await db.channel_archives.create_index("channel_id", unique=True)
+    await db.channel_archives.create_index("created_at")
+    await db.channel_archives.create_index("updated_at")
