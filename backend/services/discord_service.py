@@ -229,7 +229,7 @@ class DiscordService:
         merged_content = "\n\n".join(dict.fromkeys(text_parts)).strip()
 
         if not merged_content:
-            merged_content = "[Message contenant un fichier"
+            merged_content = "[Message Discord sans contenu textuel exploitable]"
 
         return TranscriptMessage(
             id=raw_message["id"],
@@ -256,6 +256,33 @@ class DiscordService:
             application_id=raw_message.get("application_id"),
             webhook_id=raw_message.get("webhook_id"),
         )
+
+    async def iter_channel_history(self, channel_id: str):
+        """Comme fetch_channel_history, mais yield chaque page de messages au fur et à mesure
+        de leur récupération (ordre anti-chronologique, comme renvoyé par Discord), au lieu
+        d'attendre l'intégralité du salon. Permet de suivre la progression sur les gros salons
+        sans bloquer une seule requête HTTP pendant plusieurs minutes. L'appelant est
+        responsable de réassembler et d'inverser l'ordre pour obtenir un historique
+        chronologique, comme le fait fetch_channel_history."""
+        await self.fetch_text_channel(channel_id)
+
+        before: str | None = None
+
+        while True:
+            params: dict[str, str | int] = {"limit": 100}
+            if before:
+                params["before"] = before
+
+            page = await self._get(f"/channels/{channel_id}/messages", params)
+            if not page:
+                return
+
+            yield [self._parse_transcript_message(raw_message) for raw_message in page]
+
+            if len(page) < 100:
+                return
+
+            before = page[-1]["id"]
 
     async def fetch_channel_history(self, channel_id: str) -> list[TranscriptMessage]:
         await self.fetch_text_channel(channel_id)
