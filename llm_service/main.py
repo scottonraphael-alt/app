@@ -1,6 +1,6 @@
 """Service de jugement fin : Qwen2.5-0.5B-Instruct (llama.cpp, quantifié·© Q4_K_M).
 
-Rô·¥·le : analyser un message suspect (dé·°jà·° filtré·© par le classifieur ONNX)
+Rôle : analyser un message suspect (déjà filtré par le classifieur ONNX)
 en le confrontant au règlement complet du serveur L'Oasis, et rendre un
 verdict structuré·©. C'est ici que sont traitéss le harcè·°lement, la
 discrimination et les violations nuancé·°es de la Charte de l'Aidant.
@@ -32,23 +32,29 @@ llm = Llama(
     verbose=False,
 )
 
-SYSTEM_PROMPT = f"""Tu es un assistant de modé·°ration pour le serveur Discord "L'Oasis", un serveur francophone de soutien en santé mentale.
+SYSTEM_PROMPT = f"""Tu es un assistant de modération pour le serveur Discord "L'Oasis", un serveur francophone de soutien en santé mentale.
 
 Voici le règlement complet du serveur :
 ---
 {REGLEMENT_TEXT}
 ---
 
-Ton rôle : analyser UN SEUL message et déeterminer s'il enfreint une règle préise du règlement ci-dessus.
+Ton rôle : analyser UN SEUL message et déterminer s'il enfreint une règle précise du règlement ci-dessus.
 
-Rè·°gles importantes pour ton analyse :
-- Les mots sensibles (suicide, automutilation, sang, violence, etc.) sont AUTORISé·°S tant qu'ils sont entouré·°s de balises spoiler ||comme ceci||. Ne signale PAS ces messages s'ils respectent cette règle.
-- Discuter de sa propre méication est autorisé, SAUF si le message encourage à arrê·°ter un traitement prescrit.
+Règles importantes pour ton analyse :
+- Les mots sensibles (suicide, automutilation, sang, violence, etc.) sont AUTORISÉS tant qu'ils sont entourés de balises spoiler ||comme ceci||. Ne signale PAS ces messages s'ils respectent cette règle.
+- Discuter de sa propre médication est autorisé, SAUF si le message encourage à arrêter un traitement prescrit.
 - L'aide entre membres doit être publique : rediriger vers les MP pour aider est interdit.
 - Le jugement moral envers un tiers absent (ex: "cette personne est toxique, coupe les ponts") viole la Charte de l'Aidant si le message vient d'un rôe d'aidant/support.
-- Ne signale QUE des violations claires et rattachables à un article préis du règlement. En cas de doute raisonnable, ne signale rien.
+- Ne signale QUE des violations claires et rattachables à un article précis du règlement. En cas de doute raisonnable, ne signale rien.
 
-Ré·°ponds STRICTEMENT en JSON, sans aucun texte autour, au format :
+N'invente jamais une règle.
+N'associe jamais une insulte à la règle sur les médicaments.
+La règle sur les médicaments ne s'applique que si le message parle réellement
+d'arrêter, modifier ou abandonner un traitement ou un médicament.
+Si aucune règle ne correspond clairement, réponds violation:false.
+
+Réponds STRICTEMENT en JSON, sans aucun texte autour, au format :
 {{"violation": true|false, "regle_enfreinte": "<titre de l'article>", "gravite": "faible"|"moyenne"|"grave", "explication": "<une phrase>", "confidence": <0.0 à 1.0>}}
 """
 
