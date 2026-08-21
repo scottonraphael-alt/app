@@ -1,9 +1,9 @@
-"""Service de jugement fin : Qwen2.5-1.5B-Instruct (llama.cpp, quantifié Q4_K_M).
+"""Service de jugement fin : Qwen2.5-1.5B-Instruct (llama.cpp, quantifié´© Q4_K_M).
 
-Rôle : analyser un message suspect (déjà filtré par le classifieur ONNX)
-en le confrontant au règlement complet du serveur L'Oasis, et rendre un
-verdict structuré. C'est ici que sont traités le harcèlement, la
-discrimination et les violations nuancées de la Charte de l'Aidant.
+RÃ´le : analyser un message suspect (dÃ©jÃ¡ filtrÃ© par le classifieur ONNX)
+en le confrontant au rÃ¨glement complet du serveur L'Oasis, et rendre un
+verdict structurÃ©. C'est ici que sont traitÃ©s le harcÃ¨lement, la
+discrimination et les violations nuancÃ©es de la Charte de l'Aidant.
 """
 from __future__ import annotations
 
@@ -26,29 +26,29 @@ REGLEMENT_TEXT = REGLEMENT_PATH.read_text(encoding="utf-8")
 
 llm = Llama(
     model_path=MODEL_PATH,
-    n_ctx=4096,
+    n_ctx=10240,  # AugmentÃ© pour supporter rÃ¨glement (~6k tokens) + message Discord (max 4k caractÃ¨res)
     n_threads=2,
     verbose=False,
 )
 
-SYSTEM_PROMPT = f"""Tu es un assistant de modération pour le serveur Discord "L'Oasis", un serveur francophone de soutien en santé mentale.
+SYSTEM_PROMPT = f"""Tu es un assistant de modÃ©ration pour le serveur Discord "L'Oasis", un serveur francophone de soutien en santÃ© mentale.
 
-Voici le règlement complet du serveur :
+Voici le rÃ¨glement complet du serveur :
 ---
 {REGLEMENT_TEXT}
 ---
 
-Ton rôle : analyser UN SEUL message et déterminer s'il enfreint une règle précise du règlement ci-dessus.
+Ton rÃ´le : analyser UN SEUL message et dÃ©terminer s'il enfreint une rÃ¨gle prÃ©cise du rÃ¨glement ci-dessus.
 
-Règles importantes pour ton analyse :
-- Les mots sensibles (suicide, automutilation, sang, violence, etc.) sont AUTORISÉS tant qu'ils sont entourés de balises spoiler ||comme ceci||. Ne signale PAS ces messages s'ils respectent cette règle.
-- Discuter de sa propre médication est autorisé, SAUF si le message encourage à arrêter un traitement prescrit.
-- L'aide entre membres doit être publique : rediriger vers les MP pour aider est interdit.
-- Le jugement moral envers un tiers absent (ex: "cette personne est toxique, coupe les ponts") viole la Charte de l'Aidant si le message vient d'un rôle d'aidant/support.
-- Ne signale QUE des violations claires et rattachables à un article précis du règlement. En cas de doute raisonnable, ne signale rien.
+RÃ¨gles importantes pour ton analyse :
+- Les mots sensibles (suicide, automutilation, sang, violence, etc.) sont AUTORISÃ©S tant qu'ils sont entourÃ©s de balises spoiler ||comme ceci||. Ne signale PAS ces messages s'ils respectent cette rÃ¨gle.
+- Discuter de sa propre mÃ©dication est autorisÃ©, SAUF si le message encourage Ã  arrÃªter un traitement prescrit.
+- L'aide entre membres doit Ãatre publique : rediriger vers les MP pour aider est interdit.
+- Le jugement moral envers un tiers absent (ex: "cette personne est toxique, coupe les ponts") viole la Charte de l'Aidant si le message vient d'un rÃ´le d'aidant/support.
+- Ne signale QUE des violations claires et rattachables Ã  un article prÃ©cis du rÃ¨glement. En cas de doute raisonnable, ne signale rien.
 
-Réponds STRICTEMENT en JSON, sans aucun texte autour, au format :
-{{"violation": true|false, "regle_enfreinte": "<titre de l'article>", "gravite": "faible"|"moyenne"|"grave", "explication": "<une phrase>", "confidence": <0.0 à 1.0>}}
+RÃ©ponds STRICTEMENT en JSON, sans aucun texte autour, au format :
+{{"violation": true|false, "regle_enfreinte": "<titre de l'article>", "gravite": "faible"|"moyenne"|"grave", "explication": "<une phrase>", "confidence": <0.0 Ã  1.0>}}
 """
 
 
@@ -79,12 +79,12 @@ async def judge(request: JudgeRequest) -> dict:
     try:
         verdict = json.loads(raw_content)
     except json.JSONDecodeError:
-        logger.warning("Réponse LLM non-JSON, message ignoré : %s", raw_content)
+        logger.warning("RÃ©ponse LLM non-JSON, message ignorÃ© : %s", raw_content)
         verdict = {
             "violation": False,
             "regle_enfreinte": "",
             "gravite": "faible",
-            "explication": "Réponse du modèle non interprétable.",
+            "explication": "RÃ©ponse du modÃ¨le non interprÃ©table.",
             "confidence": 0.0,
         }
 
