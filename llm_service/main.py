@@ -1,4 +1,4 @@
-"""Service de jugement fin : Qwen2.5-1.5B-Instruct (llama.cpp, quantifié·© Q4_K_M).
+"""Service de jugement fin : Qwen2.5-0.5B-Instruct (llama.cpp, quantifié·© Q4_K_M).
 
 Rô·¥·le : analyser un message suspect (dé·°jà·° filtré·© par le classifieur ONNX)
 en le confrontant au règlement complet du serveur L'Oasis, et rendre un
@@ -21,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="LLM Moderation Service")
 
-MODEL_PATH = "/app/model/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+MODEL_PATH = "/app/model/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 REGLEMENT_PATH = Path(__file__).parent / "reglement.txt"
 REGLEMENT_TEXT = REGLEMENT_PATH.read_text(encoding="utf-8")
 
 llm = Llama(
     model_path=MODEL_PATH,
     n_ctx=6144,
-    n_threads=2,
+    n_threads=4,
     verbose=False,
 )
 
