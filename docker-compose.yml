@@ -75,6 +75,8 @@ services:
       - npm_default
     restart: unless-stopped
     mem_limit: 2200m
+    volumes:
+      - ./llm_service/model:/app/model:ro
 
 volumes:
   mongo-data:
