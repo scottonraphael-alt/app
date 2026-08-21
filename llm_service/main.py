@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="LLM Moderation Service")
 
-MODEL_PATH = "/app/model/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+MODEL_PATH = "/app/model/qwen2.5-1.5b-instruct-q4_k_m.gguf"
 REGLEMENT_PATH = Path(__file__).parent / "reglement.txt"
 REGLEMENT_TEXT = REGLEMENT_PATH.read_text(encoding="utf-8")
 
