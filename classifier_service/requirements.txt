@@ -1,0 +1,6 @@
+fastapi==0.110.1
+uvicorn==0.25.0
+onnxruntime>=1.17.0
+tokenizers>=0.15.0
+huggingface_hub>=0.21.0
+numpy>=1.26.0

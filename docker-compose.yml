@@ -22,18 +22,18 @@ services:
   backend:
     build: ./backend
     container_name: emergent-backend
-    volumes:
-    - resources-data:/app/storage
     env_file:
-    - .env
+      - .env
     depends_on:
       - mongodb
+      - classifier-service
+      - llm-service
     networks:
       - npm_default
 
   # Application Frontend (React)
   frontend:
-    build: 
+    build:
       context: ./frontend
       args:
         - REACT_APP_BACKEND_URL=https://api.loasis.app
@@ -43,6 +43,38 @@ services:
     networks:
       - npm_default
 
+  # Listener Discord temps réel (Gateway) - modération automatique
+  discord-listener:
+    build: ./discord_listener
+    container_name: emergent-discord-listener
+    env_file:
+      - .env
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - npm_default
+    restart: unless-stopped
+    mem_limit: 200m
+
+  # Triage rapide (classifieur ONNX de toxicité)
+  classifier-service:
+    build: ./classifier_service
+    container_name: emergent-classifier
+    networks:
+      - npm_default
+    restart: unless-stopped
+    mem_limit: 400m
+
+  # Jugement fin (Qwen2.5-1.5B via llama.cpp, règlement en contexte)
+  llm-service:
+    build: ./llm_service
+    container_name: emergent-llm
+    networks:
+      - npm_default
+    restart: unless-stopped
+    mem_limit: 2200m
+
 volumes:
   mongo-data:
-  resources-data:
