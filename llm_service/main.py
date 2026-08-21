@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -26,7 +27,7 @@ REGLEMENT_TEXT = REGLEMENT_PATH.read_text(encoding="utf-8")
 
 llm = Llama(
     model_path=MODEL_PATH,
-    n_ctx=6144,  # Réduit pour éviter OOM : ~3.5 GiB pour les scores, suffit pour règlement + message Discord moyen
+    n_ctx=6144,
     n_threads=2,
     verbose=False,
 )
@@ -58,6 +59,36 @@ class JudgeRequest(BaseModel):
     content: str
 
 
+def parse_llm_json(raw: str) -> dict | None:
+    """Extrait le JSON d'une réponse LLM, même avec backticks ou texte autour."""
+    raw = raw.strip()
+    
+    # Essai 1 : JSON pur
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    
+    # Essai 2 : extraire le JSON entre backticks ```json ... ```
+    match = re.search(r'```(?:json)?\s*({.*?})\s*```', raw, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    
+    # Essai 3 : chercher le premier { et le dernier }
+    start = raw.find('{')
+    end = raw.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(raw[start:end+1])
+        except json.JSONDecodeError:
+            pass
+    
+    return None
+
+
 @app.post("/judge")
 async def judge(request: JudgeRequest) -> dict:
     user_prompt = (
@@ -75,10 +106,9 @@ async def judge(request: JudgeRequest) -> dict:
     )
 
     raw_content = response["choices"][0]["message"]["content"].strip()
+    verdict = parse_llm_json(raw_content)
 
-    try:
-        verdict = json.loads(raw_content)
-    except json.JSONDecodeError:
+    if verdict is None:
         logger.warning("Ré·°ponse LLM non-JSON, message ignoré·© : %s", raw_content)
         verdict = {
             "violation": False,
