@@ -1,10 +1,10 @@
 version: '3.8'
+
 networks:
   npm_default:
     external: true
 
 services:
-  # Base de données MongoDB
   mongodb:
     image: mongo:latest
     container_name: emergent-mongodb
@@ -18,7 +18,6 @@ services:
     networks:
       - npm_default
 
-  # API Backend (FastAPI)
   backend:
     build: ./backend
     container_name: emergent-backend
@@ -31,19 +30,17 @@ services:
     networks:
       - npm_default
 
-  # Application Frontend (React)
   frontend:
     build:
       context: ./frontend
       args:
-        - REACT_APP_BACKEND_URL=https://api.loasis.app
+        REACT_APP_BACKEND_URL: https://api.loasis.app
     container_name: emergent-frontend
     depends_on:
       - backend
     networks:
       - npm_default
 
-  # Listener Discord temps réel (Gateway) - modération automatique
   discord-listener:
     build: ./discord_listener
     container_name: emergent-discord-listener
@@ -58,7 +55,6 @@ services:
     restart: unless-stopped
     mem_limit: 200m
 
-  # Triage rapide (classifieur ONNX de toxicité)
   classifier-service:
     build: ./classifier_service
     container_name: emergent-classifier
@@ -67,16 +63,18 @@ services:
     restart: unless-stopped
     mem_limit: 400m
 
-  # Jugement fin (Qwen2.5-1.5B via llama.cpp, règlement en contexte)
   llm-service:
     build: ./llm_service
     container_name: emergent-llm
+    env_file:
+      - .env
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
     networks:
       - npm_default
     restart: unless-stopped
-    mem_limit: 2200m
-    volumes:
-      - ./llm_service/model:/app/model:ro
+    mem_limit: 512m
 
 volumes:
   mongo-data:
