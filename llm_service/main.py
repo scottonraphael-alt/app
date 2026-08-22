@@ -127,7 +127,7 @@ async def judge(request: JudgeRequest) -> dict[str, Any]:
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 200,
+                "maxOutputTokens": 500,
                 "responseMimeType": "application/json",
             },
         }
