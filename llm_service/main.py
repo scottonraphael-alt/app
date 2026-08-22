@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="LLM Moderation Service - Gemini")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY est obligatoire")
@@ -27,7 +27,27 @@ client = Client(api_key=GEMINI_API_KEY)
 REGLEMENT_PATH = Path(__file__).parent / "reglement.txt"
 REGLEMENT_TEXT = REGLEMENT_PATH.read_text(encoding="utf-8")
 
-SYSTEM_PROMPT = """Tu es un assistant de moderation Discord. Analyse les messages pour detecter les violations du reglement. Reponds UNIQUEMENT avec un JSON valide selon ce format exact: {"violation":false,"regle_enfreinte":"","gravite":"faible","explication":"","confidence":0.0}"""
+SYSTEM_PROMPT = f"""Tu es un assistant de moderation Discord.
+
+Reglement du serveur :
+---
+{REGLEMENT_TEXT}
+---
+
+Analyse le message et determine s'il viole une regle precise.
+"""
+
+JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "violation": {"type": "boolean"},
+        "regle_enfreinte": {"type": "string"},
+        "gravite": {"type": "string", "enum": ["faible", "moyenne", "grave"]},
+        "explication": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    },
+    "required": ["violation", "regle_enfreinte", "gravite", "explication", "confidence"],
+}
 
 
 class JudgeRequest(BaseModel):
@@ -117,7 +137,12 @@ async def judge(request: JudgeRequest) -> dict[str, Any]:
                 {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
                 {"role": "user", "parts": [{"text": user_prompt}]},
             ],
-            config={"temperature": 0.1, "max_output_tokens": 256},
+            config={
+                "temperature": 0.1,
+                "max_output_tokens": 256,
+                "response_mime_type": "application/json",
+                "response_schema": JUDGE_SCHEMA,
+            },
         )
 
         if not response.text:
