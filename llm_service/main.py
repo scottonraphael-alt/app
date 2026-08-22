@@ -7,8 +7,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI
-from google.genai import Client
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.DEBUG)
@@ -22,32 +22,21 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY est obligatoire")
 
-client = Client(api_key=GEMINI_API_KEY)
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 REGLEMENT_PATH = Path(__file__).parent / "reglement.txt"
 REGLEMENT_TEXT = REGLEMENT_PATH.read_text(encoding="utf-8")
 
 SYSTEM_PROMPT = f"""Tu es un assistant de moderation Discord.
 
-Reglement du serveur :
+Reglement :
 ---
 {REGLEMENT_TEXT}
 ---
 
-Analyse le message et determine s'il viole une regle precise.
+Reponds UNIQUEMENT avec ce JSON (aucun texte autour) :
+{{"violation":false,"regle_enfreinte":"","gravite":"faible","explication":"","confidence":0.0}}
 """
-
-JUDGE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "violation": {"type": "boolean"},
-        "regle_enfreinte": {"type": "string"},
-        "gravite": {"type": "string", "enum": ["faible", "moyenne", "grave"]},
-        "explication": {"type": "string"},
-        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    },
-    "required": ["violation", "regle_enfreinte", "gravite", "explication", "confidence"],
-}
 
 
 class JudgeRequest(BaseModel):
@@ -131,25 +120,38 @@ async def judge(request: JudgeRequest) -> dict[str, Any]:
     user_prompt = f"Message de {request.author_name} dans #{request.channel_name} : {request.content}"
 
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=[
+        payload = {
+            "contents": [
                 {"role": "user", "parts": [{"text": SYSTEM_PROMPT}]},
                 {"role": "user", "parts": [{"text": user_prompt}]},
             ],
-            config={
+            "generationConfig": {
                 "temperature": 0.1,
-                "max_output_tokens": 256,
-                "response_mime_type": "application/json",
-                "response_schema": JUDGE_SCHEMA,
+                "maxOutputTokens": 200,
+                "responseMimeType": "application/json",
             },
-        )
+        }
 
-        if not response.text:
-            logger.warning("Gemini n'a retourne aucun texte (finish_reason: %s)", getattr(response, "finish_reason", "inconnu"))
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                GEMINI_URL,
+                params={"key": GEMINI_API_KEY},
+                json=payload,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+        candidates = data.get("candidates", [])
+        if not candidates:
+            logger.warning("Gemini: aucun candidate")
             return fallback_verdict()
 
-        raw_content = response.text.strip()
+        parts = candidates[0].get("content", {}).get("parts", [])
+        if not parts:
+            logger.warning("Gemini: aucun part dans le response")
+            return fallback_verdict()
+
+        raw_content = parts[0].get("text", "").strip()
         return safe_verdict(raw_content)
 
     except Exception:
