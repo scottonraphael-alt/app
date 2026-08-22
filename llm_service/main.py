@@ -34,7 +34,7 @@ Reglement :
 {REGLEMENT_TEXT}
 ---
 
-Reponds UNIQUEMENT avec ce JSON (aucun texte autour) :
+Reponds UNIQUEMENT avec ce JSON (aucun texte autour, JSON complet) :
 {{"violation":false,"regle_enfreinte":"","gravite":"faible","explication":"","confidence":0.0}}
 """
 
@@ -50,7 +50,7 @@ def parse_llm_json(raw: str) -> dict | None:
     if not raw:
         return None
 
-    logger.debug("Parsing JSON brut: %s", raw[:300])
+    logger.debug("Parsing JSON brut: %s", raw[:500])
 
     try:
         return json.loads(raw)
@@ -87,7 +87,7 @@ def fallback_verdict() -> dict:
 
 
 def safe_verdict(raw: str) -> dict:
-    logger.info("Reponse brute Gemini: %s", raw[:800] if len(raw) > 800 else raw)
+    logger.info("Reponse brute Gemini: %s", raw[:1000] if len(raw) > 1000 else raw)
 
     parsed = parse_llm_json(raw)
 
@@ -127,7 +127,7 @@ async def judge(request: JudgeRequest) -> dict[str, Any]:
             ],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 500,
+                "maxOutputTokens": 5000,
                 "responseMimeType": "application/json",
             },
         }
