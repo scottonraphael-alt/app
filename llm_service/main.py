@@ -5,6 +5,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 import google.generativeai as genai
 from fastapi import FastAPI
@@ -46,15 +47,27 @@ R\u00e8gles importantes :
 - N'invente jamais de r\u00e8gle.
 - N'associe pas une insulte \u00e0 la r\u00e8gle sur les m\u00e9dicaments.
 
-R\u00e9ponds uniquement avec un JSON valide, selon ce format :
+R\u00e9ponds UNIQUEMENT avec un objet JSON valide, sans texte autour, selon ce format :
 {{
   "violation": true,
-  "regle_enfreinte": "",
+  "regle_enfreinte": "Article X - Description",
   "gravite": "faible",
-  "explication": "",
-  "confidence": 0.0
+  "explication": "Courte explication",
+  "confidence": 0.85
 }}
 """
+
+response_schema = {
+    "type": "object",
+    "properties": {
+        "violation": {"type": "boolean"},
+        "regle_enfreinte": {"type": "string"},
+        "gravite": {"type": "string", "enum": ["faible", "moyenne", "grave"]},
+        "explication": {"type": "string"},
+        "confidence": {"type": "number"},
+    },
+    "required": ["violation", "regle_enfreinte", "gravite", "explication", "confidence"],
+}
 
 model = genai.GenerativeModel(
     model_name=GEMINI_MODEL,
@@ -63,6 +76,7 @@ model = genai.GenerativeModel(
         "temperature": 0.1,
         "max_output_tokens": 300,
         "response_mime_type": "application/json",
+        "response_schema": response_schema,
     },
 )
 
@@ -75,6 +89,8 @@ class JudgeRequest(BaseModel):
 
 def parse_llm_json(raw: str) -> dict | None:
     raw = raw.strip()
+    if not raw:
+        return None
 
     try:
         return json.loads(raw)
@@ -110,8 +126,34 @@ def fallback_verdict() -> dict:
     }
 
 
+def safe_verdict(raw: str) -> dict:
+    """Parse la r\u00e9ponse brute de Gemini, avec fallback JSON g\u00e9n\u00e9r\u00e9 localement."""
+    logger.info("R\u00e9ponse brute Gemini: %s", raw[:500] if len(raw) > 500 else raw)
+
+    parsed = parse_llm_json(raw)
+
+    if parsed is not None:
+        if not isinstance(parsed, dict):
+            logger.warning("R\u00e9ponse JSON non-dict: %s", type(parsed))
+            return fallback_verdict()
+
+        required_keys = {"violation", "regle_enfreinte", "gravite", "explication", "confidence"}
+        if not required_keys.issubset(parsed.keys()):
+            logger.warning("Cl\u00e9s JSON manquantes: %s", required_keys - set(parsed.keys()))
+            return fallback_verdict()
+
+        if not isinstance(parsed.get("violation"), bool):
+            logger.warning("violation n'est pas un bool\u00e9en: %s", parsed.get("violation"))
+            return fallback_verdict()
+
+        return parsed
+
+    logger.warning("\u00c9chec parsing JSON, g\u00e9n\u00e9ration fallback")
+    return fallback_verdict()
+
+
 @app.post("/judge")
-async def judge(request: JudgeRequest) -> dict:
+async def judge(request: JudgeRequest) -> dict[str, Any]:
     if not request.content.strip():
         return fallback_verdict()
 
@@ -124,13 +166,7 @@ async def judge(request: JudgeRequest) -> dict:
     try:
         response = model.generate_content(user_prompt)
         raw_content = response.text.strip()
-        verdict = parse_llm_json(raw_content)
-
-        if verdict is None:
-            logger.warning("R\u00e9ponse Gemini non JSON : %s", raw_content)
-            return fallback_verdict()
-
-        return verdict
+        return safe_verdict(raw_content)
 
     except Exception:
         logger.exception("Erreur lors de l'appel Gemini")
