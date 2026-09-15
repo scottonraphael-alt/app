@@ -161,7 +161,10 @@ async def add_fiche_s(
     updated = await db.casiers.find_one({"_id": casier["_id"]})
     return updated
 
-
+async def get_casier_by_discord_id(discord_id: str) -> dict | None:
+    """Retourne le casier d'un membre, ou None s'il n'existe pas encore."""
+    return await db.casiers.find_one({"discord_id": discord_id})
+    
 async def close_fiche_s(casier_id: ObjectId, fiche_id: str, closed_by: dict) -> dict | None:
     casier = await db.casiers.find_one({"_id": casier_id})
     if not casier:
