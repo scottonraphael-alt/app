@@ -1,8 +1,10 @@
 import os
+from datetime import datetime
 
 import httpx
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from database import db
@@ -23,6 +25,17 @@ router = APIRouter(prefix="/moderation/casiers", tags=["moderation-casiers"])
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID")
 DISCORD_API_BASE = "https://discord.com/api/v10"
+
+GHOST_BOT_API_KEY = os.getenv("GHOST_BOT_API_KEY")
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+SANCTION_LABELS = {
+    "avertissement": "⚠️ Avertissement",
+    "kick": "👢 Kick",
+    "bannissement": "🔨 Bannissement",
+    "rappel_a_lordre": "📢 Rappel à l'ordre",
+}
 
 
 class MemberSearchResult(BaseModel):
@@ -118,6 +131,14 @@ class CasierDetailResponse(BaseModel):
     is_prevention: bool = False
 
 
+class BotCasierResponse(BaseModel):
+    discord_id: str
+    status: str
+    sanctions_count: int
+    has_active_fiche_s: bool
+    sanctions_markdown: str
+
+
 def object_id_or_400(value: str) -> ObjectId:
     try:
         return ObjectId(value)
@@ -141,6 +162,42 @@ def discord_avatar_url(user: dict) -> str | None:
     if not avatar or not user_id:
         return None
     return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar}.png"
+
+
+async def verify_bot_api_key(api_key: str | None = Depends(api_key_header)) -> str:
+    if not GHOST_BOT_API_KEY or not api_key or api_key != GHOST_BOT_API_KEY:
+        raise HTTPException(status_code=401, detail="Clé API invalide ou manquante.")
+    return api_key
+
+
+def format_date(iso_date: str) -> str:
+    try:
+        dt = datetime.fromisoformat(iso_date)
+        return dt.strftime("%d/%m/%Y")
+    except (ValueError, TypeError):
+        return iso_date or "date inconnue"
+
+
+def sanctions_to_markdown(casier: dict) -> str:
+    sanctions = sorted(
+        casier.get("sanctions", []),
+        key=lambda s: s.get("created_at", ""),
+        reverse=True,
+    )
+
+    if not sanctions:
+        return "*Aucune sanction enregistrée.*"
+
+    lines = []
+    for s in sanctions:
+        label = SANCTION_LABELS.get(s.get("type"), s.get("type", "Sanction"))
+        date = format_date(s.get("created_at", ""))
+        reason = s.get("reason") or "Aucune raison renseignée."
+        duration = f" ({s['duration']})" if s.get("duration") else ""
+
+        lines.append(f"**{label}**{duration} — {date}\n> {reason}")
+
+    return "\n\n".join(lines)
 
 
 async def search_guild_members(query: str, limit: int = 10) -> list[dict]:
@@ -287,6 +344,7 @@ async def build_detail_response(casier: dict) -> CasierDetailResponse:
         is_prevention=is_prevention,
     )
 
+
 def build_sanctions_summary(casier: dict) -> dict[str, int]:
     sanctions = casier.get("sanctions", [])
     summary = {"avertissement": 0, "kick": 0, "bannissement": 0, "rappel_a_lordre": 0}
@@ -295,7 +353,8 @@ def build_sanctions_summary(casier: dict) -> dict[str, int]:
         if t in summary:
             summary[t] += 1
     return summary
-    
+
+
 @router.get("/search-members", response_model=list[MemberSearchResult])
 async def search_members(
     q: str = Query(..., min_length=1),
@@ -307,6 +366,35 @@ async def search_members(
 
     results = await search_guild_members(needle, limit=10)
     return [MemberSearchResult(**member) for member in results]
+
+
+@router.get("/bot/{discord_id}", response_model=BotCasierResponse)
+async def get_casier_for_bot(
+    discord_id: str,
+    _: str = Depends(verify_bot_api_key),
+):
+    """Route dédiée aux bots externes (ex. Ghost Bot) : renvoie l'historique
+    des sanctions déjà formaté en markdown, ainsi que la présence ou non
+    d'une fiche S active. Ne crée jamais de casier et n'expose pas le
+    contenu des fiches S (uniquement leur présence)."""
+    casier = await db.casiers.find_one({"discord_id": discord_id})
+
+    if not casier:
+        return BotCasierResponse(
+            discord_id=discord_id,
+            status="vierge",
+            sanctions_count=0,
+            has_active_fiche_s=False,
+            sanctions_markdown="*Aucune sanction enregistrée.*",
+        )
+
+    return BotCasierResponse(
+        discord_id=discord_id,
+        status=compute_status(casier),
+        sanctions_count=len(casier.get("sanctions", [])),
+        has_active_fiche_s=has_active_fiche_s(casier),
+        sanctions_markdown=sanctions_to_markdown(casier),
+    )
 
 
 @router.get("", response_model=list[CasierListItem])
