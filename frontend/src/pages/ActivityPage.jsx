@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 
-// Dans l'iframe Discord, le domaine est <client_id>.discordsays.com : on peut donc
+// Dans l'iframe Discord, le domaine est .discordsays.com : on peut donc
 // retrouver le client id sans variable de build. REACT_APP_DISCORD_CLIENT_ID est facultatif.
 const CLIENT_ID =
   process.env.REACT_APP_DISCORD_CLIENT_ID || window.location.hostname.split(".")[0];
@@ -134,7 +134,6 @@ export default function ActivityPage() {
         if (!response.ok) {
           throw new Error(response.status === 403 ? "forbidden" : "error");
         }
-
         const data = await response.json();
         await sdk.commands.authenticate({ access_token: data.access_token });
 
@@ -144,6 +143,7 @@ export default function ActivityPage() {
             title: data.title,
             canControl: data.can_control,
             videoToken: data.video_token,
+            videoVersion: data.video_version,
             instanceId: sdk.instanceId,
           });
         }
@@ -233,20 +233,23 @@ export default function ActivityPage() {
     return <div style={styles.page}>{MESSAGES[session.status]}</div>;
   }
 
+  const videoSrc =
+    `${PROXY}/activity/video?t=${encodeURIComponent(session.videoToken)}` +
+    `&v=${session.videoVersion}`;
+
   return (
     <div style={styles.page} onContextMenu={(event) => event.preventDefault()}>
       <video
         ref={videoRef}
-        style={styles.video}
-        src={`${PROXY}/activity/video?t=${encodeURIComponent(session.videoToken)}`}
+        src={videoSrc}
         title={session.title}
+        style={styles.video}
         playsInline
         preload="auto"
-        // Pas d'attribut "controls" : aucune barre de progression, donc personne ne peut avancer ou reculer.
-        controlsList="nodownload noplaybackrate"
         disablePictureInPicture
+        controlsList="nodownload noremoteplayback"
         onLoadedMetadata={applyState}
-        // Si quelque chose met la vidéo en pause alors que le serveur dit "lecture", on relance.
+        onCanPlay={applyState}
         onPause={() => {
           if (serverState.current.playing) applyState();
         }}
