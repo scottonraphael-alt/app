@@ -5,7 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 import logging
 from config import CORS_ORIGINS
 from database import client, initialize_indexes
-from routers import admin, auth, members, profiles, resources, staff, tickets, animateur, animateur_calendar, responsable, casier, channel_archives
+from routers import admin, auth, members, profiles, resources, staff, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives
 from services.storage_service import init_storage
 from services.moderation_bot import start_moderation_bot, stop_moderation_bot
 
