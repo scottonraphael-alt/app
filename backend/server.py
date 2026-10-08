@@ -17,7 +17,7 @@ _bot_task = None
 async def root() -> dict[str, str]:
     return {"message": "Iris API opérationnelle"}
 
-
+app.include_router(activity.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(profiles.router, prefix="/api")
