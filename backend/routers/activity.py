@@ -5,15 +5,18 @@ Flux :
 2. POST /api/activity/token échange ce code, identifie l'utilisateur, puis vérifie
    qu'il est bien membre du serveur DISCORD_GUILD_ID (avec son propre token, sans bot).
    Le jeton signé renvoyé indique aussi si l'utilisateur peut contrôler la lecture.
-3. GET /api/activity/video sert le fichier vidéo (avec support des requêtes Range).
-   Le fichier est simplement ACTIVITY_VIDEO_DIR/ACTIVITY_VIDEO_NAME : on le remplace à la main.
+3. GET /api/activity/video sert la vidéo active (avec support des requêtes Range).
+   Les vidéos sont les fichiers .mp4 / .webm déposés dans ACTIVITY_VIDEO_DIR.
 4. WS /api/activity/ws synchronise la lecture entre tous les spectateurs d'une même
-   instance d'Activity. Le serveur fait foi : personne ne peut avancer ou reculer,
-   et seuls les rôles « contrôleurs » (staff) peuvent mettre en pause / relancer.
+   instance d'Activity. Le serveur fait foi : personne ne peut avancer ou reculer.
+   Seuls les rôles « contrôleurs » (staff) peuvent mettre en pause / relancer
+   et choisir la vidéo active parmi les fichiers du dossier.
 """
+import logging
 import os
 import re
 import time
+import zlib
 from pathlib import Path
 
 import httpx
@@ -24,6 +27,8 @@ from pydantic import BaseModel
 
 from config import APP_SESSION_SECRET, DISCORD_GUILD_ID, DISCORD_STAFF_ROLE_ID
 
+logger = logging.getLogger("activity")
+
 DISCORD_API = "https://discord.com/api/v10"
 AUDIENCE = "iris-activity"
 VIDEO_TOKEN_TTL = 6 * 3600
@@ -33,17 +38,20 @@ CHUNK_SIZE = 1024 * 1024
 ACTIVITY_CLIENT_ID = os.environ.get("ACTIVITY_DISCORD_CLIENT_ID", "")
 ACTIVITY_CLIENT_SECRET = os.environ.get("ACTIVITY_DISCORD_CLIENT_SECRET", "")
 
-# Fichier vidéo : dossier monté en volume + nom fixe. Remplace le fichier pour changer de vidéo.
+# Dossier des vidéos (monté en volume). Tous les .mp4 / .webm du dossier sont proposables au staff.
 VIDEO_DIR = Path(os.environ.get("ACTIVITY_VIDEO_DIR", "/data/activity"))
+# Vidéo utilisée tant que le staff n'en a pas choisi une autre.
 VIDEO_NAME = os.environ.get("ACTIVITY_VIDEO_NAME", "video.mp4")
-VIDEO_TITLE = os.environ.get("ACTIVITY_VIDEO_TITLE", "Vidéo")
+VIDEO_EXTENSIONS = {".mp4", ".webm"}
+# Mémorise la vidéo choisie (doit être un emplacement inscriptible, pas le dossier des vidéos en :ro).
+STATE_FILE = Path(os.environ.get("ACTIVITY_STATE_FILE", "/app/storage/activity_current.txt"))
 
 # Optionnel : ids de rôles autorisés, séparés par des virgules. Vide = tous les membres du serveur.
 ACTIVITY_ALLOWED_ROLE_IDS = {
     r.strip() for r in os.environ.get("ACTIVITY_ALLOWED_ROLE_IDS", "").split(",") if r.strip()
 }
 
-# Rôles autorisés à mettre en pause / relancer. Par défaut : le rôle staff d'IRIS.
+# Rôles autorisés à contrôler (pause, choix de la vidéo). Par défaut : le rôle staff d'IRIS.
 ACTIVITY_CONTROLLER_ROLE_IDS = {
     r.strip()
     for r in os.environ.get("ACTIVITY_CONTROLLER_ROLE_IDS", DISCORD_STAFF_ROLE_ID or "").split(",")
@@ -64,8 +72,55 @@ class ActivityTokenRequest(BaseModel):
     guild_id: str | None = None
 
 
-def video_path() -> Path:
-    return VIDEO_DIR / VIDEO_NAME
+# --------------------------------------------------------------------------------------
+# Vidéos disponibles et vidéo active
+# --------------------------------------------------------------------------------------
+_current_name: str | None = None
+
+
+def list_videos() -> list[dict]:
+    """Fichiers vidéo du dossier, triés par nom. Les noms viennent toujours du disque."""
+    try:
+        entries = sorted(VIDEO_DIR.iterdir(), key=lambda p: p.name.lower())
+    except OSError:
+        return []
+    videos = []
+    for entry in entries:
+        if (
+            entry.is_file()
+            and not entry.name.startswith(".")
+            and entry.suffix.lower() in VIDEO_EXTENSIONS
+        ):
+            videos.append({"name": entry.name, "title": entry.stem, "size": entry.stat().st_size})
+    return videos
+
+
+def _read_state() -> str | None:
+    try:
+        return STATE_FILE.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def _write_state(name: str) -> None:
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(name, encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Impossible de mémoriser la vidéo choisie (%s) : %s", STATE_FILE, exc)
+
+
+def current_video_path() -> Path | None:
+    names = [video["name"] for video in list_videos()]
+    for candidate in (_current_name, _read_state(), VIDEO_NAME):
+        if candidate and candidate in names:
+            return VIDEO_DIR / candidate
+    return VIDEO_DIR / names[0] if names else None
+
+
+def video_version(path: Path) -> int:
+    """Change quand la vidéo active change ou que son fichier est remplacé (anti-cache)."""
+    return zlib.crc32(f"{path.name}:{int(path.stat().st_mtime)}".encode("utf-8"))
 
 
 def _is_configured() -> bool:
@@ -119,9 +174,9 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         raise HTTPException(status_code=403, detail="Rôle insuffisant.")
     can_control = bool(member_roles & ACTIVITY_CONTROLLER_ROLE_IDS)
 
-    path = video_path()
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Vidéo introuvable.")
+    path = current_video_path()
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="Aucune vidéo disponible.")
 
     video_token = jwt.encode(
         {
@@ -138,9 +193,8 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         "access_token": access_token,
         "video_token": video_token,
         "can_control": can_control,
-        "title": VIDEO_TITLE,
-        # Change quand le fichier est remplacé : sert à contourner le cache du navigateur.
-        "video_version": int(path.stat().st_mtime),
+        "title": path.stem,
+        "video_version": video_version(path),
     }
 
 
@@ -187,8 +241,8 @@ async def activity_video(request: Request, t: str) -> Response:
     except jwt.PyJWTError:
         raise HTTPException(status_code=403, detail="Accès refusé.")
 
-    path = video_path()
-    if not path.is_file():
+    path = current_video_path()
+    if path is None or not path.is_file():
         raise HTTPException(status_code=404, detail="Vidéo introuvable.")
 
     size = path.stat().st_size
@@ -237,6 +291,12 @@ class Room:
         self.playing = playing
         self.touched = time.monotonic()
 
+    def reset(self) -> None:
+        self.playing = ACTIVITY_AUTOSTART
+        self.position = 0.0
+        self.since = time.monotonic()
+        self.touched = time.monotonic()
+
     def snapshot(self) -> dict:
         return {
             "type": "state",
@@ -254,13 +314,35 @@ def purge_rooms() -> None:
         del ROOMS[key]
 
 
-async def broadcast(room: Room) -> None:
-    message = room.snapshot()
+async def broadcast(room: Room, message: dict | None = None) -> None:
+    payload = message or room.snapshot()
     for client in list(room.clients):
         try:
-            await client.send_json(message)
+            await client.send_json(payload)
         except Exception:
             room.clients.discard(client)
+
+
+def videos_message() -> dict:
+    path = current_video_path()
+    return {
+        "type": "videos",
+        "videos": list_videos(),
+        "current": path.name if path else None,
+    }
+
+
+async def select_video(name: str) -> bool:
+    """Change la vidéo active pour tout le monde. Le nom doit exister dans le dossier."""
+    global _current_name
+    if name not in {video["name"] for video in list_videos()}:
+        return False
+    _current_name = name
+    _write_state(name)
+    for room in ROOMS.values():
+        room.reset()
+        await broadcast(room, {"type": "reload"})
+    return True
 
 
 @router.websocket("/ws")
@@ -285,6 +367,8 @@ async def activity_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
 
     try:
         await websocket.send_json(room.snapshot())
+        if can_control:
+            await websocket.send_json(videos_message())
         while True:
             message = await websocket.receive_json()
             kind = message.get("type") if isinstance(message, dict) else None
@@ -293,6 +377,12 @@ async def activity_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
             elif kind in ("play", "pause") and can_control:
                 room.set_playing(kind == "play")
                 await broadcast(room)
+            elif kind == "list" and can_control:
+                await websocket.send_json(videos_message())
+            elif kind == "select" and can_control:
+                name = message.get("name")
+                if isinstance(name, str) and await select_video(name):
+                    logger.info("Vidéo de l'Activity changée : %s (par %s)", name, claims.get("sub"))
             # Tout le reste (seek, avance, retour...) est ignoré : personne ne contrôle la position.
     except WebSocketDisconnect:
         pass
