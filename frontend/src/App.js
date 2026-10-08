@@ -332,7 +332,18 @@ function AuthenticatedApp({
   );
 }
 
+// Discord ajoute ces paramètres à l'URL de l'iframe d'une Activity.
+const isDiscordActivity = (() => {
+  const params = new URLSearchParams(window.location.search);
+  return params.has("frame_id") && params.has("instance_id");
+})();
+
 export default function App() {
+  // L'Activity ne passe pas par la session IRIS : elle a sa propre vérification (serveur Discord).
+  return isDiscordActivity ? <ActivityPage /> : <MainApp />;
+}
+
+function MainApp() {
   const [session, setSession] = useState(null);
 
   const loadSession = useCallback(async () => {
