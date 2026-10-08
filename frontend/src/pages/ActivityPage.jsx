@@ -123,7 +123,7 @@ export default function ActivityPage() {
           response_type: "code",
           state: "",
           prompt: "none",
-          scope: ["identify"],
+          scope: ["identify", "guilds.members.read"],
         });
 
         const response = await fetch(`${PROXY}/activity/token`, {
