@@ -3,7 +3,7 @@
 Flux :
 1. L'Activity (frontend) obtient un `code` OAuth via le SDK Discord.
 2. POST /api/activity/token échange ce code, identifie l'utilisateur, puis vérifie
-   avec le bot qu'il est bien membre du serveur DISCORD_GUILD_ID. Le jeton signé
+   qu'il est bien membre du serveur DISCORD_GUILD_ID (avec son propre token, sans bot). Le jeton signé
    renvoyé indique aussi si l'utilisateur a le droit de contrôler la lecture.
 3. GET /api/activity/video sert la vidéo (avec support des requêtes Range).
 4. WS /api/activity/ws synchronise la lecture entre tous les spectateurs d'une même
@@ -21,14 +21,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from config import (
-    APP_SESSION_SECRET,
-    DISCORD_BOT_TOKEN,
-    DISCORD_CLIENT_ID,
-    DISCORD_CLIENT_SECRET,
-    DISCORD_GUILD_ID,
-    DISCORD_STAFF_ROLE_ID,
-)
+from config import APP_SESSION_SECRET, DISCORD_GUILD_ID, DISCORD_STAFF_ROLE_ID
 from database import db
 from services.storage_service import STORAGE_ROOT
 
@@ -36,6 +29,11 @@ DISCORD_API = "https://discord.com/api/v10"
 AUDIENCE = "iris-activity"
 VIDEO_TOKEN_TTL = 6 * 3600
 CHUNK_SIZE = 1024 * 1024
+
+# Application Discord DÉDIÉE à l'Activity (distincte de celle du login IRIS et du bot de modération).
+# Ainsi, si Discord sanctionne l'Activity, le bot de modération n'est pas touché.
+ACTIVITY_CLIENT_ID = os.environ.get("ACTIVITY_DISCORD_CLIENT_ID", "")
+ACTIVITY_CLIENT_SECRET = os.environ.get("ACTIVITY_DISCORD_CLIENT_SECRET", "")
 
 # Id d'une ressource déjà uploadée dans IRIS (page Ressources).
 ACTIVITY_VIDEO_RESOURCE_ID = os.environ.get("ACTIVITY_VIDEO_RESOURCE_ID", "")
@@ -67,10 +65,9 @@ class ActivityTokenRequest(BaseModel):
 def _is_configured() -> bool:
     return all(
         [
-            DISCORD_CLIENT_ID,
-            DISCORD_CLIENT_SECRET,
+            ACTIVITY_CLIENT_ID,
+            ACTIVITY_CLIENT_SECRET,
             DISCORD_GUILD_ID,
-            DISCORD_BOT_TOKEN,
             APP_SESSION_SECRET,
             ACTIVITY_VIDEO_RESOURCE_ID,
         ]
@@ -90,8 +87,8 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         token_response = await client.post(
             f"{DISCORD_API}/oauth2/token",
             data={
-                "client_id": DISCORD_CLIENT_ID,
-                "client_secret": DISCORD_CLIENT_SECRET,
+                "client_id": ACTIVITY_CLIENT_ID,
+                "client_secret": ACTIVITY_CLIENT_SECRET,
                 "grant_type": "authorization_code",
                 "code": payload.code,
             },
@@ -100,24 +97,19 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
             raise HTTPException(status_code=401, detail="Authentification Discord refusée.")
         access_token = token_response.json()["access_token"]
 
-        me_response = await client.get(
-            f"{DISCORD_API}/users/@me",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        if me_response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Utilisateur Discord introuvable.")
-        user_id = me_response.json()["id"]
-
-        # Vérification faite avec le bot : fiable, sans pagination de la liste des serveurs.
+        # Vérification avec le token de l'utilisateur (scope guilds.members.read) :
+        # 200 = membre du serveur, 404 = pas membre. Aucun bot n'est nécessaire.
         member_response = await client.get(
-            f"{DISCORD_API}/guilds/{DISCORD_GUILD_ID}/members/{user_id}",
-            headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}"},
+            f"{DISCORD_API}/users/@me/guilds/{DISCORD_GUILD_ID}/member",
+            headers={"Authorization": f"Bearer {access_token}"},
         )
 
     if member_response.status_code != 200:
         raise HTTPException(status_code=403, detail="Réservé aux membres du serveur.")
+    member = member_response.json()
+    user_id = (member.get("user") or {}).get("id", "unknown")
 
-    member_roles = set(member_response.json().get("roles", []))
+    member_roles = set(member.get("roles", []))
     if ACTIVITY_ALLOWED_ROLE_IDS and not member_roles & ACTIVITY_ALLOWED_ROLE_IDS:
         raise HTTPException(status_code=403, detail="Rôle insuffisant.")
     can_control = bool(member_roles & ACTIVITY_CONTROLLER_ROLE_IDS)
