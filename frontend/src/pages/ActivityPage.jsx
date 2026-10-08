@@ -51,11 +51,15 @@ const styles = {
     background: "rgba(0,0,0,0.7)",
     fontSize: 14,
   },
-  controlButton: {
+  controlBar: {
     position: "absolute",
     bottom: 20,
     left: "50%",
     transform: "translateX(-50%)",
+    display: "flex",
+    gap: 10,
+  },
+  controlButton: {
     padding: "10px 24px",
     borderRadius: 999,
     border: "none",
@@ -65,6 +69,36 @@ const styles = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  panel: {
+    position: "absolute",
+    bottom: 76,
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "min(480px, 92vw)",
+    maxHeight: "50vh",
+    overflowY: "auto",
+    padding: 8,
+    borderRadius: 12,
+    background: "rgba(20,20,24,0.96)",
+    border: "1px solid rgba(255,255,255,0.15)",
+  },
+  panelTitle: { padding: "6px 10px", fontSize: 13, opacity: 0.7 },
+  videoItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    padding: "10px 12px",
+    border: "none",
+    borderRadius: 8,
+    background: "transparent",
+    color: "#fff",
+    fontSize: 15,
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  videoItemActive: { background: "rgba(255,255,255,0.14)", fontWeight: 600 },
 };
 
 const MESSAGES = {
@@ -84,11 +118,20 @@ function describeError(error) {
   }
 }
 
+function formatSize(bytes) {
+  if (!bytes) return "";
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} Go` : `${Math.round(mb)} Mo`;
+}
+
 export default function ActivityPage() {
   const [session, setSession] = useState({ status: "loading" });
   const [playing, setPlaying] = useState(true);
   const [connected, setConnected] = useState(false);
   const [needsClick, setNeedsClick] = useState(false);
+  const [videos, setVideos] = useState([]);
+  const [currentVideo, setCurrentVideo] = useState(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const videoRef = useRef(null);
   const socketRef = useRef(null);
@@ -215,6 +258,16 @@ export default function ActivityPage() {
       };
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
+        if (message.type === "reload") {
+          // Le staff a changé de vidéo : on recharge pour récupérer la nouvelle.
+          window.location.reload();
+          return;
+        }
+        if (message.type === "videos") {
+          setVideos(message.videos || []);
+          setCurrentVideo(message.current || null);
+          return;
+        }
         if (message.type !== "state") return;
         serverState.current = { playing: message.playing, position: message.position };
         setPlaying(message.playing);
@@ -248,11 +301,23 @@ export default function ActivityPage() {
     };
   }, [session, applyState]);
 
-  const sendControl = () => {
+  const send = (payload) => {
     const socket = socketRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: playing ? "pause" : "play" }));
+      socket.send(JSON.stringify(payload));
     }
+  };
+
+  const sendControl = () => send({ type: playing ? "pause" : "play" });
+
+  const togglePicker = () => {
+    if (!pickerOpen) send({ type: "list" }); // rafraîchit la liste des fichiers du dossier
+    setPickerOpen((open) => !open);
+  };
+
+  const chooseVideo = (name) => {
+    setPickerOpen(false);
+    if (name !== currentVideo) send({ type: "select", name });
   };
 
   const startPlayback = () => {
@@ -298,10 +363,36 @@ export default function ActivityPage() {
       {!connected && <div style={styles.badge}>Connexion…</div>}
       {connected && !playing && <div style={styles.badge}>⏸ En pause</div>}
 
+      {session.canControl && connected && pickerOpen && (
+        <div style={styles.panel}>
+          <div style={styles.panelTitle}>Choisir la vidéo ({videos.length})</div>
+          {videos.length === 0 && <div style={styles.panelTitle}>Aucun fichier dans le dossier.</div>}
+          {videos.map((video) => (
+            <button
+              key={video.name}
+              type="button"
+              style={{
+                ...styles.videoItem,
+                ...(video.name === currentVideo ? styles.videoItemActive : {}),
+              }}
+              onClick={() => chooseVideo(video.name)}
+            >
+              <span>{video.name === currentVideo ? "▶ " : ""}{video.title}</span>
+              <span style={{ opacity: 0.6, fontSize: 12 }}>{formatSize(video.size)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {session.canControl && connected && (
-        <button type="button" style={styles.controlButton} onClick={sendControl}>
-          {playing ? "⏸ Pause" : "▶ Reprendre"}
-        </button>
+        <div style={styles.controlBar}>
+          <button type="button" style={styles.controlButton} onClick={sendControl}>
+            {playing ? "⏸ Pause" : "▶ Reprendre"}
+          </button>
+          <button type="button" style={styles.controlButton} onClick={togglePicker}>
+            🎞 Vidéos
+          </button>
+        </div>
       )}
 
       {needsClick && (
