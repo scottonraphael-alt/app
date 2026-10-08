@@ -3,9 +3,10 @@
 Flux :
 1. L'Activity (frontend) obtient un `code` OAuth via le SDK Discord.
 2. POST /api/activity/token échange ce code, identifie l'utilisateur, puis vérifie
-   qu'il est bien membre du serveur DISCORD_GUILD_ID (avec son propre token, sans bot). Le jeton signé
-   renvoyé indique aussi si l'utilisateur a le droit de contrôler la lecture.
-3. GET /api/activity/video sert la vidéo (avec support des requêtes Range).
+   qu'il est bien membre du serveur DISCORD_GUILD_ID (avec son propre token, sans bot).
+   Le jeton signé renvoyé indique aussi si l'utilisateur peut contrôler la lecture.
+3. GET /api/activity/video sert le fichier vidéo (avec support des requêtes Range).
+   Le fichier est simplement ACTIVITY_VIDEO_DIR/ACTIVITY_VIDEO_NAME : on le remplace à la main.
 4. WS /api/activity/ws synchronise la lecture entre tous les spectateurs d'une même
    instance d'Activity. Le serveur fait foi : personne ne peut avancer ou reculer,
    et seuls les rôles « contrôleurs » (staff) peuvent mettre en pause / relancer.
@@ -22,8 +23,6 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from config import APP_SESSION_SECRET, DISCORD_GUILD_ID, DISCORD_STAFF_ROLE_ID
-from database import db
-from services.storage_service import STORAGE_ROOT
 
 DISCORD_API = "https://discord.com/api/v10"
 AUDIENCE = "iris-activity"
@@ -31,12 +30,14 @@ VIDEO_TOKEN_TTL = 6 * 3600
 CHUNK_SIZE = 1024 * 1024
 
 # Application Discord DÉDIÉE à l'Activity (distincte de celle du login IRIS et du bot de modération).
-# Ainsi, si Discord sanctionne l'Activity, le bot de modération n'est pas touché.
 ACTIVITY_CLIENT_ID = os.environ.get("ACTIVITY_DISCORD_CLIENT_ID", "")
 ACTIVITY_CLIENT_SECRET = os.environ.get("ACTIVITY_DISCORD_CLIENT_SECRET", "")
 
-# Id d'une ressource déjà uploadée dans IRIS (page Ressources).
-ACTIVITY_VIDEO_RESOURCE_ID = os.environ.get("ACTIVITY_VIDEO_RESOURCE_ID", "")
+# Fichier vidéo : dossier monté en volume + nom fixe. Remplace le fichier pour changer de vidéo.
+VIDEO_DIR = Path(os.environ.get("ACTIVITY_VIDEO_DIR", "/data/activity"))
+VIDEO_NAME = os.environ.get("ACTIVITY_VIDEO_NAME", "video.mp4")
+VIDEO_TITLE = os.environ.get("ACTIVITY_VIDEO_TITLE", "Vidéo")
+
 # Optionnel : ids de rôles autorisés, séparés par des virgules. Vide = tous les membres du serveur.
 ACTIVITY_ALLOWED_ROLE_IDS = {
     r.strip() for r in os.environ.get("ACTIVITY_ALLOWED_ROLE_IDS", "").split(",") if r.strip()
@@ -48,6 +49,7 @@ ACTIVITY_CONTROLLER_ROLE_IDS = {
     for r in os.environ.get("ACTIVITY_CONTROLLER_ROLE_IDS", DISCORD_STAFF_ROLE_ID or "").split(",")
     if r.strip()
 }
+
 # True : la vidéo démarre dès l'ouverture de l'Activity. False : le staff doit lancer la lecture.
 ACTIVITY_AUTOSTART = os.environ.get("ACTIVITY_AUTOSTART", "true").lower() != "false"
 
@@ -62,6 +64,10 @@ class ActivityTokenRequest(BaseModel):
     guild_id: str | None = None
 
 
+def video_path() -> Path:
+    return VIDEO_DIR / VIDEO_NAME
+
+
 def _is_configured() -> bool:
     return all(
         [
@@ -69,7 +75,6 @@ def _is_configured() -> bool:
             ACTIVITY_CLIENT_SECRET,
             DISCORD_GUILD_ID,
             APP_SESSION_SECRET,
-            ACTIVITY_VIDEO_RESOURCE_ID,
         ]
     )
 
@@ -103,10 +108,10 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
             f"{DISCORD_API}/users/@me/guilds/{DISCORD_GUILD_ID}/member",
             headers={"Authorization": f"Bearer {access_token}"},
         )
+        if member_response.status_code != 200:
+            raise HTTPException(status_code=403, detail="Réservé aux membres du serveur.")
+        member = member_response.json()
 
-    if member_response.status_code != 200:
-        raise HTTPException(status_code=403, detail="Réservé aux membres du serveur.")
-    member = member_response.json()
     user_id = (member.get("user") or {}).get("id", "unknown")
 
     member_roles = set(member.get("roles", []))
@@ -114,10 +119,8 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         raise HTTPException(status_code=403, detail="Rôle insuffisant.")
     can_control = bool(member_roles & ACTIVITY_CONTROLLER_ROLE_IDS)
 
-    resource = await db.resources.find_one(
-        {"id": ACTIVITY_VIDEO_RESOURCE_ID, "is_deleted": False}, {"_id": 0}
-    )
-    if not resource:
+    path = video_path()
+    if not path.is_file():
         raise HTTPException(status_code=404, detail="Vidéo introuvable.")
 
     video_token = jwt.encode(
@@ -130,11 +133,14 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         APP_SESSION_SECRET,
         algorithm="HS256",
     )
+
     return {
         "access_token": access_token,
         "video_token": video_token,
         "can_control": can_control,
-        "title": resource.get("title") or resource.get("original_filename") or "Vidéo",
+        "title": VIDEO_TITLE,
+        # Change quand le fichier est remplacé : sert à contourner le cache du navigateur.
+        "video_version": int(path.stat().st_mtime),
     }
 
 
@@ -181,21 +187,12 @@ async def activity_video(request: Request, t: str) -> Response:
     except jwt.PyJWTError:
         raise HTTPException(status_code=403, detail="Accès refusé.")
 
-    resource = await db.resources.find_one(
-        {"id": ACTIVITY_VIDEO_RESOURCE_ID, "is_deleted": False}, {"_id": 0}
-    )
-    if not resource:
-        raise HTTPException(status_code=404, detail="Vidéo introuvable.")
-
-    root = STORAGE_ROOT.resolve()
-    path = (root / resource["storage_path"]).resolve()
-    if root not in path.parents or not path.is_file():
+    path = video_path()
+    if not path.is_file():
         raise HTTPException(status_code=404, detail="Vidéo introuvable.")
 
     size = path.stat().st_size
-    media_type = resource.get("content_type") or "video/mp4"
-    if media_type == "application/octet-stream":
-        media_type = "video/mp4"
+    media_type = "video/webm" if path.suffix.lower() == ".webm" else "video/mp4"
     headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
 
     try:
@@ -217,7 +214,7 @@ async def activity_video(request: Request, t: str) -> Response:
 
 
 # --------------------------------------------------------------------------------------
-# Synchronisation de la lecture (en mémoire : un seul process uvicorn, comme dans ton Dockerfile)
+# Synchronisation de la lecture (en mémoire : un seul process uvicorn)
 # --------------------------------------------------------------------------------------
 class Room:
     """État de lecture partagé par tous les spectateurs d'une instance d'Activity."""
