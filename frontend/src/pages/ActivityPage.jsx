@@ -73,6 +73,17 @@ const MESSAGES = {
   error: "Impossible de charger la vidéo. Réessaie dans un instant.",
 };
 
+function describeError(error) {
+  if (!error) return "erreur inconnue";
+  if (typeof error === "string") return error;
+  if (error.message) return error.code ? `${error.code} - ${error.message}` : error.message;
+  try {
+    return JSON.stringify(error);
+  } catch (e) {
+    return String(error);
+  }
+}
+
 export default function ActivityPage() {
   const [session, setSession] = useState({ status: "loading" });
   const [playing, setPlaying] = useState(true);
@@ -114,10 +125,14 @@ export default function ActivityPage() {
     let cancelled = false;
 
     (async () => {
+      let step = "init";
       try {
+        step = "sdk";
         const sdk = new DiscordSDK(CLIENT_ID);
+        step = "ready";
         await sdk.ready();
 
+        step = "authorize";
         const { code } = await sdk.commands.authorize({
           client_id: CLIENT_ID,
           response_type: "code",
@@ -126,15 +141,26 @@ export default function ActivityPage() {
           scope: ["identify", "guilds.members.read"],
         });
 
+        step = "token";
         const response = await fetch(`${PROXY}/activity/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code, guild_id: sdk.guildId }),
         });
         if (!response.ok) {
-          throw new Error(response.status === 403 ? "forbidden" : "error");
+          let body = "";
+          try {
+            body = await response.text();
+          } catch (e) {
+            body = "";
+          }
+          const failure = new Error(`HTTP ${response.status} ${body}`);
+          failure.httpStatus = response.status;
+          throw failure;
         }
         const data = await response.json();
+
+        step = "authenticate";
         await sdk.commands.authenticate({ access_token: data.access_token });
 
         if (!cancelled) {
@@ -148,8 +174,13 @@ export default function ActivityPage() {
           });
         }
       } catch (error) {
+        const detail = `[${step}] ${describeError(error)}`;
+        console.error("[activity] échec", detail, error);
         if (!cancelled) {
-          setSession({ status: error.message === "forbidden" ? "forbidden" : "error" });
+          setSession({
+            status: error && error.httpStatus === 403 ? "forbidden" : "error",
+            detail,
+          });
         }
       }
     })();
@@ -230,7 +261,16 @@ export default function ActivityPage() {
   };
 
   if (session.status !== "ok") {
-    return <div style={styles.page}>{MESSAGES[session.status]}</div>;
+    return (
+      <div style={styles.page}>
+        <div style={{ textAlign: "center", maxWidth: 640, padding: 16 }}>
+          <div>{MESSAGES[session.status]}</div>
+          {session.detail && (
+            <pre style={{ fontSize: 12, opacity: 0.7, whiteSpace: "pre-wrap" }}>{session.detail}</pre>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const videoSrc =
