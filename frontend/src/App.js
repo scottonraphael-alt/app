@@ -12,6 +12,7 @@ import HelperProfilePage from "./pages/HelperProfilePage";
 import LoginPage from "./pages/LoginPage";
 import NewTicketPage from "./pages/NewTicketPage";
 import ResourcesPage from "./pages/ResourcesPage";
+import ActivityPage from "./pages/ActivityPage";
 import TicketWorkspacePage from "./pages/TicketWorkspacePage";
 import AbsenceCalendarPage from "./pages/AbsenceCalendarPage";
 import MeetingSummariesPage from "./pages/MeetingSummariesPage";
