@@ -1,4 +1,3 @@
-version: '3.8'
 networks:
   npm_default:
     external: true
@@ -23,9 +22,10 @@ services:
     build: ./backend
     container_name: emergent-backend
     volumes:
-    - resources-data:/app/storage
+      - resources-data:/app/storage
+      - ./activity-video:/data/activity:ro
     env_file:
-    - .env
+      - .env
     depends_on:
       - mongodb
     networks:
@@ -33,7 +33,7 @@ services:
 
   # Application Frontend (React)
   frontend:
-    build: 
+    build:
       context: ./frontend
       args:
         - REACT_APP_BACKEND_URL=https://api.loasis.app
