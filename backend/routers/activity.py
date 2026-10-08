@@ -166,7 +166,7 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
             headers={"Authorization": f"Bearer {access_token}"},
         )
         if member_response.status_code != 200:
-            raise HTTPException(status_code=403, detail="Réservé aux membres du serveur.")
+            raise HTTPException(status_code=403, detail="Réservé aux membres du serveur L'Oasis.")
         member = member_response.json()
 
     user_id = (member.get("user") or {}).get("id", "unknown")
