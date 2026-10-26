@@ -247,6 +247,9 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   if (error || !ticket) return <div className="tw-desk tw-loading tw-error" data-testid="ticket-load-error">{error || "Ticket introuvable."}</div>;
 
 
+  // Le message d’ouverture du bot reste dans le dossier pour l’import et l’IA,
+  // mais son contenu V2 n’est pas présenté dans la conversation.
+  const visibleMessages = page === 1 && messages[0]?.author?.is_bot ? messages.slice(1) : messages;
   const pageCount = Math.max(1, Math.ceil(ticket.message_count / pageSize));
   const dirty = vocalSummary !== (ticket.vocal_summary || "") || personTriggers !== (ticket.person_triggers || "") || followUpStatus !== (ticket.follow_up_status || "en attente de réponse");
   const noteCount = (ticket.notes_entries || []).length + (ticket.notes ? 1 : 0);
@@ -288,12 +291,12 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         <section className="tw-conversation" data-testid="transcript-panel" aria-label="Conversation">
           <header className="tw-panel-heading"><span className="tw-panel-icon"><HeartHandshake size={22} /></span><div><h2>Conversation <span>{ticket.message_count}</span></h2><p>{ticket.last_synced_at ? `Synchronisé le ${formatTime(ticket.last_synced_at)}` : "Historique des échanges"}</p></div></header>
           <div className="tw-messages" ref={transcriptRef} aria-busy={messagesLoading}>
-            {!messagesLoading && !messagesError && messages.length === 0 && <div className="tw-empty" data-testid="empty-transcript"><HeartHandshake size={26} /><h3>La conversation commence ici</h3><p>Les messages du salon apparaîtront après synchronisation.</p></div>}
+            {!messagesLoading && !messagesError && visibleMessages.length === 0 && <div className="tw-empty" data-testid="empty-transcript"><HeartHandshake size={26} /><h3>La conversation commence ici</h3><p>Les échanges de l’accompagnement apparaîtront ici.</p></div>}
             {messagesLoading && <div className="tw-empty" role="status"><LoaderCircle className="tw-spin" size={24} /><p>Chargement des messages…</p></div>}
             {messagesError && <div className="tw-empty tw-error" role="alert"><p>{messagesError}</p><button className="tw-button" type="button" onClick={() => setMessagesVersion((value) => value + 1)}>Réessayer</button></div>}
-            {!messagesLoading && !messagesError && messages.map((message, index) => {
+            {!messagesLoading && !messagesError && visibleMessages.map((message, index) => {
               const day = new Date(message.timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
-              const previousDay = index ? new Date(messages[index - 1].timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : null;
+              const previousDay = index ? new Date(visibleMessages[index - 1].timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : null;
               const body = <><p className="tw-message-text">{message.content}</p>{(message.attachments || []).map((attachment) => <a className="tw-attachment" href={attachment.url} key={attachment.id} target="_blank" rel="noreferrer" data-testid={`attachment-${attachment.id}`}><FileText size={14} />{attachment.filename}</a>)}</>;
               return <div key={message.id}>
                 {day !== previousDay && <div className="tw-day"><span>{day}</span></div>}
