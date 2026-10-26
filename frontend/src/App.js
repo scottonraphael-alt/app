@@ -259,7 +259,7 @@ function AuthenticatedApp({
             path="/staff/taches"
             element={
               canSeeStaff ? (
-                <QuarterlyTasksPage isResponsable={isResponsable} />
+                <QuarterlyTasksPage isResponsable={isResponsable} helper={helper} />
               ) : (
                 <Navigate to={defaultRoute} replace />
               )
