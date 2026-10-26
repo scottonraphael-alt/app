@@ -20,7 +20,6 @@ from models.staff import (
     QuarterlyPeriodCreate,
     QuarterlyTask,
     QuarterlyTaskCreate,
-    VolunteerRating,
 )
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.auth_service import current_responsable, current_staff, is_responsable_helper
@@ -40,7 +39,7 @@ MAX_MEETING_MEDIA_SIZE = 50 * 1024 * 1024
 VIDEO_EXTENSIONS = {"mp4", "webm", "mov"}
 AUDIO_EXTENSIONS = {"mp3", "wav", "ogg", "m4a"}
 
-# Évaluation privée des responsables : visible d'eux et du volontaire concerné uniquement.
+# Anciennes évaluations (étoiles) des volontaires : le système a été retiré, elles ne sont plus jamais renvoyées.
 PRIVATE_VOLUNTEER_FIELDS = {"rating", "note"}
 
 
@@ -71,13 +70,9 @@ def _helper_identity(helper: AuthenticatedHelper) -> dict:
 
 
 async def _hide_private_ratings(tasks: list[dict], helper: AuthenticatedHelper) -> list[dict]:
-    if await is_responsable_helper(helper.id):
-        return tasks
     for task in tasks:
         task["volunteers"] = [
-            volunteer
-            if volunteer.get("id") == helper.id
-            else {key: value for key, value in volunteer.items() if key not in PRIVATE_VOLUNTEER_FIELDS}
+            {key: value for key, value in volunteer.items() if key not in PRIVATE_VOLUNTEER_FIELDS}
             for volunteer in task.get("volunteers", [])
         ]
     return tasks
@@ -369,36 +364,6 @@ async def remove_volunteer(
     if not existing:
         raise HTTPException(status_code=404, detail="Tâche introuvable.")
     volunteers = [v for v in existing.get("volunteers", []) if v["id"] != helper_id]
-    updated_at = _now()
-    await db.quarterly_tasks.update_one(
-        {"id": task_id},
-        {"$set": {"volunteers": volunteers, "updated_at": updated_at}},
-    )
-    existing["volunteers"] = volunteers
-    existing["updated_at"] = updated_at
-    return existing
-
-
-@router.put("/tasks/{task_id}/volunteers/{helper_id}/rate", response_model=QuarterlyTask)
-async def rate_volunteer(
-    task_id: str,
-    helper_id: str,
-    payload: VolunteerRating,
-    _: AuthenticatedHelper = Depends(current_responsable),
-) -> QuarterlyTask:
-    existing = await db.quarterly_tasks.find_one({"id": task_id}, {"_id": 0})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Tâche introuvable.")
-    volunteers = existing.get("volunteers", [])
-    found = False
-    for volunteer in volunteers:
-        if volunteer["id"] == helper_id:
-            volunteer["rating"] = payload.rating
-            volunteer["note"] = payload.note.strip()
-            found = True
-            break
-    if not found:
-        raise HTTPException(status_code=404, detail="Volontaire introuvable sur cette tâche.")
     updated_at = _now()
     await db.quarterly_tasks.update_one(
         {"id": task_id},

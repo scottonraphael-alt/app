@@ -848,7 +848,7 @@ def _stored_volunteers() -> dict[str, dict]:
     return _volunteers_by_id(h.run(h.db.quarterly_tasks.find_one({"id": TASK_ID})))
 
 
-def test_staff_task_list_hides_other_volunteers_private_rating():
+def test_staff_task_list_never_returns_old_ratings():
     _seed_task()
     client = _client(staff.router, role="staff")
 
@@ -858,21 +858,20 @@ def test_staff_task_list_hides_other_volunteers_private_rating():
     volunteers = _volunteers_by_id(response.json()[0])
     own = volunteers[h.USER_IDS["staff"]]
     other = volunteers[h.USER_IDS["helper"]]
-    assert own["rating"] == 4 and own["note"] == "très bien" and own["completed"] is True
+    assert "rating" not in own and "note" not in own and own["completed"] is True
     assert "rating" not in other and "note" not in other
     assert other["username"] == "test-helper"
 
 
-def test_responsable_task_list_keeps_every_rating():
+def test_responsable_task_list_never_returns_old_ratings():
     _seed_task()
     _with_roles("responsable", "staff")
     client = _client(staff.router, role="responsable")
 
     response = client.get("/api/staff/tasks", params={"period_id": PERIOD_ID})
 
-    volunteers = _volunteers_by_id(response.json()[0])
-    assert volunteers[h.USER_IDS["staff"]]["rating"] == 4
-    assert volunteers[h.USER_IDS["helper"]]["note"] == "avis privé"
+    for volunteer in response.json()[0]["volunteers"]:
+        assert "rating" not in volunteer and "note" not in volunteer
 
 
 def test_signup_response_hides_private_ratings_but_keeps_them_stored():
@@ -907,7 +906,7 @@ def test_unsubscribe_keeps_other_ratings_stored():
     assert stored[h.USER_IDS["helper"]]["rating"] == 2
 
 
-def test_responsable_can_still_rate_volunteer():
+def test_rating_route_is_removed():
     _seed_task()
     _with_roles("responsable", "staff")
     client = _client(staff.router, role="responsable")
@@ -917,18 +916,5 @@ def test_responsable_can_still_rate_volunteer():
         json={"rating": 5, "note": "progrès"},
     )
 
-    assert response.status_code == 200
-    assert _volunteers_by_id(response.json())[h.USER_IDS["helper"]]["rating"] == 5
-    assert _stored_volunteers()[h.USER_IDS["helper"]]["note"] == "progrès"
-
-
-def test_staff_cannot_rate_volunteer():
-    _seed_task()
-    client = _client(staff.router, role="staff")
-
-    response = client.put(
-        f"/api/staff/tasks/{TASK_ID}/volunteers/{h.USER_IDS['helper']}/rate",
-        json={"rating": 1, "note": "x"},
-    )
-
-    assert response.status_code == 403
+    assert response.status_code in (404, 405)
+    assert _stored_volunteers()[h.USER_IDS["helper"]]["rating"] == 2

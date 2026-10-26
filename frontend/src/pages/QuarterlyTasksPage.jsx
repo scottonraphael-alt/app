@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Archive, ArrowRight, Calendar, Check, ChevronDown, Plus, Search, Star, Trash2, Users, X } from "lucide-react";
+import { Archive, ArrowRight, Calendar, Check, ChevronDown, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
 import "@/QuarterlyTasks.css";
 
@@ -19,11 +19,7 @@ function Avatar({ member }) {
 }
 
 function Volunteer({ member, task, admin, act }) {
-  const [open, setOpen] = useState(false);
-  const [rating, setRating] = useState(member.rating || 0);
-  const [note, setNote] = useState(member.note || "");
-  const [busy, setBusy] = useState(false);
-  return <div className="qt-volunteer"><div className="qt-person"><Avatar member={member}/><span>{person(member)}</span>{member.rating > 0 && <span className="qt-rating"><Star size={12}/>{member.rating}/5</span>}{admin && <><button className="qt-icon" aria-label={`Évaluer ${person(member)}`} onClick={() => setOpen(!open)}><Star size={15}/></button><button className="qt-icon qt-danger" aria-label={`Retirer ${person(member)}`} onClick={() => act("removeVolunteer",task.id,member.id)}><X size={15}/></button></>}</div>{open && <form className="qt-rating-form" onSubmit={async e => {e.preventDefault();setBusy(true);try {await act("rate",task.id,member.id,{rating,note});setOpen(false);}catch {}finally {setBusy(false);}}}><label>Évaluation<select value={rating} onChange={e=>setRating(Number(e.target.value))}><option value={0}>Sans note</option>{[1,2,3,4,5].map(n=><option key={n} value={n}>{n}/5</option>)}</select></label><label>Commentaire<input value={note} onChange={e=>setNote(e.target.value)}/></label><button className="qt-button" disabled={busy}>Enregistrer</button></form>}</div>;
+  return <div className="qt-volunteer"><div className="qt-person"><Avatar member={member}/><span>{person(member)}</span>{admin && <button className="qt-icon qt-danger" aria-label={`Retirer ${person(member)}`} onClick={() => act("removeVolunteer",task.id,member.id)}><X size={15}/></button>}</div></div>;
 }
 
 function Task({ task, admin=false, members=[], helper, act, readOnly=false }) {
@@ -56,12 +52,11 @@ export default function QuarterlyTasksPage({ isResponsable=false, helper }) {
   const load=useCallback(async()=>{setLoading(true);setError("");try{const [p,a]=await Promise.all([api.get("/staff/tasks/period"),api.get("/staff/tasks/periods/archived")]);setPeriod(p.data);setArchives(a.data);setTasks(p.data?(await api.get("/staff/tasks",{params:{period_id:p.data.id}})).data:[]);}catch(e){setError(getErrorMessage(e));}finally{setLoading(false);}},[]);
   useEffect(()=>{load();},[load]);
   useEffect(()=>{if(isResponsable)api.get("/staff/members").then(r=>setMembers(r.data)).catch(e=>toast.error(getErrorMessage(e)));},[isResponsable]);
-  const act=async(type,id,member,payload)=>{try{
+  const act=async(type,id,member)=>{try{
     if(type==="deleteTask"){if(!window.confirm("Supprimer définitivement cette tâche ?"))return;await api.delete(`/staff/tasks/${id}`);setTasks(t=>t.filter(x=>x.id!==id));return;}
     let r;
     if(type==="signup")r=await api.post(`/staff/tasks/${id}/signup`);
     if(type==="nominate")r=await api.post(`/staff/tasks/${id}/nominate/${member}`);
-    if(type==="rate")r=await api.put(`/staff/tasks/${id}/volunteers/${member}/rate`,payload);
     if(type==="removeVolunteer")r=await api.delete(`/staff/tasks/${id}/volunteers/${member}`);
     if(r)setTasks(t=>t.map(x=>x.id===id?r.data:x));
   }catch(e){toast.error(getErrorMessage(e));throw e;}};
