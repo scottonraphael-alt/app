@@ -97,6 +97,9 @@ class DiscordService:
 
             return response.json()
 
+    async def fetch_guild_channels(self) -> list[dict[str, Any]]:
+        return await self._get(f"/guilds/{DISCORD_GUILD_ID}/channels")
+
     async def fetch_member(self, member_id: str) -> DiscordMember:
         member_id = ensure_discord_id(member_id)
         payload = await self._get(f"/guilds/{DISCORD_GUILD_ID}/members/{member_id}")

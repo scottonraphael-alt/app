@@ -106,5 +106,11 @@ async def delete_ticket_as_admin(
     ticket_id: str,
     _: AuthenticatedHelper = Depends(current_admin),
 ) -> None:
-    await ticket_or_404(ticket_id)
+    ticket = await ticket_or_404(ticket_id)
+    # Éviter que le scanner recrée un dossier supprimé tant que son salon existe.
+    await db.ticket_import_exclusions.update_one(
+        {"_id": ticket["channel_id"]},
+        {"$set": {"excluded_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
     await db.tickets.delete_one({"id": ticket_id, "demo_ticket": {"$ne": True}})

@@ -27,3 +27,22 @@ Sans mention exploitable, sans rôle autorisé ou si la personne est introuvable
 Cette détection n’est exécutée qu’à la création : les synchronisations manuelles et quotidiennes
 conservent les réattributions et désattributions effectuées dans Iris. Les deux rôles sont également
 proposés dans la liste de réattribution manuelle.
+
+
+### Création automatique des dossiers depuis Discord
+
+Le backend recherche au démarrage puis toutes les 60 secondes les salons textuels dont le nom
+commence par `🌸・｜soutien-`, dans la catégorie principale `DISCORD_TICKET_CATEGORY_ID`.
+Les dossiers déjà présents sont ignorés, y compris les dossiers archivés ou réattribués.
+Le message d’ouverture du bot doit contenir `Soutien de <@identifiant>` : cette mention identifie
+la personne aidée, et `Ton Interlocuteur est <@identifiant>` permet d’attribuer le helper.
+Les textes des embeds et composants Discord sont également lus. Si le salon est encore vide,
+il sera retenté au prochain passage. Les salons existants correspondant au format sont aussi
+récupérés après le déploiement, sans import manuel. Les catégories d’archives supplémentaires
+ne déclenchent pas cette découverte.
+
+L’accueil récupère les tickets et compteurs toutes les 30 secondes lorsqu’il est ouvert.
+L’apparition d’un nouveau dossier prend généralement un à deux cycles de vérification.
+Un dossier supprimé dans Iris est exclu de la découverte pour ne pas être recréé automatiquement ;
+un nouvel import manuel du salon reste possible. Les réussites et erreurs sont journalisées
+côté backend sous `services.ticket_import`. Aucun accès Anthropic n’est nécessaire à l’import.

@@ -6,6 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pymongo.errors import DuplicateKeyError
 
 from database import db
 from models.ticket import (
@@ -105,7 +106,10 @@ async def create_ticket(
         updated_at=timestamp,
     )
     document = ticket.model_dump()
-    await db.tickets.insert_one(document)
+    try:
+        await db.tickets.insert_one(document)
+    except DuplicateKeyError as error:
+        raise HTTPException(status_code=409, detail="Un ticket existe déjà pour ce salon Discord.") from error
     return ticket
 
 

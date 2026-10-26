@@ -59,6 +59,7 @@ function AuthenticatedApp({
       return response.data;
     },
     enabled: canSeeHelper,
+    refetchInterval: 30 * 1000,
   });
 
   const statsQuery = useQuery({
@@ -68,6 +69,7 @@ function AuthenticatedApp({
       return response.data;
     },
     enabled: canSeeHelper,
+    refetchInterval: 30 * 1000,
   });
 
   const tickets = ticketsQuery.data || [];
