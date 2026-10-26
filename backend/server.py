@@ -11,6 +11,7 @@ from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
 from services.ticket_reminders import run_ticket_reminders
+from services.ticket_avatars import run_ticket_avatar_cache
 from services.moderation_bot import start_moderation_bot, stop_moderation_bot
 
 # Agenda (refonte en cours) : branché seulement si tous ses modules sont présents,
@@ -68,6 +69,7 @@ _bot_task = None
 _ticket_refresh_task = None
 _ticket_import_task = None
 _ticket_reminders_task = None
+_ticket_avatars_task = None
 @app.get("/api/")
 async def root() -> dict[str, str]:
     return {"message": "Iris API opérationnelle"}
@@ -113,7 +115,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup() -> None:
-    global _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task
+    global _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task, _ticket_avatars_task
     await initialize_indexes()
     try:
         await asyncio.to_thread(init_storage)
@@ -129,6 +131,7 @@ async def startup() -> None:
             logger.exception("Agenda : index ou migration impossibles au démarrage")
         agenda_reminders.start_scheduler()
 
+    _ticket_avatars_task = asyncio.create_task(run_ticket_avatar_cache())
     _ticket_reminders_task = asyncio.create_task(run_ticket_reminders())
     _ticket_import_task = asyncio.create_task(run_ticket_import())
     _ticket_refresh_task = asyncio.create_task(run_ticket_refresh())
@@ -142,7 +145,7 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    ticket_tasks = [task for task in (_ticket_import_task, _ticket_refresh_task, _ticket_reminders_task) if task]
+    ticket_tasks = [task for task in (_ticket_import_task, _ticket_refresh_task, _ticket_reminders_task, _ticket_avatars_task) if task]
     for task in ticket_tasks:
         task.cancel()
     await asyncio.gather(*ticket_tasks, return_exceptions=True)

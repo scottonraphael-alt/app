@@ -4,7 +4,7 @@ from uuid import uuid4
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Request
 from fastapi.responses import StreamingResponse
 from pymongo.errors import DuplicateKeyError
 
@@ -23,6 +23,8 @@ from services.auth_service import current_ticket_helper, is_admin_helper
 from services.ai_summary_service import ensure_ai_configuration, stream_summary
 from services.discord_service import DiscordService
 from services.ticket_assignment import resolve_import_helper
+from services.ticket_avatars import cache_avatar, cache_ticket_avatars
+from services.file_response_service import stream_local_file
 
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -106,12 +108,12 @@ async def create_ticket(
         created_at=timestamp,
         updated_at=timestamp,
     )
-    document = ticket.model_dump()
+    document = await cache_ticket_avatars(ticket.model_dump())
     try:
         await db.tickets.insert_one(document)
     except DuplicateKeyError as error:
         raise HTTPException(status_code=409, detail="Un ticket existe déjà pour ce salon Discord.") from error
-    return ticket
+    return document
 
 
 @router.post("/{ticket_id}/notes", response_model=TicketNote, status_code=201)
@@ -135,6 +137,7 @@ async def create_ticket_note(
         created_at=timestamp,
         updated_at=timestamp,
     )
+    note.author.avatar_url = await cache_avatar(note.author.avatar_url)
     await db.tickets.update_one(
         {"id": ticket_id, "demo_ticket": {"$ne": True}},
         {"$push": {"notes_entries": note.model_dump()}, "$set": {"updated_at": timestamp, "last_helper_update_at": timestamp}},
@@ -159,6 +162,18 @@ async def delete_ticket_note(
         {"id": ticket_id, "demo_ticket": {"$ne": True}},
         {"$pull": {"notes_entries": {"id": note_id}}, "$set": {"updated_at": timestamp, "last_helper_update_at": timestamp}},
     )
+
+
+@router.get("/avatars/{cache_key}")
+async def get_ticket_avatar(
+    request: Request,
+    cache_key: str = Path(pattern=r"^[a-f0-9]{64}$"),
+    _: AuthenticatedHelper = Depends(current_ticket_helper),
+):
+    avatar = await db.ticket_avatars.find_one({"_id": cache_key})
+    if not avatar or not avatar.get("path") or avatar.get("content_type") not in {"image/png", "image/jpeg", "image/gif", "image/webp"}:
+        raise HTTPException(404, "Avatar conservé introuvable.")
+    return stream_local_file(request, avatar["path"], content_type=avatar["content_type"], filename="avatar", attachment=False)
 
 
 @router.get("/{ticket_id}", response_model=TicketDetail)
@@ -248,12 +263,13 @@ async def sync_ticket(
 ) -> TicketDetail:
     ticket = await ticket_or_404(ticket_id, _)
     transcript = await DiscordService().fetch_channel_history(ticket["channel_id"], require_ticket_category=True)
+    cached = await cache_ticket_avatars({"transcript": [message.model_dump() for message in transcript]}, previous=ticket)
     timestamp = now_iso()
     await db.tickets.update_one(
         {"id": ticket_id},
         {
             "$set": {
-                "transcript": [message.model_dump() for message in transcript],
+                "transcript": cached["transcript"],
                 "message_count": len(transcript),
                 "last_synced_at": timestamp,
                 "updated_at": timestamp,

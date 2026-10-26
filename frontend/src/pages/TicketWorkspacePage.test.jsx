@@ -94,3 +94,16 @@ it("affiche un état vide si seul le message d’ouverture existe", async () => 
   expect(container.querySelector('[data-testid="empty-transcript"]')).not.toBeNull();
   expect(container.querySelector('[data-testid="transcript-message-ouverture"]')).toBeNull();
 });
+
+it("utilise la copie d’avatar de l’API et affiche une initiale si l’image manque", async () => {
+  const avatar = `/api/tickets/avatars/${"a".repeat(64)}`;
+  api.get.mockImplementation((url) => Promise.resolve({ data: url.endsWith("/messages") ? {
+    total: 1, messages: [{ id: "portrait", content: "Bonjour", timestamp: "2026-10-01", author: { id: "member", username: "Membre", avatar_url: avatar } }],
+  } : ticket }));
+  await click('[data-testid="sync-ticket-button"]');
+  const image = container.querySelector('.tw-author-avatar img');
+  expect(image.getAttribute('src')).toContain(avatar);
+  await act(async () => image.dispatchEvent(new Event('error')));
+  expect(container.querySelector('.tw-author-avatar img')).toBeNull();
+  expect(container.querySelector('.tw-author-avatar').textContent).toBe('M');
+});

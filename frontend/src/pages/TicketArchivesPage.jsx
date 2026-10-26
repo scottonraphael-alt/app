@@ -1,3 +1,4 @@
+import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
@@ -58,7 +59,7 @@ function MemberAvatar({ member }) {
     <span className="tar-avatar">
       {member?.avatar_url && !failed ? (
         <img
-          src={member.avatar_url}
+          src={resolveAvatarUrl(member.avatar_url)}
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}

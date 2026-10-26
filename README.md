@@ -83,3 +83,28 @@ Un test par minute maximum est autorisé pour l’ensemble des coordinateurs ; i
 le rappel du dimanche. Pour retirer le test, supprimer le composant `TicketReminderTestPanel`,
 son inclusion dans `AdminDashboardPage` et la route de test. Les tests automatisés simulent
 les envois et ne publient rien sur Discord.
+
+### Conservation des avatars des tickets
+
+Les imports manuels et automatiques copient les avatars de la personne aidée, du helper attribué
+et des auteurs des messages dans `IRIS_STORAGE_ROOT/iris/avatars/` (racine par défaut `/app/storage`).
+Les notes et les réattributions conservent aussi l’avatar de leur auteur/interlocuteur.
+La configuration Docker Compose monte déjà `resources-data` sur `/app/storage` : les copies
+survivent aux redéploiements tant que ce volume et MongoDB sont conservés. Pour une autre
+installation, utiliser un volume persistant à l’emplacement `IRIS_STORAGE_ROOT`.
+
+Les copies sont servies par `GET /api/tickets/avatars/{clé}`, avec les mêmes droits que les tickets.
+Les vues de tickets, listes, archives et attributions utilisent ces images via le domaine API.
+Une synchronisation réutilise les portraits déjà conservés des auteurs, même si leur avatar Discord
+change ou devient indisponible après leur départ. L’accès au membre sur Discord n’est pas nécessaire
+pour servir une copie existante. Les écritures d’images sont atomiques, les URL dédupliquées,
+et seules des images PNG/JPEG/GIF/WebP provenant des chemins d’avatars des CDN Discord sont acceptées
+(1 Mo maximum, aucun suivi de redirection). Les SVG/HTML et URL arbitraires ne sont pas copiés.
+
+Un traitement de rattrapage démarre avec l’API puis repasse chaque heure sur les dossiers existants,
+y compris archivés, sans modifier notes, attributions, dates de suivi ni compteurs d’activité.
+Les opérations conditionnelles empêchent d’écraser une modification concurrente.
+Si le CDN ou le disque est temporairement indisponible, l’import reste possible avec l’URL d’origine
+et une copie est retentée après une heure. Un avatar déjà disparu du CDN et jamais conservé ne peut
+pas être récupéré ; une initiale est affichée en cas d’échec de chargement dans la conversation.
+Les métadonnées de copie sont conservées dans la collection `ticket_avatars`, sans expiration.

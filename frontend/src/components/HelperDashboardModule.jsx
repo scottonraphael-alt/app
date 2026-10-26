@@ -1,3 +1,4 @@
+import { resolveAvatarUrl } from "../utils/avatar";
 import {
   ArrowRight,
   Archive,
@@ -115,7 +116,7 @@ export default function HelperDashboardModule({
                     <span className="nd-helper-v2-avatar">
                       {member.avatar_url ? (
                         <img
-                          src={member.avatar_url}
+                          src={resolveAvatarUrl(member.avatar_url)}
                           alt=""
                           loading="lazy"
                         />

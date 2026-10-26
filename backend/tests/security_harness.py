@@ -181,3 +181,14 @@ def make_client(*routers, include_app_middlewares: bool = False) -> TestClient:
     for router in routers:
         app.include_router(router, prefix="/api")
     return TestClient(app, raise_server_exceptions=False)
+
+
+from services import ticket_avatars as _ticket_avatars
+
+
+async def _offline_avatar_download(source):
+    return None
+
+
+real_avatar_download = _ticket_avatars.download_avatar
+_ticket_avatars.download_avatar = _offline_avatar_download

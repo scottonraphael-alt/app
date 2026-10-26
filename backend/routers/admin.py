@@ -15,6 +15,7 @@ from models.ticket import (
 from services.auth_service import current_admin, current_helper
 from services.discord_service import DiscordService
 from services.ticket_assignment import ticket_helper_role_ids
+from services.ticket_avatars import cache_avatar
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -89,6 +90,8 @@ async def assign_ticket_helper(
         )
         if not assigned_helper:
             raise HTTPException(status_code=422, detail="Le helper choisi n’est pas autorisé.")
+    if assigned_helper:
+        assigned_helper.avatar_url = await cache_avatar(assigned_helper.avatar_url)
     timestamp = datetime.now(timezone.utc).isoformat()
     updates = {"assigned_helper": assigned_helper.model_dump() if assigned_helper else None, "updated_at": timestamp}
     if input_data.helper_id != (ticket.get("assigned_helper") or {}).get("id"):

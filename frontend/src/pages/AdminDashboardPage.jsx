@@ -1,3 +1,4 @@
+import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -45,7 +46,7 @@ function Avatar({ member, className = "" }) {
     <span className={`ta-avatar ${className}`}>
       {member?.avatar_url && !failed ? (
         <img
-          src={member.avatar_url}
+          src={resolveAvatarUrl(member.avatar_url)}
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}

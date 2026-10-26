@@ -12,6 +12,7 @@ from database import db
 from models.ticket import TicketDetail
 from services.discord_service import DiscordService
 from services.ticket_assignment import resolve_import_helper
+from services.ticket_avatars import cache_ticket_avatars
 
 logger = logging.getLogger(__name__)
 # Le message d'ouverture OasisBot distingue explicitement la personne aidée des helpers.
@@ -48,9 +49,10 @@ async def import_ticket_channel(channel_id: str, discord: DiscordService) -> boo
         assigned_helper=assigned, last_synced_at=timestamp, last_helper_update_at=timestamp,
         created_by="system:discord-import", created_at=messages[0].timestamp, updated_at=timestamp,
     )
+    document = await cache_ticket_avatars(ticket.model_dump())
     try:
         result = await db.tickets.update_one(
-            {"channel_id": channel_id}, {"$setOnInsert": ticket.model_dump()}, upsert=True,
+            {"channel_id": channel_id}, {"$setOnInsert": document}, upsert=True,
         )
     except DuplicateKeyError:
         # Un import manuel ou un autre worker a gagné la course : son dossier est conservé.

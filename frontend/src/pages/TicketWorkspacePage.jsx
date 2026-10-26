@@ -5,10 +5,20 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
+import { resolveAvatarUrl } from "../utils/avatar";
 import "@/TicketWorkspace.css";
 
 
 const formatTime = (timestamp) => new Date(timestamp).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+
+
+function MessageAvatar({ author }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [author.avatar_url]);
+  return <span className="tw-author-avatar">{author.avatar_url && !failed
+    ? <img src={resolveAvatarUrl(author.avatar_url)} alt="" onError={() => setFailed(true)} />
+    : (author.display_name || author.username).slice(0, 1).toUpperCase()}</span>;
+}
 
 
 export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, isAdmin, helper }) {
@@ -301,7 +311,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
               return <div key={message.id}>
                 {day !== previousDay && <div className="tw-day"><span>{day}</span></div>}
                 <article className={`tw-message${message.author.is_bot ? " is-bot" : ""}${message.author.id === ticket.member.id ? " is-member" : ""}`} data-testid={`transcript-message-${message.id}`}>
-                  <span className="tw-author-avatar">{message.author.avatar_url ? <img src={message.author.avatar_url} alt="" /> : (message.author.display_name || message.author.username).slice(0, 1).toUpperCase()}</span>
+                  <MessageAvatar author={message.author} />
                   <div className="tw-message-body"><header><strong>{message.author.display_name || message.author.username}</strong>{message.author.is_bot && <span className="tw-bot-tag">BOT</span>}<time dateTime={message.timestamp}>{new Date(message.timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</time></header>
                   {message.author.is_bot && message.content.length > 400 ? <details className="tw-system-message"><summary>Message automatique · {message.content.slice(0, 85).replace(/\s+/g, " ")}…</summary>{body}</details> : body}
                   </div>

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from database import db
 from services.ai_summary_service import stream_summary
 from services.discord_service import DiscordService
+from services.ticket_avatars import cache_ticket_avatars
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,8 @@ async def refresh_due_tickets() -> None:
         try:
             messages = await DiscordService().fetch_channel_history(ticket["channel_id"], require_ticket_category=True)
             timestamp = datetime.now(timezone.utc).isoformat()
-            transcript = [message.model_dump() for message in messages]
+            cached = await cache_ticket_avatars({"transcript": [message.model_dump() for message in messages]}, previous=ticket)
+            transcript = cached["transcript"]
             await db.tickets.update_one({"id": ticket["id"]}, {"$set": {
                 "transcript": transcript, "message_count": len(messages),
                 "last_synced_at": timestamp, "updated_at": timestamp,
