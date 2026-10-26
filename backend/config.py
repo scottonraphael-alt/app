@@ -153,3 +153,7 @@ def missing_oauth_settings() -> list[str]:
         "DISCORD_ADMIN_ROLE_ID": DISCORD_ADMIN_ROLE_ID,
     }
     return [name for name, value in required.items() if not value]
+
+# Synthèses des tickets (clé exclusivement côté serveur).
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+TICKET_SUMMARY_MODEL = os.getenv("TICKET_SUMMARY_MODEL", "claude-haiku-5-5").strip()

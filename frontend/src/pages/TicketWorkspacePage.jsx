@@ -1,9 +1,11 @@
 import { Archive, ArrowRight, Bot, Check, FilePlus2, FileText, HeartHandshake, LoaderCircle, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCheck, Volume2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import * as Tabs from "@radix-ui/react-tabs";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
+import "@/Casier.css";
 import "@/TicketWorkspace.css";
 
 
@@ -19,6 +21,16 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   }, []);
   const navigate = useNavigate();
   const [ticket, setTicket] = useState(null);
+  const [page, setPage] = useState(1);
+  const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
+  const [messagesError, setMessagesError] = useState("");
+  const [messagesVersion, setMessagesVersion] = useState(0);
+  const transcriptRef = useRef(null);
+  const lastSyncRef = useRef(null);
+  lastSyncRef.current = ticket?.last_synced_at;
+  const pageSize = 50;
+
   const [vocalSummary, setVocalSummary] = useState("");
   const [personTriggers, setPersonTriggers] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,7 +50,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       setLoading(true);
       setError("");
       try {
-        const response = await api.get(`/tickets/${ticketId}`);
+        const response = await api.get(`/tickets/${ticketId}`, { params: { include_transcript: false } });
         setTicket(response.data);
         setVocalSummary(response.data.vocal_summary || "");
         setPersonTriggers(response.data.person_triggers || "");
@@ -49,6 +61,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         setLoading(false);
       }
     };
+    setPage(1);
     loadTicket();
   }, [ticketId]);
 
@@ -56,6 +69,43 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
     if (!isAdmin) return;
     api.get("/admin/helpers").then((response) => setHelpers(response.data)).catch(() => undefined);
   }, [isAdmin]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setMessagesLoading(true);
+    setMessagesError("");
+    api.get(`/tickets/${ticketId}/messages`, { params: { page, page_size: pageSize }, signal: controller.signal })
+      .then(({ data }) => {
+        setMessages(data.messages);
+        setTicket((current) => current ? { ...current, message_count: data.total } : current);
+        transcriptRef.current?.scrollTo?.({ top: 0 });
+      })
+      .catch((requestError) => { if (!controller.signal.aborted) setMessagesError(getErrorMessage(requestError)); })
+      .finally(() => { if (!controller.signal.aborted) setMessagesLoading(false); });
+    return () => controller.abort();
+  }, [ticketId, page, messagesVersion]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const refresh = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const { data } = await api.get(`/tickets/${ticketId}`, { params: { include_transcript: false }, signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (data.last_synced_at !== lastSyncRef.current) setMessagesVersion((version) => version + 1);
+        setTicket((current) => current ? { ...current, ai_summary: data.ai_summary, last_synced_at: data.last_synced_at, message_count: data.message_count } : current);
+      } catch {
+        // Les erreurs de lecture ponctuelles ne doivent pas interrompre la saisie.
+      }
+    };
+    const interval = window.setInterval(refresh, 5 * 60 * 1000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [ticketId]);
 
   const save = async () => {
     setSaving(true);
@@ -120,6 +170,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       const response = await api.post(`/tickets/${ticketId}/sync`);
       setTicket(response.data);
       onTicketUpdate?.(response.data);
+      setMessagesVersion((version) => version + 1);
       toast.success("Transcription actualisée.");
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
@@ -174,13 +225,13 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           if (eventType === "complete") {
             setTicket((current) => ({ ...current, ai_summary: payload }));
             setSummaryProgress("");
-            toast.success("Résumé Gemini enregistré.");
+            toast.success("Résumé Claude enregistré.");
           }
           if (eventType === "error") throw new Error(payload.message);
         });
       }
     } catch (requestError) {
-      toast.error(requestError.message || "La génération Gemini a échoué.");
+      toast.error(requestError.message || "La génération Claude a échoué.");
     } finally {
       setGeneratingSummary(false);
       setSummaryProgress("");
@@ -192,12 +243,12 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
 
 
   return (
-    <section className="tw-page" data-testid="ticket-workspace-page">
-      <header className="workspace-header">
-        <div className="workspace-title">
+    <section className="cz-page tw-page" data-testid="ticket-workspace-page">
+      <header className="workspace-header cz-header">
+        <div className="workspace-title cz-header-copy">
           <div className="member-title" data-testid="ticket-member-header">
             <span className="tw-member-avatar">{ticket.member.avatar_url ? <img src={ticket.member.avatar_url} alt="" /> : <HeartHandshake size={26} />}</span>
-            <span><p>ACCOMPAGNEMENT · DOSSIER {ticket.status === "active" ? "OUVERT" : "ARCHIVÉ"}</p><h1>{ticket.member.display_name || ticket.member.username}</h1></span>
+            <span><p>ACCOMPAGNEMENT · DOSSIER {ticket.status === "active" ? "OUVERT" : "ARCHIVÉ"}</p><h1>{ticket.member.display_name || ticket.member.username}</h1><p className="tw-intro">Messages, synthèse et repères de l’accompagnement.</p></span>
           </div>
         </div>
         <div className="workspace-actions">
@@ -216,6 +267,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       <div className="ticket-meta" data-testid="ticket-metadata">
         <span>DOSSIER PRIVÉ · {ticket.id}</span>
         <span>{ticket.message_count} ÉCHANGES</span>
+        <span>DERNIÈRE SYNCHRONISATION · {ticket.last_synced_at ? formatTime(ticket.last_synced_at) : "—"}</span>
         <span>OUVERT LE · {ticket.created_at ? formatTime(ticket.created_at) : "—"}</span>
         <label className="follow-up-control" htmlFor="follow-up-status">STATUT DE SUIVI
           <select id="follow-up-status" value={followUpStatus} onChange={(event) => setFollowUpStatus(event.target.value)} data-testid="follow-up-status-select">
@@ -231,17 +283,26 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           <span><UserRoundCheck size={16} /> AIDÉ PAR</span>
           {isAdmin ? <select value={ticket.assigned_helper?.id || ""} onChange={(event) => assignHelper(event.target.value)} data-testid="helper-assignment-select"><option value="">Non attribué</option>{helpers.map((helper) => <option value={helper.id} key={helper.id}>{helper.display_name || helper.username} · {helper.id}</option>)}</select> : <b data-testid="assigned-helper-readonly">{ticket.assigned_helper ? `${ticket.assigned_helper.display_name || ticket.assigned_helper.username} · ${ticket.assigned_helper.id}` : "Non attribué"}</b>}
         </div>
-        <div className="ai-notice" data-testid="gemini-privacy-notice"><Bot size={16} /> Gemini synthétise uniquement le contenu de ce dossier, sans diagnostic.</div>
+        <div className="ai-notice" data-testid="ai-privacy-notice"><Bot size={16} /> Claude synthétise uniquement le contenu de ce dossier, sans diagnostic.</div>
       </section>
 
+      <p className="tw-refresh-info"><RefreshCw size={14} /> Messages et résumé actualisés chaque jour pour les dossiers ouverts.</p>
+      <Tabs.Root defaultValue="messages" key={ticketId}>
+        <Tabs.List className="cz-tabs cz-tabs--view" aria-label="Vues du dossier">
+          <Tabs.Trigger className="cz-tab" value="messages"><HeartHandshake size={16} /> Messages <span className="cz-tab-count">{ticket.message_count}</span></Tabs.Trigger>
+          <Tabs.Trigger className="cz-tab" value="suivi"><FileText size={16} /> Synthèse et suivi</Tabs.Trigger>
+        </Tabs.List>
       <div className="workspace-grid">
+        <Tabs.Content value="messages" className="tw-tab-panel">
         <section className="workspace-column transcript-column" data-testid="transcript-panel">
           <div className="column-header"><span><HeartHandshake size={16} /> ÉCOUTE</span><b>{ticket.message_count}</b></div>
-          <div className="transcript-scroll">
-            {ticket.transcript.length === 0 && <p className="empty-transcript" data-testid="empty-transcript">Aucun message dans ce salon.</p>}
-            {ticket.transcript.map((message) => (
+          <div className="transcript-scroll" ref={transcriptRef} aria-busy={messagesLoading}>
+            {!messagesLoading && !messagesError && messages.length === 0 && <p className="empty-transcript" data-testid="empty-transcript">Aucun message dans ce salon.</p>}
+            {messagesLoading && <p className="empty-transcript" role="status">Chargement des messages…</p>}
+            {messagesError && <div className="empty-transcript" role="alert">{messagesError} <button type="button" onClick={() => setMessagesVersion((value) => value + 1)}>Réessayer</button></div>}
+            {!messagesLoading && !messagesError && messages.map((message) => (
               <article className={`transcript-message ${message.author.id === "iris-demo-helper" ? "helper-message" : "member-message"}`} key={message.id} data-testid={`transcript-message-${message.id}`}>
-                <img src={message.author.avatar_url} alt="" />
+                {message.author.avatar_url ? <img src={message.author.avatar_url} alt="" /> : <span className="tw-author-avatar"><HeartHandshake size={18} /></span>}
                 <div>
                   <div className="message-line"><strong>{message.author.display_name || message.author.username}</strong><time>{formatTime(message.timestamp)}</time></div>
                   {message.content && <p>{message.content}</p>}
@@ -250,12 +311,20 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
               </article>
             ))}
           </div>
+          <nav className="tw-pagination" aria-label="Pagination des messages">
+            <button type="button" disabled={page === 1 || messagesLoading} onClick={() => setPage((value) => value - 1)}>Précédente</button>
+            <span aria-live="polite">Page {page} sur {Math.max(1, Math.ceil(ticket.message_count / pageSize))}</span>
+            <button type="button" disabled={page * pageSize >= ticket.message_count || messagesLoading} onClick={() => setPage((value) => value + 1)}>Suivante</button>
+          </nav>
         </section>
+        </Tabs.Content>
+        <Tabs.Content value="suivi" className="tw-tab-panel">
         <aside className="intelligence-panel" data-testid="vocal-panel">
           <section className="ai-summary-widget" data-testid="ai-summary-panel">
-            <div className="intelligence-label"><span><Bot size={15} /> RÉSUMÉ GEMINI</span><b>CONFIDENTIEL</b></div>
+            <div className="intelligence-label"><span><Bot size={15} /> RÉSUMÉ CLAUDE</span><b>CONFIDENTIEL</b></div>
+            {ticket.ai_summary?.generated_at && <p className="tw-summary-date">Généré le {formatTime(ticket.ai_summary.generated_at)}</p>}
             {ticket.ai_summary ? <div className="summary-content" data-testid="ai-summary-content"><div><strong>Contexte</strong><p>{ticket.ai_summary.context}</p></div><div><strong>Besoins exprimés</strong><p>{ticket.ai_summary.expressed_needs}</p></div><div><strong>Actions</strong><p>{ticket.ai_summary.actions}</p></div><div><strong>Prochain suivi</strong><p>{ticket.ai_summary.next_follow_up}</p></div></div> : <p className="summary-empty" data-testid="ai-summary-empty">Aucune synthèse générée pour le moment.</p>}
-            <button className="gemini-summary-button" type="button" onClick={generateSummary} disabled={generatingSummary} data-testid="generate-ai-summary-button"><Bot size={16} /> {generatingSummary ? summaryProgress || "Génération…" : "Générer le résumé"}</button>
+            <button className="ai-summary-button" type="button" onClick={generateSummary} disabled={generatingSummary} data-testid="generate-ai-summary-button"><Bot size={16} /> {generatingSummary ? summaryProgress || "Génération…" : "Générer le résumé"}</button>
           </section>
           <section className="person-triggers-widget" data-testid="person-triggers-panel">
             <div className="intelligence-label"><span><HeartHandshake size={15} /> TRIGGERS DE LA PERSONNE</span><b>CONFIDENTIEL</b></div>
@@ -283,7 +352,9 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
             <p className="editor-foot"><ShieldCheck size={13} /> Visible uniquement dans Iris</p>
           </section>
         </aside>
+        </Tabs.Content>
       </div>
+      </Tabs.Root>
     </section>
   );
 }

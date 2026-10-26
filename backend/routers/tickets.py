@@ -4,7 +4,7 @@ from uuid import uuid4
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from database import db
@@ -35,10 +35,10 @@ def ticket_scope(helper: AuthenticatedHelper) -> dict:
     return {"$or": [{"demo_ticket": {"$exists": False}}, {"demo_ticket": False}]}
 
 
-async def ticket_or_404(ticket_id: str, helper: AuthenticatedHelper) -> dict:
+async def ticket_or_404(ticket_id: str, helper: AuthenticatedHelper, *, include_transcript: bool = True) -> dict:
     ticket = await db.tickets.find_one(
         {"$and": [{"id": ticket_id}, ticket_scope(helper)]},
-        {"_id": 0},
+        {"_id": 0} if include_transcript else {"_id": 0, "transcript": 0},
     )
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket Iris introuvable.")
@@ -156,8 +156,25 @@ async def delete_ticket_note(
 async def get_ticket(
     ticket_id: str,
     _: AuthenticatedHelper = Depends(current_ticket_helper),
+    include_transcript: bool = True,
 ) -> TicketDetail:
-    return await ticket_or_404(ticket_id, _)
+    return await ticket_or_404(ticket_id, _, include_transcript=include_transcript)
+
+
+@router.get("/{ticket_id}/messages")
+async def ticket_messages(
+    ticket_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    helper: AuthenticatedHelper = Depends(current_ticket_helper),
+) -> dict:
+    ticket = await ticket_or_404(ticket_id, helper, include_transcript=False)
+    document = await db.tickets.find_one(
+        {"$and": [{"id": ticket_id}, ticket_scope(helper)]},
+        {"_id": 0, "transcript": {"$slice": [(page - 1) * page_size, page_size]}},
+    )
+    return {"messages": (document or {}).get("transcript", []),
+            "total": ticket.get("message_count", 0), "page": page, "page_size": page_size}
 
 
 @router.post("/{ticket_id}/ai-summary/stream")

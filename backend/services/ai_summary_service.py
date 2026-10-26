@@ -1,11 +1,10 @@
 import json
 from datetime import datetime, timezone
-from uuid import uuid4
 
-from emergentintegrations.llm.chat import LlmChat, StreamDone, TextDelta, UserMessage
+from anthropic import AsyncAnthropic
 from fastapi import HTTPException, status
 
-from config import EMERGENT_LLM_KEY
+from config import ANTHROPIC_API_KEY, TICKET_SUMMARY_MODEL
 from models.ticket import AiSummary
 
 
@@ -17,10 +16,10 @@ Chaque valeur est une phrase ou une liste courte, claire et factuelle."""
 
 
 def ensure_ai_configuration() -> None:
-    if not EMERGENT_LLM_KEY:
+    if not ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="La clé Gemini n’est pas configurée.",
+            detail="La clé Anthropic n’est pas configurée.",
         )
 
 
@@ -39,6 +38,8 @@ def summary_input(ticket: dict) -> str:
             "statut_de_suivi": ticket.get("follow_up_status", ""),
             "transcription": messages,
             "notes_privees": ticket.get("notes", ""),
+            "notes": [{"titre": note.get("title"), "contenu": note.get("content")} for note in ticket.get("notes_entries", [])],
+            "reperes": ticket.get("person_triggers", ""),
             "compte_rendu_vocal": ticket.get("vocal_summary", ""),
         },
         ensure_ascii=False,
@@ -53,7 +54,9 @@ def parse_summary(raw_text: str, helper_id: str) -> AiSummary:
     try:
         payload = json.loads(cleaned)
     except json.JSONDecodeError as error:
-        raise ValueError("Gemini a retourné un format de résumé invalide.") from error
+        raise ValueError("Claude a retourné un format de résumé invalide.") from error
+    if not isinstance(payload, dict):
+        raise ValueError("Claude a retourné un résumé invalide.")
     aliases = {
         "context": ("context", "contexte"),
         "expressed_needs": ("expressed_needs", "needs", "besoins_exprimés", "besoins"),
@@ -82,16 +85,18 @@ def parse_summary(raw_text: str, helper_id: str) -> AiSummary:
 
 async def stream_summary(ticket: dict, helper_id: str):
     ensure_ai_configuration()
-    chat = LlmChat(
-        api_key=EMERGENT_LLM_KEY,
-        session_id=f"iris-summary-{ticket['id']}-{uuid4()}",
-        system_message=SYSTEM_PROMPT,
-    ).with_model("gemini", "gemini-3.5-flash")
     chunks: list[str] = []
-    async for event in chat.stream_message(UserMessage(text=summary_input(ticket))):
-        if isinstance(event, TextDelta):
-            chunks.append(event.content)
-            yield "progress", "Gemini rédige la synthèse…"
-        elif isinstance(event, StreamDone):
-            break
+    async with AsyncAnthropic(api_key=ANTHROPIC_API_KEY, timeout=90.0, max_retries=2) as client:
+        async with client.messages.stream(
+            model=TICKET_SUMMARY_MODEL,
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": summary_input(ticket)}],
+        ) as stream:
+            async for text in stream.text_stream:
+                chunks.append(text)
+                yield "progress", "Claude rédige la synthèse…"
+            result = await stream.get_final_message()
+            if result.stop_reason != "end_turn":
+                raise ValueError("La synthèse Claude est incomplète.")
     yield "complete", parse_summary("".join(chunks), helper_id)

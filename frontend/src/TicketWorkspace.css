@@ -56,7 +56,7 @@ body.ticket-workspace-no-nav .app-shell > .app-main { grid-column:1 / -1 !import
 .tw-page .summary-content { display:flex; flex-direction:column; gap:16px; }
 .tw-page .summary-content strong { font:600 13px "Manrope",sans-serif; color:#6d4e80; }
 .tw-page .summary-content p, .tw-page .summary-empty, .tw-page .person-triggers-widget > p { margin:7px 0 0; color:var(--muted,#64706a); font-size:13px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; }
-.tw-page .gemini-summary-button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:20px; padding:11px 15px; border:1px solid #d6c5e4; border-radius:999px; background:#e7dbf1; color:#704d88; font-size:12px; font-weight:600; }
+.tw-page .ai-summary-button { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; margin-top:20px; padding:11px 15px; border:1px solid #d6c5e4; border-radius:999px; background:#e7dbf1; color:#704d88; font-size:12px; font-weight:600; }
 .tw-page textarea, .tw-page .new-note-form input { display:block; width:100%; max-width:100%; padding:13px 15px; border:1px solid #dbe3dc; border-radius:12px; background:#fcfdfb; color:var(--ink,#1c2622); font-size:13px; line-height:1.8; }
 .tw-page textarea { min-height:130px; resize:vertical; }
 .tw-page textarea:focus, .tw-page .new-note-form input:focus, .tw-page select:focus { outline:none; border-color:#88a492; box-shadow:0 0 0 3px rgba(74,103,92,.1); }
@@ -203,3 +203,18 @@ body.ticket-workspace-no-nav .app-shell > .app-main { grid-column:1 / -1 !import
     min-width: 0;
   }
 }
+
+/* Même hiérarchie que le casier et le journal : en-tête, contexte, onglets, panneaux. */
+.tw-page .workspace-grid { display: block; }
+.tw-page .tw-tab-panel { min-width: 0; }
+.tw-page .tw-tab-panel[hidden] { display: none; }
+.tw-page .intelligence-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.tw-page .notes-widget { grid-column: 1 / -1; }
+.tw-page .tw-intro { margin: 10px 0 0; font-size: 13px; letter-spacing: 0; line-height: 1.7; }
+.tw-page .transcript-scroll { max-height: 70vh; min-height: 180px; }
+.tw-page .tw-refresh-info { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin: 0 0 24px; }
+.tw-page .tw-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 24px; border-top: 1px solid var(--line); font-size: 12px; }
+.tw-page .tw-pagination button { border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--sage); padding: 10px 14px; }
+.tw-page .tw-author-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: var(--sage-soft); color: var(--sage); }
+.tw-page .tw-summary-date { font-size: 11px; color: var(--muted); }
+@media (max-width: 900px) { .tw-page .intelligence-panel { grid-template-columns: minmax(0, 1fr); } }

@@ -8,6 +8,7 @@ from config import CORS_ORIGINS
 from database import client, initialize_indexes
 from routers import admin, auth, members, profiles, resources, staff, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives
 from services.storage_service import init_storage
+from services.ticket_refresh import run_ticket_refresh
 from services.moderation_bot import start_moderation_bot, stop_moderation_bot
 
 # Agenda (refonte en cours) : branché seulement si tous ses modules sont présents,
@@ -62,6 +63,7 @@ class SecurityHeadersMiddleware:
 
 
 _bot_task = None
+_ticket_refresh_task = None
 @app.get("/api/")
 async def root() -> dict[str, str]:
     return {"message": "Iris API opérationnelle"}
@@ -107,7 +109,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup() -> None:
-    global _bot_task
+    global _bot_task, _ticket_refresh_task
     await initialize_indexes()
     try:
         await asyncio.to_thread(init_storage)
@@ -123,6 +125,7 @@ async def startup() -> None:
             logger.exception("Agenda : index ou migration impossibles au démarrage")
         agenda_reminders.start_scheduler()
 
+    _ticket_refresh_task = asyncio.create_task(run_ticket_refresh())
     _bot_task = asyncio.create_task(start_moderation_bot())
     _bot_task.add_done_callback(
         lambda t: logger.error("Bot de modération arrêté : %s", t.exception())
@@ -133,6 +136,9 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    if _ticket_refresh_task:
+        _ticket_refresh_task.cancel()
+        await asyncio.gather(_ticket_refresh_task, return_exceptions=True)
     await stop_moderation_bot()
     if _bot_task:
         _bot_task.cancel()
