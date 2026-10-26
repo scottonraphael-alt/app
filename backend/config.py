@@ -62,6 +62,8 @@ DISCORD_HELPER_ROLE2_ID = os.environ.get("DISCORD_HELPER_ROLE2_ID")
 DISCORD_ANIMATEUR_ROLE_ID = os.getenv("DISCORD_ANIMATEUR_ROLE_ID", "")
 DISCORD_OPERATEUR_ROLE_ID = os.getenv("DISCORD_OPERATEUR_ROLE_ID", "")
 DISCORD_OPERATEUR_ROLE2_ID = os.getenv("DISCORD_OPERATEUR_ROLE2_ID", "")
+# Rôle « Adjoint » : purement esthétique (badge du tableau de bord), ne donne aucun accès.
+DISCORD_ADJOINT_ROLE_ID = os.getenv("DISCORD_ADJOINT_ROLE_ID", "1502192430387040407")
 
 # --- Sécurité / logs d'auth ---
 TRUSTED_PROXIES = os.environ.get(

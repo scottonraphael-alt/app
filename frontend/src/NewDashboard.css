@@ -1930,7 +1930,7 @@ body.dashboard-no-nav .app-shell > .app-main {
 .nd-page .nd-anim-calendar .nd-anim-message {
   color: #765c8b;
 }
-/* Pilules : Responsable, Coordinateur, Opérateur, Helper, Animateur */
+/* Pilules : Responsable, Adjoint, Coordinateur, Opérateur, Helper, Animateur */
 
 .nd-page .nd-pill {
   border: 1px solid transparent;
@@ -1941,6 +1941,13 @@ body.dashboard-no-nav .app-shell > .app-main {
   background: #f8e2e3;
   border-color: #ecc3c6;
   color: #a13945;
+}
+
+/* Adjoint — un cran plus rouge que Responsable */
+.nd-page .nd-pill--adjoint {
+  background: #f3cfd1;
+  border-color: #e2a2a8;
+  color: #8c1f2c;
 }
 
 /* Coordinateur — orange pastel */

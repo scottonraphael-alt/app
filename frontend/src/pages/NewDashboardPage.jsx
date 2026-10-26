@@ -36,6 +36,7 @@ export default function NewDashboardPage({
   isResponsable = false,
   isOperateur = false,
   isAnimateur = false,
+  isAdjoint = false,
 }) {
   useEffect(() => {
     document.body.classList.add("dashboard-no-nav");
@@ -112,6 +113,10 @@ const pills = [
   isResponsable && {
     label: "Responsable",
     tone: "responsable",
+  },
+  isAdjoint && {
+    label: "Adjoint",
+    tone: "adjoint",
   },
   isAdmin && {
     label: "Coordinateur",

@@ -41,6 +41,7 @@ function AuthenticatedApp({
   isResponsable,
   isOperateur,
   isAnimateur,
+  isAdjoint,
   onSessionRefresh,
 }) {
   const queryClient = useQueryClient();
@@ -130,6 +131,7 @@ function AuthenticatedApp({
         isResponsable={isResponsable}
         isOperateur={isOperateur}
         isAnimateur={isAnimateur}
+        isAdjoint={isAdjoint}
       />
     ) : (
       <Navigate to={defaultRoute} replace />
@@ -428,6 +430,7 @@ function MainApp() {
             isResponsable={session.is_responsable}
             isOperateur={session.is_operateur}
             isAnimateur={session.is_animateur}
+            isAdjoint={session.is_adjoint}
             onSessionRefresh={() => sessionQuery.refetch()}
           />
         ) : (

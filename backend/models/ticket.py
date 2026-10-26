@@ -148,6 +148,7 @@ class AuthSession(BaseModel):
     is_responsable: bool = False
     is_animateur: bool = False
     is_operateur: bool = False
+    is_adjoint: bool = False
 
 
 class AdminHelperOverview(BaseModel):

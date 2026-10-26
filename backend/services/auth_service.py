@@ -19,6 +19,7 @@ from config import (
     DISCORD_HELPER_ROLE2_ID,
     DISCORD_OPERATEUR_ROLE_ID,
     DISCORD_OPERATEUR_ROLE2_ID,
+    DISCORD_ADJOINT_ROLE_ID,
     DISCORD_STAFF_ROLE_ID,
     DISCORD_ANIMATEUR_ROLE_ID,
     DISCORD_RESPONSABLE_ROLE_ID,
@@ -202,6 +203,7 @@ async def get_helper_role_flags(helper_id: str) -> dict[str, bool]:
             (bool(DISCORD_OPERATEUR_ROLE_ID) and DISCORD_OPERATEUR_ROLE_ID in role_ids)
             or (bool(DISCORD_OPERATEUR_ROLE2_ID) and DISCORD_OPERATEUR_ROLE2_ID in role_ids)
         ),
+        "is_adjoint": bool(DISCORD_ADJOINT_ROLE_ID) and DISCORD_ADJOINT_ROLE_ID in role_ids,
     }
     flags["is_helper"] = (
         bool(DISCORD_HELPER_ROLE_ID) and DISCORD_HELPER_ROLE_ID in role_ids
