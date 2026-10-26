@@ -108,3 +108,37 @@ Si le CDN ou le disque est temporairement indisponible, l’import reste possibl
 et une copie est retentée après une heure. Un avatar déjà disparu du CDN et jamais conservé ne peut
 pas être récupéré ; une initiale est affichée en cas d’échec de chargement dans la conversation.
 Les métadonnées de copie sont conservées dans la collection `ticket_avatars`, sans expiration.
+
+### Consultation, recherche et traitement des tickets
+
+L’ouverture d’un dossier par l’interface appelle `POST /api/tickets/{id}/view` : elle actualise
+`last_helper_update_at` et alimente le journal. Les GET de détail, la pagination chargée en fond,
+les avatars et le polling ne comptent jamais comme une intervention humaine.
+Les rappels hebdomadaires tiennent donc compte des ouvertures et des modifications manuelles.
+
+La vue **À traiter** des suivis ouverts regroupe les dossiers sans interlocuteur, sans ouverture
+ni mise à jour depuis sept jours, en échec de synchronisation ou en échec de synthèse.
+Les motifs sont calculés côté serveur et affichés sur chaque ligne de cette vue.
+Le bouton **Rechercher** du dossier recherche dans toute la transcription, avec un mot/une expression
+(insensible à la casse et aux accents) et/ou une période de dates, interprétées à Paris.
+Les résultats sont paginés par 20 et permettent d’ouvrir la page du message et de le surligner.
+Le message d’ouverture automatique masqué reste exclu des résultats visibles.
+
+Les messages et la synthèse restent actualisés ensemble chaque jour côté serveur.
+Les états `sync_status`, `sync_error`, `last_sync_attempt_at`, `summary_status`, `summary_error`
+permettent d’afficher une actualisation en cours, sa réussite ou son échec. Un échec Anthropic
+conserve la dernière synthèse et les messages synchronisés ; il ne devient pas une fausse erreur Discord.
+
+Les actions manuelles des tickets utilisent la collection centrale `auth_logs`, sa rétention
+et ses restrictions responsables existantes. La catégorie **Tickets** du journal permet de filtrer
+consultations, imports manuels, modifications, notes, attributions/désattributions, archivages/réactivations,
+suppressions, synchronisations manuelles, recherches, générations IA et tests de rappel Discord.
+Les événements gardent auteur, date, IP, méthode, résultat, dossier et champs concernés,
+avec des longueurs pour les textes : les conversations, contenus de notes et termes recherchés
+ne sont pas recopiés dans le journal. Les échecs métier sont également consignés.
+Les consultations de listes, filtres, recherches de listes, choix d’interlocuteur, changements d’onglet,
+pagination, ouvertures de pièces jointes et rédaction/fermeture d’une note sont signalés par l’interface
+avec `source: client` pour les distinguer des opérations vérifiées par le serveur.
+Le journal de ces interactions n’est pas une preuve d’une modification de données.
+Les erreurs d’authentification et d’autorisation continuent d’utiliser le journal de sécurité existant.
+Un échec du journal est signalé dans les logs serveur sans annuler une modification déjà enregistrée.

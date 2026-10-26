@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from database import db
 from models.ticket import (
@@ -16,6 +16,7 @@ from services.auth_service import current_admin, current_helper
 from services.discord_service import DiscordService
 from services.ticket_assignment import ticket_helper_role_ids
 from services.ticket_avatars import cache_avatar
+from services.ticket_audit import audit_action
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -75,7 +76,9 @@ async def admin_overview(
 
 
 @router.patch("/tickets/{ticket_id}/assignment", response_model=TicketDetail)
+@audit_action("ticket.assignment.changed", 200)
 async def assign_ticket_helper(
+    request: Request,
     ticket_id: str,
     input_data: TicketAssignmentUpdate,
     _: AuthenticatedHelper = Depends(current_admin),
@@ -105,7 +108,9 @@ async def assign_ticket_helper(
 
 
 @router.delete("/tickets/{ticket_id}", status_code=204)
+@audit_action("ticket.deleted", 204)
 async def delete_ticket_as_admin(
+    request: Request,
     ticket_id: str,
     _: AuthenticatedHelper = Depends(current_admin),
 ) -> None:
@@ -120,7 +125,9 @@ async def delete_ticket_as_admin(
 
 
 @router.post("/ticket-reminders/test")
+@audit_action("ticket.reminder.test_sent", 200)
 async def send_test_ticket_reminder(
+    request: Request,
     _: AuthenticatedHelper = Depends(current_admin),
 ) -> dict:
     from services.ticket_reminders import test_reminder

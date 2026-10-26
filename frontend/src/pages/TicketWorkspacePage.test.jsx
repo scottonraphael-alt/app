@@ -40,7 +40,7 @@ const type = async (selector, value) => act(async () => {
 });
 
 it("pagine la conversation tout en gardant le résumé visible", async () => {
-  expect(api.get).toHaveBeenCalledWith("/tickets/ticket", { params: { include_transcript: false } });
+  expect(api.post).toHaveBeenCalledWith("/tickets/ticket/view");
   await click('[aria-label="Page suivante"]');
   expect(container.querySelector('[aria-label="Page de messages"]').value).toBe("2");
   expect(container.querySelector('[data-testid="transcript-message-message-2"]')).not.toBeNull();
@@ -106,4 +106,18 @@ it("utilise la copie d’avatar de l’API et affiche une initiale si l’image 
   await act(async () => image.dispatchEvent(new Event('error')));
   expect(container.querySelector('.tw-author-avatar img')).toBeNull();
   expect(container.querySelector('.tw-author-avatar').textContent).toBe('M');
+});
+
+
+it("recherche dans toutes les pages et ouvre le message trouvé", async () => {
+  api.get.mockImplementation((url, options) => Promise.resolve({ data: url.endsWith('/search') ? {
+    total: 1, page: 1, items: [{ message_id: 'message-2', message_page: 2, author_name: 'Membre', timestamp: '2026-10-01', excerpt: 'Un souvenir retrouvé' }],
+  } : { total: 51, messages: [{ id: 'message-2', content: 'Un souvenir retrouvé', timestamp: '2026-10-01', author: { id: 'member', username: 'Membre' } }] } }));
+  await click('button[aria-expanded]');
+  await type('[aria-label="Rechercher dans toute la conversation"]', 'souvenir');
+  await act(async () => container.querySelector('.tw-search-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  expect(api.get).toHaveBeenCalledWith('/tickets/ticket/messages/search', expect.objectContaining({ params: expect.objectContaining({ q: 'souvenir' }) }));
+  await click('.tw-search-result');
+  expect(container.querySelector('[aria-label="Page de messages"]').value).toBe('2');
+  expect(container.querySelector('#tw-message-message-2').className).toContain('is-search-hit');
 });

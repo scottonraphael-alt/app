@@ -29,7 +29,7 @@ def test_pagination(client):
     assert client.get('/api/tickets/missing/messages',cookies=cookies).status_code==404
 
 def test_refresh_once(client,monkeypatch):
-    seed()
+    seed(last_helper_update_at='2026-10-01T10:00:00+00:00')
     calls=[]
     async def history(*args,**kwargs):
         assert kwargs['require_ticket_category']
@@ -46,6 +46,9 @@ def test_refresh_once(client,monkeypatch):
     assert len(calls)==1
     assert stored['message_count']==0
     assert stored['ai_summary']['generated_by']=='system:daily-refresh'
+    assert stored['sync_status']=='success'
+    assert stored['summary_status']=='ready'
+    assert stored['last_helper_update_at']=='2026-10-01T10:00:00+00:00'
     assert 'refresh_lease_until' not in stored
 
 @pytest.mark.parametrize('extra',[{'status':'archived'},{'demo_ticket':True},{'refresh_lease_until':'2099-01-01'}])
@@ -67,8 +70,26 @@ def test_summary_failure(client,monkeypatch):
     h.run(ticket_refresh.refresh_due_tickets())
     stored=h.run(h.db.tickets.find_one({'id':'ticket'}))
     assert stored['ai_summary']['context']=='Ancien'
+    assert stored['sync_status']=='success'
+    assert stored['summary_status']=='error' and stored['summary_error']
     assert 'auto_refreshed_at' not in stored
     assert 'refresh_lease_until' in stored
+
+def test_discord_failure_preserves_messages_and_does_not_start_summary(client,monkeypatch):
+    seed(ai_summary={'context':'Ancien'},last_helper_update_at='2026-10-01T10:00:00+00:00')
+    async def failed(*args,**kwargs):
+        raise RuntimeError('Discord indisponible')
+    async def unexpected(*args):
+        pytest.fail('La synthèse ne doit pas démarrer après un échec Discord')
+        yield
+    monkeypatch.setattr(ticket_refresh.DiscordService,'fetch_channel_history',failed)
+    monkeypatch.setattr(ticket_refresh,'stream_summary',unexpected)
+    h.run(ticket_refresh.refresh_due_tickets())
+    stored=h.run(h.db.tickets.find_one({'id':'ticket'}))
+    assert stored['sync_status']=='error' and stored['sync_error']
+    assert len(stored['transcript'])==120
+    assert stored['ai_summary']['context']=='Ancien'
+    assert stored['last_helper_update_at']=='2026-10-01T10:00:00+00:00'
 
 def test_anthropic_stream(monkeypatch):
     from services import ai_summary_service as service

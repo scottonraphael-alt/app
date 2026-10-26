@@ -1,3 +1,4 @@
+import { ticketEvent, ATTENTION_LABELS } from "../utils/ticketEvents";
 import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -99,6 +100,7 @@ export default function DashboardPage({
 
   useEffect(() => {
     document.body.classList.add("ticket-list-no-nav");
+    ticketEvent("list.viewed");
 
     return () => {
       document.body.classList.remove("ticket-list-no-nav");
@@ -129,6 +131,8 @@ export default function DashboardPage({
       ) {
         return false;
       }
+
+      if (assignmentFilter === "attention" && !ticket.needs_attention) return false;
 
       if (
         assignmentFilter === "unassigned" &&
@@ -170,12 +174,15 @@ export default function DashboardPage({
     helper?.id,
   ]);
 
+  const attentionCount = activeTickets.filter((ticket) => ticket.needs_attention).length;
+
   const hasFilters =
     Boolean(search.trim()) ||
     statusFilter !== "all" ||
     assignmentFilter !== "all";
 
   const clearFilters = () => {
+    ticketEvent("list.filter_changed", null, "reset");
     setSearch("");
     setStatusFilter("all");
     setAssignmentFilter("all");
@@ -244,6 +251,7 @@ export default function DashboardPage({
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
+                onBlur={() => { if (search.trim()) ticketEvent("list.search_submitted", null, search.trim().length); }}
                 placeholder="Rechercher un membre, un salon ou un interlocuteur…"
                 aria-label="Rechercher un suivi"
               />
@@ -252,9 +260,7 @@ export default function DashboardPage({
             <select
               className="tl-status-select"
               value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value)
-              }
+              onChange={(event) => { setStatusFilter(event.target.value); ticketEvent("list.filter_changed", null, event.target.value); }}
               aria-label="Filtrer par statut de suivi"
             >
               {STATUS_FILTERS.map((status) => (
@@ -266,13 +272,14 @@ export default function DashboardPage({
           </div>
 
           <div className="tl-filters" aria-label="Filtrer les attributions">
+            <button type="button" className={assignmentFilter === "attention" ? "is-selected" : ""} aria-pressed={assignmentFilter === "attention"} onClick={() => { setAssignmentFilter("attention"); ticketEvent("list.filter_changed", null, "attention"); }}>À traiter · {attentionCount}</button>
             <button
               type="button"
               className={
                 assignmentFilter === "all" ? "is-selected" : ""
               }
               aria-pressed={assignmentFilter === "all"}
-              onClick={() => setAssignmentFilter("all")}
+              onClick={() => { setAssignmentFilter("all"); ticketEvent("list.filter_changed", null, "all"); }}
             >
               Tous les suivis
             </button>
@@ -284,7 +291,7 @@ export default function DashboardPage({
                   assignmentFilter === "mine" ? "is-selected" : ""
                 }
                 aria-pressed={assignmentFilter === "mine"}
-                onClick={() => setAssignmentFilter("mine")}
+                onClick={() => { setAssignmentFilter("mine"); ticketEvent("list.filter_changed", null, "mine"); }}
               >
                 Mes suivis
               </button>
@@ -298,7 +305,7 @@ export default function DashboardPage({
                   : ""
               }
               aria-pressed={assignmentFilter === "unassigned"}
-              onClick={() => setAssignmentFilter("unassigned")}
+              onClick={() => { setAssignmentFilter("unassigned"); ticketEvent("list.filter_changed", null, "unassigned"); }}
             >
               Sans interlocuteur
             </button>
@@ -380,12 +387,14 @@ export default function DashboardPage({
                   key={ticket.id}
                   to={`/tickets/${ticket.id}`}
                   className="tl-ticket"
+                  title={(ticket.attention_reasons || []).map((reason) => ATTENTION_LABELS[reason]).join(" · ")}
                   data-testid={`ticket-row-${ticket.id}`}
                 >
                   <MemberAvatar member={ticket.member} />
 
                   <span className="tl-ticket-copy">
                     <strong>{displayName(ticket.member)}</strong>
+                  {assignmentFilter === "attention" && <span className="tl-attention-reasons">{(ticket.attention_reasons || []).map(reason => ATTENTION_LABELS[reason]).join(" · ")}</span>}
 
                     <small>
                       {ticket.title || ticket.channel_name}

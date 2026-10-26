@@ -49,6 +49,7 @@ const CATEGORIES = [
   },
   { key: "casiers", label: "Casiers", hint: "Modifications de casiers" },
   { key: "projets", label: "Projets", hint: "Projets, tâches et ressources" },
+  { key: "tickets", label: "Tickets", hint: "Consultations, recherches et actions manuelles sur les suivis" },
   { key: "autres", label: "Autres", hint: "Tous les autres événements" },
 ];
 
@@ -73,6 +74,28 @@ const AGENDA_EVENT_LABELS = {
   "agenda.settings.test_sent": "Agenda : message de test envoyé",
 };
 
+const TICKET_EVENT_LABELS = {
+  "ticket.ui.coordination.filter_changed": "Filtre des attributions modifié", "ticket.ui.coordination.ticket_selected": "Dossier sélectionné pour attribution",
+  "ticket.ui.coordination.helper_selected": "Interlocuteur sélectionné", "ticket.ui.coordination.search_submitted": "Recherche dans les attributions",
+  "ticket.ui.archives.filter_changed": "Filtre des archives modifié", "ticket.ui.archives.search_submitted": "Recherche dans les archives",
+  "ticket.ui.workspace.mobile_view_changed": "Vue mobile du dossier changée", "ticket.ui.search.opened": "Recherche ouverte",
+  "ticket.archived": "Dossier archivé", "ticket.reactivated": "Dossier réactivé",
+  "ticket.created": "Ticket importé manuellement", "ticket.viewed": "Dossier ouvert et suivi actualisé",
+  "ticket.updated": "Dossier modifié", "ticket.deleted": "Dossier supprimé",
+  "ticket.note.created": "Note ajoutée", "ticket.note.deleted": "Note supprimée",
+  "ticket.assignment.changed": "Interlocuteur modifié", "ticket.sync.completed": "Synchronisation manuelle",
+  "ticket.ai_summary.requested": "Synthèse IA demandée", "ticket.ai_summary.completed": "Synthèse IA enregistrée",
+  "ticket.ai_summary.failed": "Synthèse IA échouée", "ticket.search": "Recherche dans la conversation",
+  "ticket.reminder.test_sent": "Test du rappel Discord envoyé",
+  "ticket.ui.list.viewed": "Liste des suivis consultée", "ticket.ui.list.filter_changed": "Filtre des suivis modifié",
+  "ticket.ui.list.search_submitted": "Recherche dans la liste des suivis",
+  "ticket.ui.archives.viewed": "Archives des suivis consultées", "ticket.ui.coordination.viewed": "Attributions consultées",
+  "ticket.ui.workspace.tab_changed": "Onglet du dossier consulté", "ticket.ui.messages.page_changed": "Page de messages consultée",
+  "ticket.ui.note.composer_opened": "Rédaction de note ouverte", "ticket.ui.note.composer_closed": "Rédaction de note fermée",
+  "ticket.ui.attachment.opened": "Pièce jointe ouverte", "ticket.ui.search.closed": "Recherche fermée",
+  "ticket.ui.search.result_opened": "Résultat de recherche ouvert",
+};
+
 const EVENT_LABELS = {
   "auth.login.started": "Connexion démarrée",
   "auth.login.success": "Connexion réussie",
@@ -95,6 +118,7 @@ const EVENT_LABELS = {
   "project.resource.uploaded": "Ressource ajoutée",
   "project.resource.deleted": "Ressource supprimée",
 
+  ...TICKET_EVENT_LABELS,
   ...CASIER_EVENT_LABELS,
   ...AGENDA_EVENT_LABELS,
 };
@@ -347,6 +371,19 @@ function describeEvent(log) {
     ? ["la fiche S ", quote(d.fiche_title)]
     : ["une fiche S"];
 
+  if (type.startsWith("ticket.")) {
+    const failed = type.endsWith(".failed");
+    const label = TICKET_EVENT_LABELS[type] || (failed ? `${TICKET_EVENT_LABELS[type.slice(0, -7)] || "Action sur le ticket"} : échec` : humanize(type));
+    const extras = [];
+    if (d.ticket_id) extras.push(["Dossier", d.ticket_id]);
+    if (d.fields?.length) extras.push(["Champs", d.fields.join(", ")]);
+    if (d.helper_id) extras.push(["Interlocuteur", d.helper_id]);
+    if (d.value) extras.push(["Sélection", d.value]);
+    if (d.query_length !== undefined) extras.push(["Recherche", `${d.query_length} caractères`]);
+    if (d.total !== undefined) extras.push(["Résultats", d.total]);
+    return { parts: [actor, " · ", label, ...forMember], extras };
+  }
+
   let parts;
 
   switch (type) {
@@ -546,6 +583,7 @@ function categoryLabel(type) {
   if (/^auth\.(login\.|session\.|logout$)/.test(type)) return "Connexions";
   if (/^casier\./.test(type)) return "Casiers";
   if (/^project\./.test(type)) return "Projets";
+  if (/^ticket\./.test(type)) return "Tickets";
 
   return "Autres";
 }
@@ -646,7 +684,7 @@ function EventBadge({ eventType }) {
           eventType === "project.member.added" ||
           eventType === "project.task.submitted"
         ? "status-pending"
-        : eventType === "auth.login.failure" ||
+        : eventType?.endsWith(".failed") || eventType === "auth.login.failure" ||
             eventType === "authz.forbidden" ||
             eventType === "project.deleted" ||
             eventType === "project.task.deleted" ||
@@ -660,7 +698,7 @@ function EventBadge({ eventType }) {
 
   return (
     <span className={`status-badge ${tone}`}>
-      {EVENT_LABELS[eventType] || humanize(eventType)}
+      {EVENT_LABELS[eventType] || (eventType?.startsWith("ticket.") && eventType.endsWith(".failed") ? `${TICKET_EVENT_LABELS[eventType.slice(0, -7)] || "Action ticket"} : échec` : humanize(eventType))}
     </span>
   );
 }
@@ -746,7 +784,7 @@ function TechnicalDetails({ log }) {
 function LogRow({ log, now }) {
   const date = parseDate(log.created_at);
   const { parts, extras } = describeEvent(log);
-  const link = casierLogLink(log.event_type, log.details);
+  const link = log.event_type?.startsWith("ticket.") && log.details?.ticket_id && !log.event_type.startsWith("ticket.deleted") ? `/tickets/${encodeURIComponent(log.details.ticket_id)}` : casierLogLink(log.event_type, log.details);
 
   return (
     <tr className={isAlertEvent(log.event_type) ? "ral-row--alert" : undefined}>
@@ -776,7 +814,7 @@ function LogRow({ log, now }) {
 
             {link && (
               <Link to={link} className="ral-detail-link">
-                {log.details?.casier_id ? "Ouvrir le casier" : "Voir le signalement"}
+                {log.details?.ticket_id ? "Ouvrir le dossier" : log.details?.casier_id ? "Ouvrir le casier" : "Voir le signalement"}
                 <ArrowRight size={13} aria-hidden="true" />
               </Link>
             )}

@@ -22,6 +22,7 @@ CATEGORY_CLAUSES = {
     "acces_refuses": {"event_type": {"$in": ["authz.forbidden", "auth.login.failure"]}},
     "casiers": {"event_type": {"$regex": r"^casier\."}},
     "projets": {"event_type": {"$regex": r"^project\."}},
+    "tickets": {"event_type": {"$regex": r"^ticket\."}},
 }
 CATEGORY_KEYS = (*CATEGORY_CLAUSES, "autres")
 
@@ -29,6 +30,9 @@ CATEGORY_KEYS = (*CATEGORY_CLAUSES, "autres")
 # « toutes les valeurs texte d'un sous-document » sans $expr, que mongomock ne gère pas bien).
 # Source : routers/animateur.py, routers/auth.py, services/auth_service.py et services/casier_audit.py.
 SEARCH_DETAIL_FIELDS = (
+    "ticket_id",
+    "helper_id",
+    "previous_helper_id",
     "member_id",
     "member_username",
     "casier_id",

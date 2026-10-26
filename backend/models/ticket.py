@@ -111,6 +111,14 @@ class TicketSummary(BaseModel):
     priority: Literal["routine", "prioritaire", "urgent"] = "routine"
     follow_up_status: Literal["en attente de réponse", "en cours", "à conclure"] = "en attente de réponse"
     assigned_helper: HelperIdentity | None = None
+    last_helper_update_at: str | None = None
+    sync_status: Literal["idle", "syncing", "success", "error"] = "idle"
+    sync_error: str | None = None
+    last_sync_attempt_at: str | None = None
+    summary_status: Literal["idle", "generating", "ready", "error"] = "idle"
+    summary_error: str | None = None
+    attention_reasons: list[str] = Field(default_factory=list)
+    needs_attention: bool = False
 
 
 class TicketDetail(TicketSummary):
@@ -118,7 +126,6 @@ class TicketDetail(TicketSummary):
     notes: str = ""
     vocal_summary: str = ""
     last_synced_at: str | None = None
-    last_helper_update_at: str | None = None
     created_by: str
     is_demo: bool = False
     ai_summary: AiSummary | None = None
@@ -166,3 +173,9 @@ class AdminOverview(BaseModel):
     active_tickets: int
     unassigned_tickets: int
     helpers: list[AdminHelperOverview] = Field(default_factory=list)
+
+
+class TicketUiEvent(BaseModel):
+    kind: Literal["coordination.filter_changed", "coordination.ticket_selected", "coordination.helper_selected", "coordination.search_submitted", "archives.filter_changed", "archives.search_submitted", "workspace.mobile_view_changed", "search.opened", "list.viewed", "list.filter_changed", "list.search_submitted", "archives.viewed", "coordination.viewed", "workspace.tab_changed", "messages.page_changed", "note.composer_opened", "note.composer_closed", "attachment.opened", "search.closed", "search.result_opened"]
+    ticket_id: str | None = Field(default=None, max_length=100)
+    value: str | None = Field(default=None, max_length=100)

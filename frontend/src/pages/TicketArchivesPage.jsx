@@ -1,3 +1,4 @@
+import { ticketEvent } from "../utils/ticketEvents";
 import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -80,6 +81,7 @@ export default function TicketArchivesPage({
 
   useEffect(() => {
     document.body.classList.add("ticket-archives-no-nav");
+    ticketEvent("archives.viewed");
 
     return () => {
       document.body.classList.remove("ticket-archives-no-nav");
@@ -131,6 +133,7 @@ export default function TicketArchivesPage({
   const hasFilters = Boolean(search.trim() || onlyMine);
 
   const clearFilters = () => {
+    ticketEvent("archives.filter_changed", null, "reset");
     setSearch("");
     setOnlyMine(false);
   };
@@ -186,6 +189,7 @@ export default function TicketArchivesPage({
             <input
               type="search"
               value={search}
+              onBlur={() => { if (search.trim()) ticketEvent("archives.search_submitted", null, search.trim().length); }}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Rechercher un membre, un salon ou un interlocuteur…"
               aria-label="Rechercher dans les suivis archivés"
@@ -197,7 +201,7 @@ export default function TicketArchivesPage({
               type="button"
               className={!onlyMine ? "is-selected" : ""}
               aria-pressed={!onlyMine}
-              onClick={() => setOnlyMine(false)}
+              onClick={() => { setOnlyMine(false); ticketEvent("archives.filter_changed", null, "all"); }}
             >
               Toutes les archives
             </button>
@@ -207,7 +211,7 @@ export default function TicketArchivesPage({
                 type="button"
                 className={onlyMine ? "is-selected" : ""}
                 aria-pressed={onlyMine}
-                onClick={() => setOnlyMine(true)}
+                onClick={() => { setOnlyMine(true); ticketEvent("archives.filter_changed", null, "mine"); }}
               >
                 Mes anciens suivis
               </button>

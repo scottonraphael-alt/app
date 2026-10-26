@@ -521,3 +521,5 @@ body.ticket-list-no-nav .app-shell > .app-main {
     transition: none;
   }
 }
+
+.tl-page .tl-attention-reasons { color:#997443; font-size:11px; line-height:1.5; max-width:180px; }

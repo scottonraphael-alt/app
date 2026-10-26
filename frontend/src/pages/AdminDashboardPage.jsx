@@ -1,3 +1,4 @@
+import { ticketEvent } from "../utils/ticketEvents";
 import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useState } from "react";
 import {
@@ -71,6 +72,7 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     document.body.classList.add("assignments-no-nav");
+    ticketEvent("coordination.viewed");
 
     return () => {
       document.body.classList.remove("assignments-no-nav");
@@ -246,6 +248,7 @@ export default function AdminDashboardPage() {
   const selectTicket = (ticket) => {
     if (busy) return;
 
+    ticketEvent("coordination.ticket_selected", ticket.id);
     setSelectedTicketId(ticket.id);
     setSelectedHelperId("");
     setSelectionChanged(false);
@@ -256,6 +259,7 @@ export default function AdminDashboardPage() {
   const selectHelper = (helperId) => {
     if (busy) return;
 
+    ticketEvent("coordination.helper_selected", selectedTicketId, helperId || "unassigned");
     setSelectedHelperId(helperId);
     setSelectionChanged(true);
     assignmentMutation.reset();
@@ -399,6 +403,7 @@ export default function AdminDashboardPage() {
                   <Search size={17} aria-hidden="true" />
                   <input
                     value={search}
+                    onBlur={() => { if (search.trim()) ticketEvent("coordination.search_submitted", null, `tickets:${search.trim().length}`); }}
                     onChange={(event) =>
                       setSearch(event.target.value)
                     }
@@ -419,7 +424,7 @@ export default function AdminDashboardPage() {
                         filter === item.id ? "is-selected" : ""
                       }
                       aria-pressed={filter === item.id}
-                      onClick={() => setFilter(item.id)}
+                      onClick={() => { setFilter(item.id); ticketEvent("coordination.filter_changed", null, item.id); }}
                     >
                       {item.label}
                       <span>{item.count}</span>
@@ -556,6 +561,7 @@ export default function AdminDashboardPage() {
                       <Search size={16} aria-hidden="true" />
                       <input
                         value={helperSearch}
+                        onBlur={() => { if (helperSearch.trim()) ticketEvent("coordination.search_submitted", null, `helpers:${helperSearch.trim().length}`); }}
                         onChange={(event) =>
                           setHelperSearch(event.target.value)
                         }

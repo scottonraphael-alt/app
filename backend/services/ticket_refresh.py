@@ -30,25 +30,34 @@ async def refresh_due_tickets() -> None:
         )
         if not ticket:
             continue
+        phase = "messages"
         try:
+            await db.tickets.update_one({"id": ticket["id"]}, {"$set": {"sync_status": "syncing", "sync_error": None, "last_sync_attempt_at": now.isoformat()}})
             messages = await DiscordService().fetch_channel_history(ticket["channel_id"], require_ticket_category=True)
             timestamp = datetime.now(timezone.utc).isoformat()
             cached = await cache_ticket_avatars({"transcript": [message.model_dump() for message in messages]}, previous=ticket)
             transcript = cached["transcript"]
             await db.tickets.update_one({"id": ticket["id"]}, {"$set": {
                 "transcript": transcript, "message_count": len(messages),
-                "last_synced_at": timestamp, "updated_at": timestamp,
+                "last_synced_at": timestamp, "updated_at": timestamp, "sync_status": "success", "sync_error": None,
             }})
             # Relecture pour intégrer les notes éventuellement modifiées pendant la synchronisation.
             current = await db.tickets.find_one({"id": ticket["id"], "status": "active"})
             if not current:
                 continue
+            phase = "summary"
+            await db.tickets.update_one({"id": ticket["id"]}, {"$set": {"summary_status": "generating", "summary_error": None}})
             async for event, summary in stream_summary(current, "system:daily-refresh"):
                 if event == "complete":
                     await db.tickets.update_one({"id": ticket["id"], "status": "active"}, {"$set": {
-                        "ai_summary": summary.model_dump(), "auto_refreshed_at": timestamp,
+                        "ai_summary": summary.model_dump(), "auto_refreshed_at": timestamp, "summary_status": "ready", "summary_error": None,
                     }, "$unset": {"refresh_lease_until": ""}})
         except Exception:
+            if phase == "messages":
+                updates = {"sync_status": "error", "sync_error": "L’actualisation quotidienne des messages a échoué. Vérifiez l’accès au salon Discord."}
+            else:
+                updates = {"summary_status": "error", "summary_error": "La synthèse quotidienne a échoué. Les messages synchronisés restent disponibles."}
+            await db.tickets.update_one({"id": ticket["id"]}, {"$set": updates})
             # Le bail sert aussi de délai avant nouvelle tentative ; aucun contenu privé dans le log.
             logger.exception("Actualisation quotidienne impossible pour le ticket %s", ticket["id"])
 
