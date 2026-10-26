@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Bot, Check, ChevronLeft, ChevronRight, FilePlus2, FileText, HeartHandshake, LoaderCircle, MoreHorizontal, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
+import { Archive, ArrowRight, Bot, Check, ChevronLeft, ChevronRight, FilePlus2, FileText, HeartHandshake, LoaderCircle, MoreHorizontal, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -255,14 +255,17 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   return (
     <section className="tw-desk" data-testid="ticket-workspace-page" data-mobile-view={mobileView}>
       <header className="tw-topbar">
-        <Link to="/" className="tw-back" aria-label="Retour à l’accueil" data-testid="ticket-back-link"><ArrowLeft size={18} /></Link>
-        <span className="tw-member-avatar">{ticket.member.avatar_url ? <img src={ticket.member.avatar_url} alt="" /> : <HeartHandshake size={22} />}</span>
-        <div className="tw-identity" data-testid="ticket-member-header"><p>ESPACE D’ÉCOUTE <span> / {ticket.channel_name}</span></p><h1>{ticket.member.display_name || ticket.member.username}</h1></div>
-        <span className={`tw-state ${ticket.status === "active" ? "is-active" : ""}`}>{ticket.status === "active" ? "Ouvert" : "Archivé"}</span>
+        <div className="tw-identity" data-testid="ticket-member-header">
+          <p>ACCOMPAGNEMENT · DOSSIER {ticket.status === "active" ? "OUVERT" : "ARCHIVÉ"}</p>
+          <h1>{ticket.member.display_name || ticket.member.username}</h1>
+          <p className="tw-intro">Historique des échanges et suivi de l’accompagnement.</p>
+        </div>
         <div className="tw-top-actions">
-          <span className="tw-save-state" role="status">{dirty ? "Modifications non enregistrées" : <><Check size={13} /> À jour</>}</span>
+          <Link to="/" className="tw-button tw-home" data-testid="ticket-back-link">Accueil <ArrowRight size={17} /></Link>
+          <button className="tw-button" disabled={syncing} onClick={sync} type="button" data-testid="sync-ticket-button">{syncing ? <LoaderCircle className="tw-spin" size={15} /> : <RefreshCw size={15} />} Actualiser</button>
+          <button className="tw-button" onClick={archive} type="button" data-testid="archive-ticket-button"><Archive size={15} /> {ticket.status === "active" ? "Archiver" : "Réactiver"}</button>
           <button className="tw-button tw-button-primary" disabled={saving || !dirty} onClick={save} type="button" data-testid="save-ticket-button">{saving ? <LoaderCircle className="tw-spin" size={15} /> : <Save size={15} />} {saving ? "Enregistrement…" : "Enregistrer"}</button>
-          <details className="tw-menu"><summary aria-label="Actions du dossier"><MoreHorizontal size={20} /></summary><div className="tw-menu-content"><button onClick={archive} type="button" data-testid="archive-ticket-button"><Archive size={15} /> {ticket.status === "active" ? "Archiver le dossier" : "Réactiver le dossier"}</button>{isAdmin && <button className="tw-danger" onClick={deleteTicket} type="button" data-testid="delete-ticket-button"><Trash2 size={15} /> Supprimer le dossier</button>}</div></details>
+          {isAdmin && <details className="tw-menu"><summary aria-label="Actions du dossier"><MoreHorizontal size={20} /></summary><div className="tw-menu-content"><button className="tw-danger" onClick={deleteTicket} type="button" data-testid="delete-ticket-button"><Trash2 size={15} /> Supprimer le dossier</button></div></details>}
         </div>
       </header>
 
@@ -270,14 +273,14 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         <label className="tw-context-control" htmlFor="follow-up-status"><span>Suivi</span><select id="follow-up-status" value={followUpStatus} onChange={(event) => setFollowUpStatus(event.target.value)} data-testid="follow-up-status-select"><option value="en attente de réponse">En attente de réponse</option><option value="en cours">En cours</option><option value="à conclure">À conclure</option></select></label>
         <div className="tw-context-control" data-testid="helper-assignment-panel"><UserRoundCheck size={15} /><span>Interlocuteur</span>{isAdmin ? <select aria-label="Helper principal" value={ticket.assigned_helper?.id || ""} onChange={(event) => assignHelper(event.target.value)} data-testid="helper-assignment-select"><option value="">Non attribué</option>{helpers.map((person) => <option value={person.id} key={person.id}>{person.display_name || person.username}</option>)}</select> : <strong data-testid="assigned-helper-readonly">{ticket.assigned_helper?.display_name || ticket.assigned_helper?.username || "Non attribué"}</strong>}</div>
         <span className="tw-context-date">Ouvert le {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString("fr-FR") : "—"}</span>
-        <span className="tw-private"><ShieldCheck size={13} /> Dossier privé</span>
+        <span className="tw-private"><span className="tw-save-state" role="status">{dirty ? "Modifications non enregistrées" : <><Check size={13} /> À jour</>}</span><ShieldCheck size={13} /> Dossier privé</span>
       </div>
 
       <div className="tw-mobile-nav" aria-label="Vue du dossier"><button type="button" aria-pressed={mobileView === "messages"} onClick={() => setMobileView("messages")}>Conversation <span>{ticket.message_count}</span></button><button type="button" aria-pressed={mobileView === "dossier"} onClick={() => setMobileView("dossier")}>Dossier et suivi</button></div>
 
       <div className="tw-layout">
         <section className="tw-conversation" data-testid="transcript-panel" aria-label="Conversation">
-          <header className="tw-panel-heading"><div><h2>Conversation <span>{ticket.message_count}</span></h2><p>{ticket.last_synced_at ? `Synchronisé le ${formatTime(ticket.last_synced_at)}` : "Historique des échanges"}</p></div><button className="tw-button tw-sync" disabled={syncing} onClick={sync} type="button" data-testid="sync-ticket-button" title="Synchroniser les messages Discord">{syncing ? <LoaderCircle className="tw-spin" size={15} /> : <RefreshCw size={15} />} <span>Actualiser</span></button></header>
+          <header className="tw-panel-heading"><div><h2>Conversation <span>{ticket.message_count}</span></h2><p>{ticket.last_synced_at ? `Synchronisé le ${formatTime(ticket.last_synced_at)}` : "Historique des échanges"}</p></div></header>
           <div className="tw-messages" ref={transcriptRef} aria-busy={messagesLoading}>
             {!messagesLoading && !messagesError && messages.length === 0 && <div className="tw-empty" data-testid="empty-transcript"><HeartHandshake size={26} /><h3>La conversation commence ici</h3><p>Les messages du salon apparaîtront après synchronisation.</p></div>}
             {messagesLoading && <div className="tw-empty" role="status"><LoaderCircle className="tw-spin" size={24} /><p>Chargement des messages…</p></div>}

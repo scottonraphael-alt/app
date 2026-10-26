@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from config import DISCORD_HELPER_ROLE_ID
 from database import db
 from models.ticket import (
     AdminHelperOverview,
@@ -15,6 +14,7 @@ from models.ticket import (
 )
 from services.auth_service import current_admin, current_helper
 from services.discord_service import DiscordService
+from services.ticket_assignment import ticket_helper_role_ids
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -34,14 +34,14 @@ async def ticket_or_404(ticket_id: str) -> dict:
 async def list_authorized_helpers(
     _: AuthenticatedHelper = Depends(current_admin),
 ) -> list[HelperIdentity]:
-    return await DiscordService().fetch_helpers(DISCORD_HELPER_ROLE_ID)
+    return await DiscordService().fetch_helpers(ticket_helper_role_ids())
 
 
 @router.get("/overview", response_model=AdminOverview)
 async def admin_overview(
     _: AuthenticatedHelper = Depends(current_admin),
 ) -> AdminOverview:
-    helpers = await DiscordService().fetch_helpers(DISCORD_HELPER_ROLE_ID)
+    helpers = await DiscordService().fetch_helpers(ticket_helper_role_ids())
     profiles = await db.helper_profiles.find({}, {"_id": 0}).to_list(1000)
     profiles_by_helper = {profile["helper_id"]: profile for profile in profiles}
     tickets = await db.tickets.find(
@@ -82,7 +82,7 @@ async def assign_ticket_helper(
     await ticket_or_404(ticket_id)
     assigned_helper: HelperIdentity | None = None
     if input_data.helper_id:
-        helpers = await DiscordService().fetch_helpers(DISCORD_HELPER_ROLE_ID)
+        helpers = await DiscordService().fetch_helpers(ticket_helper_role_ids())
         assigned_helper = next(
             (helper for helper in helpers if helper.id == input_data.helper_id),
             None,

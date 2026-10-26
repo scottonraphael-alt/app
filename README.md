@@ -18,3 +18,12 @@ Le backend doit rester en fonctionnement ; l’ouverture du navigateur n’est p
 La page affiche les messages dans l’ordre chronologique, par pages de 50. L’API
 `GET /api/tickets/{id}/messages?page=1&page_size=50` conserve les mêmes restrictions d’accès que les tickets.
 `GET /api/tickets/{id}?include_transcript=false` permet de charger le dossier sans sa transcription complète.
+
+
+À l’import d’un nouveau ticket, l’interlocuteur est recherché dans le premier message
+(« Ton Interlocuteur est <@identifiant> », y compris dans les embeds et composants Discord).
+L’attribution est validée avec les rôles `DISCORD_HELPER_ROLE_ID` et `DISCORD_HELPER_ROLE2_ID`.
+Sans mention exploitable, sans rôle autorisé ou si la personne est introuvable, le ticket reste non attribué.
+Cette détection n’est exécutée qu’à la création : les synchronisations manuelles et quotidiennes
+conservent les réattributions et désattributions effectuées dans Iris. Les deux rôles sont également
+proposés dans la liste de réattribution manuelle.

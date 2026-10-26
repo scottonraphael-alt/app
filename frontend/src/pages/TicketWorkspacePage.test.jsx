@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 jest.mock("react-router-dom", () => ({
   useParams: () => ({ ticketId: "ticket" }), useNavigate: () => jest.fn(),
-  Link: ({ children }) => <span>{children}</span>,
+  Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }), { virtual: true });
 jest.mock("@/TicketWorkspace.css", () => ({}), { virtual: true });
 import TicketWorkspacePage from "./TicketWorkspacePage";

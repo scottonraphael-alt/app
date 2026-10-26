@@ -118,7 +118,10 @@ class DiscordService:
         role_ids = await self.fetch_member_role_ids(member_id)
         return role_id in role_ids
 
-    async def fetch_helpers(self, role_id: str) -> list[HelperIdentity]:
+    async def fetch_helpers(self, role_id: str | set[str]) -> list[HelperIdentity]:
+        role_ids = {role_id} if isinstance(role_id, str) else role_id
+        if not role_ids:
+            return []
         helpers: list[HelperIdentity] = []
         after: str | None = None
 
@@ -132,7 +135,7 @@ class DiscordService:
                 break
 
             for member in page:
-                if role_id not in member.get("roles", []):
+                if not role_ids.intersection(member.get("roles", [])):
                     continue
 
                 user = member["user"]

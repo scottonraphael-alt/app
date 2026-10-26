@@ -21,6 +21,7 @@ from models.ticket import (
 from services.auth_service import current_ticket_helper, is_admin_helper
 from services.ai_summary_service import ensure_ai_configuration, stream_summary
 from services.discord_service import DiscordService
+from services.ticket_assignment import resolve_import_helper
 
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -82,6 +83,7 @@ async def create_ticket(
     member = await discord.fetch_member(input_data.member_id)
     channel = await discord.fetch_text_channel(input_data.channel_id, require_ticket_category=True)
     transcript = await discord.fetch_channel_history(input_data.channel_id, require_ticket_category=True)
+    assigned_helper = await resolve_import_helper(transcript, discord)
     timestamp = now_iso()
     ticket = TicketDetail(
         id=str(uuid4()),
@@ -92,6 +94,7 @@ async def create_ticket(
         status="active",
         message_count=len(transcript),
         transcript=transcript,
+        assigned_helper=assigned_helper,
         notes="",
         vocal_summary="",
         notes_entries=[],
