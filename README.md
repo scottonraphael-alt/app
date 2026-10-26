@@ -142,3 +142,7 @@ avec `source: client` pour les distinguer des opérations vérifiées par le ser
 Le journal de ces interactions n’est pas une preuve d’une modification de données.
 Les erreurs d’authentification et d’autorisation continuent d’utiliser le journal de sécurité existant.
 Un échec du journal est signalé dans les logs serveur sans annuler une modification déjà enregistrée.
+
+L’archivage retire l’interlocuteur affecté. Un dossier archivé ne peut pas être réaffecté ;
+sa réactivation le laisse sans interlocuteur. Les anciennes affectations des dossiers déjà archivés
+sont supprimées au démarrage du backend, sans modifier leur date de suivi.

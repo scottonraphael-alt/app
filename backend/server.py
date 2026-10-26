@@ -5,7 +5,7 @@ from starlette.datastructures import MutableHeaders
 from starlette.middleware.cors import CORSMiddleware
 import logging
 from config import CORS_ORIGINS
-from database import client, initialize_indexes
+from database import client, db, initialize_indexes
 from routers import admin, auth, members, profiles, resources, staff, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives
 from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
@@ -117,6 +117,11 @@ logger = logging.getLogger(__name__)
 async def startup() -> None:
     global _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task, _ticket_avatars_task
     await initialize_indexes()
+    # Mise en cohérence des dossiers archivés avant cette règle.
+    await db.tickets.update_many(
+        {"status": "archived", "assigned_helper": {"$ne": None}, "demo_ticket": {"$ne": True}},
+        {"$set": {"assigned_helper": None}},
+    )
     try:
         await asyncio.to_thread(init_storage)
     except Exception as error:

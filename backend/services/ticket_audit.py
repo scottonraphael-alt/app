@@ -44,6 +44,8 @@ def audit_action(event, status=200):
                 fields = data.model_dump(exclude_none=True)
                 if event == 'ticket.updated' and fields.get('status') and fields['status'] != (ticket or {}).get('status'):
                     actual_event = 'ticket.archived' if fields['status'] == 'archived' else 'ticket.reactivated'
+                    if actual_event == 'ticket.archived':
+                        details['previous_helper_id'] = ((ticket or {}).get('assigned_helper') or {}).get('id')
                 details['fields'] = list(fields)
                 details['field_lengths'] = {key: len(value) for key,value in fields.items() if key in {'notes','vocal_summary','person_triggers','content','title'} and isinstance(value,str)}
                 for key in ('status','follow_up_status','helper_id'):

@@ -341,6 +341,8 @@ async def update_ticket(
 ) -> TicketDetail:
     ticket = await ticket_or_404(ticket_id, _)
     updates = input_data.model_dump(exclude_none=True)
+    if updates.get("status", ticket.get("status")) == "archived":
+        updates["assigned_helper"] = None
     if not updates:
         return await ticket_or_404(ticket_id, _)
     timestamp = now_iso()

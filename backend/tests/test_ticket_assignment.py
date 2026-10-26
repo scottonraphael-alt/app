@@ -62,6 +62,19 @@ def test_plus_available_for_manual_assignment(client):
     assert r.status_code==200,r.text
     assert r.json()['assigned_helper']['id']==PLUS_ID
 
+def test_archive_clears_assignment_and_reactivation_does_not_restore_it(client):
+    ticket=create(client,[opening()])
+    url=f"/api/tickets/{ticket['id']}"
+    cookies=h.session_cookies('admin')
+    archived=client.patch(url,json={'status':'archived'},cookies=cookies)
+    assert archived.status_code==200
+    assert archived.json()['assigned_helper'] is None
+    assert client.patch(f"/api/admin/tickets/{ticket['id']}/assignment",json={'helper_id':PLUS_ID},cookies=cookies).status_code==409
+    assert client.post(url+'/sync',cookies=cookies).json()['assigned_helper'] is None
+    reactivated=client.patch(url,json={'status':'active'},cookies=cookies)
+    assert reactivated.status_code==200
+    assert reactivated.json()['assigned_helper'] is None
+
 @pytest.mark.parametrize('manual_id',[PLUS_ID,None])
 def test_manual_decision_survives_manual_and_daily_sync(client,monkeypatch,manual_id):
     ticket=create(client,[opening()])

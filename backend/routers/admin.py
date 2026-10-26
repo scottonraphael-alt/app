@@ -85,6 +85,8 @@ async def assign_ticket_helper(
 ) -> TicketDetail:
     ticket = await ticket_or_404(ticket_id)
     assigned_helper: HelperIdentity | None = None
+    if input_data.helper_id and ticket.get("status") == "archived":
+        raise HTTPException(status_code=409, detail="Réactivez le dossier avant d’affecter un interlocuteur.")
     if input_data.helper_id:
         helpers = await DiscordService().fetch_helpers(ticket_helper_role_ids())
         assigned_helper = next(
@@ -100,10 +102,12 @@ async def assign_ticket_helper(
     if input_data.helper_id != (ticket.get("assigned_helper") or {}).get("id"):
         # Le nouvel interlocuteur dispose d'une semaine avant le prochain rappel.
         updates["last_helper_update_at"] = timestamp
-    await db.tickets.update_one(
-        {"id": ticket_id, "demo_ticket": {"$ne": True}},
+    result = await db.tickets.update_one(
+        {"id": ticket_id, "demo_ticket": {"$ne": True}, **({"status": "active"} if assigned_helper else {})},
         {"$set": updates},
     )
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Le dossier a changé. Actualisez la page.")
     return await ticket_or_404(ticket_id)
 
 
