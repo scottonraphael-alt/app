@@ -15,6 +15,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
+import TicketReminderTestPanel from "../components/TicketReminderTestPanel";
 import "@/TicketAssignments.css";
 
 function displayName(member) {
@@ -337,6 +338,7 @@ export default function AdminDashboardPage() {
         </section>
       ) : (
         <>
+          <TicketReminderTestPanel />
           <div className="ta-summary">
             <div className="ta-summary-item ta-summary-item--orange">
               <span>À attribuer</span>

@@ -101,6 +101,7 @@ async def create_ticket(
         notes_entries=[],
         person_triggers="",
         last_synced_at=timestamp,
+        last_helper_update_at=timestamp,
         created_by=helper.id,
         created_at=timestamp,
         updated_at=timestamp,
@@ -136,7 +137,7 @@ async def create_ticket_note(
     )
     await db.tickets.update_one(
         {"id": ticket_id, "demo_ticket": {"$ne": True}},
-        {"$push": {"notes_entries": note.model_dump()}, "$set": {"updated_at": timestamp}},
+        {"$push": {"notes_entries": note.model_dump()}, "$set": {"updated_at": timestamp, "last_helper_update_at": timestamp}},
     )
     return note
 
@@ -153,9 +154,10 @@ async def delete_ticket_note(
         raise HTTPException(status_code=404, detail="Note introuvable.")
     if note["author"]["id"] != helper.id and not await is_admin_helper(helper.id):
         raise HTTPException(status_code=403, detail="Seul l’auteur ou un administrateur peut supprimer cette note.")
+    timestamp = now_iso()
     await db.tickets.update_one(
         {"id": ticket_id, "demo_ticket": {"$ne": True}},
-        {"$pull": {"notes_entries": {"id": note_id}}, "$set": {"updated_at": now_iso()}},
+        {"$pull": {"notes_entries": {"id": note_id}}, "$set": {"updated_at": timestamp, "last_helper_update_at": timestamp}},
     )
 
 
@@ -200,7 +202,7 @@ async def generate_ai_summary(
                     continue
                 await db.tickets.update_one(
                     {"id": ticket_id, "demo_ticket": {"$ne": True}},
-                    {"$set": {"ai_summary": payload.model_dump()}},
+                    {"$set": {"ai_summary": payload.model_dump(), "last_helper_update_at": now_iso()}},
                 )
                 yield f"event: complete\ndata: {json.dumps(payload.model_dump())}\n\n"
         except HTTPException as error:
@@ -223,11 +225,15 @@ async def update_ticket(
     input_data: TicketUpdate,
     _: AuthenticatedHelper = Depends(current_ticket_helper),
 ) -> TicketDetail:
-    await ticket_or_404(ticket_id, _)
+    ticket = await ticket_or_404(ticket_id, _)
     updates = input_data.model_dump(exclude_none=True)
     if not updates:
         return await ticket_or_404(ticket_id, _)
-    updates["updated_at"] = now_iso()
+    timestamp = now_iso()
+    if any(key in {"notes", "vocal_summary", "follow_up_status", "person_triggers"}
+           and value != ticket.get(key, "") for key, value in updates.items()):
+        updates["last_helper_update_at"] = timestamp
+    updates["updated_at"] = timestamp
     await db.tickets.update_one(
         {"$and": [{"id": ticket_id}, ticket_scope(_)]},
         {"$set": updates},

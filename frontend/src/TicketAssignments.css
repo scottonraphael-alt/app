@@ -709,3 +709,17 @@ body.assignments-no-nav .app-shell > .app-main {
     animation: none;
   }
 }
+
+/* Vérification temporaire du rappel hebdomadaire Discord. */
+.ta-page .ta-reminder-panel { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; padding:20px 22px; margin-bottom:24px; border:1px solid #d5e3d7; border-radius:18px; background:#edf3ed; }
+.ta-page .ta-reminder-copy { display:flex; align-items:flex-start; gap:13px; flex:1; min-width:240px; }
+.ta-page .ta-reminder-icon { display:grid; place-items:center; width:42px; height:42px; flex-shrink:0; border-radius:12px; color:#4a675c; background:#dce8df; }
+.ta-page .ta-reminder-copy h2 { display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin:0; font:600 17px/1.4 "Manrope",sans-serif; }
+.ta-page .ta-reminder-copy h2 span { padding:2px 6px; border-radius:5px; background:#fff; color:#718075; font:500 10px "IBM Plex Sans",sans-serif; }
+.ta-page .ta-reminder-copy p { margin:5px 0 0; color:#64766a; font-size:12px; line-height:1.6; }
+.ta-page .ta-reminder-copy p.ta-reminder-notice { color:#7f8d81; font-size:11px; }
+.ta-page .ta-reminder-result { flex-basis:100%; margin:0; padding-top:12px; border-top:1px solid #d8e3da; font-size:12px; color:#486b5b; }
+.ta-page .ta-reminder-result p { margin:0 0 7px; }
+.ta-page .ta-reminder-result a { display:inline-flex; align-items:center; gap:5px; margin-right:12px; text-decoration:underline; }
+.ta-page .ta-reminder-error { color:#a14e54; }
+@media(max-width:640px) { .ta-page .ta-reminder-panel { padding:16px; } .ta-page .ta-reminder-panel > button { width:100%; justify-content:center; } .ta-page .ta-reminder-copy { min-width:0; } }

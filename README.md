@@ -46,3 +46,40 @@ L’apparition d’un nouveau dossier prend généralement un à deux cycles de 
 Un dossier supprimé dans Iris est exclu de la découverte pour ne pas être recréé automatiquement ;
 un nouvel import manuel du salon reste possible. Les réussites et erreurs sont journalisées
 côté backend sous `services.ticket_import`. Aucun accès Anthropic n’est nécessaire à l’import.
+
+### Rappel hebdomadaire des dossiers en retard
+
+Le backend envoie un message Discord Components V2 dans le salon `1499495750151966862`
+chaque dimanche à **12 h, Europe/Paris** (heure d’été/hiver gérée automatiquement).
+Seuls les dossiers actifs, non démonstration, attribués à un membre ayant le rôle
+`DISCORD_HELPER_ROLE_ID` ou `DISCORD_HELPER_ROLE2_ID` et sans suivi manuel depuis **7 jours**
+sont concernés. Les helpers sont mentionnés individuellement, sans ping de rôle ni `@everyone`.
+Les messages contiennent des liens `FRONTEND_URL/tickets/{id}`, sans identité de la personne
+aidée ni contenu de la conversation. `FRONTEND_URL` reprend l’adresse publique utilisée
+pour l’authentification, par défaut `https://iris.loasis.app`.
+
+L’horloge `last_helper_update_at` est mise à jour à la création, à la modification effective
+des notes générales, compte-rendu, points de vigilance ou statut de suivi, à l’ajout/suppression
+d’une note et à la génération manuelle d’une synthèse IA. Une réattribution accorde une semaine
+au nouvel interlocuteur. La synchronisation Discord et la synthèse automatique ne remettent
+jamais ce délai à zéro. Les dossiers anciens sans ce champ utilisent les dates disponibles
+(notes, synthèse manuelle, création, ou modification postérieure à la dernière synchronisation).
+Les dates d’anciennes éditions déjà écrasées par une synchronisation ne peuvent pas être reconstituées.
+
+Le planificateur vérifie toutes les 30 secondes ; il peut rattraper un redémarrage après midi
+le dimanche. Un verrou Mongo par dimanche empêche les redémarrages ou plusieurs workers
+d’envoyer plusieurs fois le rappel. Sans dossier en retard, aucun message hebdomadaire n’est envoyé.
+Les résultats (`sent`, `empty`, `failed`, ou `sending` si un processus a été interrompu)
+et identifiants des messages sont conservés dans `ticket_reminder_runs`.
+Après un échec ou une réponse réseau incertaine, le rappel n’est pas renvoyé automatiquement
+ce dimanche pour éviter des notifications répétées : vérifier les logs `services.ticket_reminders`
+et le salon avant un nouvel essai manuel. Le backend doit rester en fonctionnement.
+
+Le bloc **Test temporaire** se trouve dans **Attribution des suivis**, après vérification
+des droits coordinateur. Le bouton **Envoyer un test Discord** appelle
+`POST /api/admin/ticket-reminders/test` (coordinateur obligatoire) et envoie réellement le rappel,
+avec les mentions des helpers concernés. Sans retard, il envoie une confirmation V2 sans mention.
+Un test par minute maximum est autorisé pour l’ensemble des coordinateurs ; il ne consomme pas
+le rappel du dimanche. Pour retirer le test, supprimer le composant `TicketReminderTestPanel`,
+son inclusion dans `AdminDashboardPage` et la route de test. Les tests automatisés simulent
+les envois et ne publient rien sur Discord.

@@ -79,7 +79,7 @@ async def assign_ticket_helper(
     input_data: TicketAssignmentUpdate,
     _: AuthenticatedHelper = Depends(current_admin),
 ) -> TicketDetail:
-    await ticket_or_404(ticket_id)
+    ticket = await ticket_or_404(ticket_id)
     assigned_helper: HelperIdentity | None = None
     if input_data.helper_id:
         helpers = await DiscordService().fetch_helpers(ticket_helper_role_ids())
@@ -89,14 +89,14 @@ async def assign_ticket_helper(
         )
         if not assigned_helper:
             raise HTTPException(status_code=422, detail="Le helper choisi n’est pas autorisé.")
+    timestamp = datetime.now(timezone.utc).isoformat()
+    updates = {"assigned_helper": assigned_helper.model_dump() if assigned_helper else None, "updated_at": timestamp}
+    if input_data.helper_id != (ticket.get("assigned_helper") or {}).get("id"):
+        # Le nouvel interlocuteur dispose d'une semaine avant le prochain rappel.
+        updates["last_helper_update_at"] = timestamp
     await db.tickets.update_one(
         {"id": ticket_id, "demo_ticket": {"$ne": True}},
-        {
-            "$set": {
-                "assigned_helper": assigned_helper.model_dump() if assigned_helper else None,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-        },
+        {"$set": updates},
     )
     return await ticket_or_404(ticket_id)
 
@@ -114,3 +114,11 @@ async def delete_ticket_as_admin(
         upsert=True,
     )
     await db.tickets.delete_one({"id": ticket_id, "demo_ticket": {"$ne": True}})
+
+
+@router.post("/ticket-reminders/test")
+async def send_test_ticket_reminder(
+    _: AuthenticatedHelper = Depends(current_admin),
+) -> dict:
+    from services.ticket_reminders import test_reminder
+    return await test_reminder()

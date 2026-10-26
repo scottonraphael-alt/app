@@ -118,6 +118,7 @@ class TicketDetail(TicketSummary):
     notes: str = ""
     vocal_summary: str = ""
     last_synced_at: str | None = None
+    last_helper_update_at: str | None = None
     created_by: str
     is_demo: bool = False
     ai_summary: AiSummary | None = None

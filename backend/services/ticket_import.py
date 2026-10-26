@@ -45,7 +45,7 @@ async def import_ticket_channel(channel_id: str, discord: DiscordService) -> boo
         id=str(uuid4()), title=f"#{channel.get('name', channel_id)} · {member.display_name or member.username}",
         member=member, channel_id=channel_id, channel_name=channel.get("name", channel_id),
         status="active", message_count=len(messages), transcript=messages,
-        assigned_helper=assigned, last_synced_at=timestamp,
+        assigned_helper=assigned, last_synced_at=timestamp, last_helper_update_at=timestamp,
         created_by="system:discord-import", created_at=messages[0].timestamp, updated_at=timestamp,
     )
     try:

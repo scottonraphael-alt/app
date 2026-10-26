@@ -157,3 +157,7 @@ def missing_oauth_settings() -> list[str]:
 # Synthèses des tickets (clé exclusivement côté serveur).
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
 TICKET_SUMMARY_MODEL = os.getenv("TICKET_SUMMARY_MODEL", "claude-haiku-5-5").strip()
+
+# Rappels de suivi Discord (dimanche midi, Europe/Paris).
+TICKET_REMINDER_CHANNEL_ID = "1499495750151966862"
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://iris.loasis.app").rstrip("/")
