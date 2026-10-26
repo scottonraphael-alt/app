@@ -54,8 +54,8 @@ chaque dimanche à **12 h, Europe/Paris** (heure d’été/hiver gérée automat
 Seuls les dossiers actifs, non démonstration, attribués à un membre ayant le rôle
 `DISCORD_HELPER_ROLE_ID` ou `DISCORD_HELPER_ROLE2_ID` et sans suivi manuel depuis **7 jours**
 sont concernés. Les helpers sont mentionnés individuellement, sans ping de rôle ni `@everyone`.
-Les messages contiennent des liens `FRONTEND_URL/tickets/{id}`, sans identité de la personne
-aidée ni contenu de la conversation. `FRONTEND_URL` reprend l’adresse publique utilisée
+Les messages affichent le nom de la personne aidée et des liens `FRONTEND_URL/tickets/{id}`,
+sans contenu de la conversation. `FRONTEND_URL` reprend l’adresse publique utilisée
 pour l’authentification, par défaut `https://iris.loasis.app`.
 
 L’horloge `last_helper_update_at` est mise à jour à la création, à la modification effective

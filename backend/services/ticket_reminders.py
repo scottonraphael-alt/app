@@ -66,6 +66,7 @@ async def stale_tickets(now):
     candidates = db.tickets.find(
         {"status": "active", "demo_ticket": {"$ne": True}},
         {"_id": 0, "id": 1, "assigned_helper.id": 1, "created_at": 1,
+         "member.display_name": 1, "member.username": 1, "title": 1, "channel_name": 1,
          "last_helper_update_at": 1, "last_synced_at": 1, "updated_at": 1, "notes_entries.updated_at": 1,
          "ai_summary.generated_at": 1, "ai_summary.generated_by": 1},
     )
@@ -76,7 +77,9 @@ async def stale_tickets(now):
             continue
         updated = last_human_update(ticket)
         if updated and now - updated >= INACTIVITY:
-            result.append({"id": ticket["id"], "helper_id": helper_id, "updated": updated})
+            member = ticket.get("member") or {}
+            name = member.get("display_name") or member.get("username") or ticket.get("title") or ticket.get("channel_name") or "Dossier sans nom"
+            result.append({"id": ticket["id"], "name": name, "helper_id": helper_id, "updated": updated})
     return sorted(result, key=lambda row: (row["helper_id"], row["updated"], row["id"]))
 
 
@@ -100,14 +103,19 @@ def message_payloads(rows, *, test=False):
             {"type": 10, "content": f"## {title}\nCes dossiers ouverts n’ont pas été mis à jour manuellement depuis au moins 7 jours. Merci de faire le point sur leur suivi." if rows else f"## {title}\nL’envoi Discord V2 fonctionne. Aucun dossier ouvert attribué à un Helper ou Helper+ n’est en retard actuellement."},
         ]
         users = []
-        for index, row in enumerate(page, (page_number - 1) * 8 + 1):
+        for row in page:
             helper_id = row["helper_id"]
             if helper_id not in mentioned:
                 users.append(helper_id)
                 mentioned.add(helper_id)
             date = row["updated"].astimezone(PARIS).strftime("%d/%m/%Y à %H:%M")
+            # Le nom reste du texte, même si le pseudo contient du Markdown ou une mention.
+            name = re.sub(r"\s+", " ", str(row.get("name") or "Dossier sans nom")).strip()[:120]
+            for character in "\\`*_~|<>[]()":
+                name = name.replace(character, "\\" + character)
+            name = name.replace("@", "@\u200b")
             components.append(
-                {"type": 9, "components": [{"type": 10, "content": f"<@{helper_id}> · **Dossier {index}**\nDernière mise à jour : {date}"}],
+                {"type": 9, "components": [{"type": 10, "content": f"<@{helper_id}> · **{name}**\nDernière mise à jour : {date}"}],
                  "accessory": {"type": 2, "style": 5, "label": "Ouvrir le dossier", "url": f"{site}/tickets/{quote(str(row['id']), safe='')}"}},
             )
         components.append({"type": 10, "content": "-# Iris · Rappel chaque dimanche à 12 h (heure de Paris). Les actualisations automatiques ne comptent pas comme un suivi manuel."})

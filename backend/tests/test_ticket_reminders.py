@@ -234,3 +234,28 @@ def test_discord_http_payload_and_errors(monkeypatch):
     with pytest.raises(HTTPException) as error:
         h.run(reminder.post_discord_message(payload))
     assert error.value.status_code==502
+
+
+
+@pytest.mark.parametrize('member,expected',[
+    ({'display_name':'Alex Martin','username':'alex'},'Alex Martin'),
+    ({'username':'alex'},'alex'),
+])
+def test_reminder_names_the_aided_member(member,expected):
+    seed(member=member)
+    rows=h.run(reminder.stale_tickets(NOW))
+    payload=reminder.message_payloads(rows)[0]
+    section=next(item for item in payload['components'][0]['components'] if item['type']==9)
+    assert f'**{expected}**' in section['components'][0]['content']
+    assert 'Dossier 1' not in section['components'][0]['content']
+    assert payload['allowed_mentions']['users']==[HELPER]
+
+
+def test_member_name_cannot_create_extra_mentions_or_formatting():
+    rows=[{'id':'ticket','name':'**Alex** <@everyone>\nAutre ligne','helper_id':HELPER,'updated':NOW}]
+    payload=reminder.message_payloads(rows)[0]
+    section=next(item for item in payload['components'][0]['components'] if item['type']==9)
+    content=section['components'][0]['content']
+    assert r'\*\*Alex\*\*' in content
+    assert '<@everyone>' not in content
+    assert payload['allowed_mentions']=={'parse':[],'users':[HELPER],'roles':[],'replied_user':False}
