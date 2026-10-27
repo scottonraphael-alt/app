@@ -11,6 +11,7 @@ from services.auth_service import current_responsable
 from services import server_statistics as stats
 from services.statistics_charts import analytics, boundary, scope_for
 from services.statistics_member_metrics import member_metrics
+from services.statistics_interactions import interactions
 
 router = APIRouter(prefix='/responsable/statistics', tags=['statistics'])
 
@@ -27,7 +28,7 @@ async def overview(
     member_id: str | None = Query(None, pattern=r'^[0-9]{1,22}$'),
     category_id: str | None = Query(None, pattern=r'^([0-9]{1,22}|uncategorized)$'),
     weekday: int | None = Query(None, ge=0, le=6), hour: int | None = Query(None, ge=0, le=23),
-    granularity: Literal['hour','day','week','month','year'] = 'day', compare: bool = True, include_members: bool = False,
+    granularity: Literal['hour','day','week','month','year'] = 'day', compare: bool = True, include_members: bool = False, include_interactions: bool = False,
     _: AuthenticatedHelper = Depends(current_responsable),
 ):
     today = stats.now().astimezone(stats.PARIS).date()
@@ -90,6 +91,7 @@ async def overview(
         'category_totals': named(result['categories'], categories),
         'available_channels': [{'id':row['channel_id'], 'name':row['channel_name'], 'category_id':row['category_id'] or 'uncategorized'} for row in channels],
         'selected_member': {'id':member_id, 'name':names.get(member_id,member_id)} if member_id else None,
+        'interaction_metrics': await interactions(start,end,excluded,channel_id=channel_id,member_id=member_id,category_id=category_id,weekday=weekday,hour=hour,compare=compare) if include_interactions else None,
         'member_metrics': await member_metrics(start,end,excluded,channel_id=channel_id,member_id=member_id,category_id=category_id,weekday=weekday,hour=hour,compare=compare) if include_members else None,
         'charts': await analytics(start,end,hours,total,excluded,granularity=granularity,compare=compare,
             channel_id=channel_id,member_id=member_id,category_id=category_id,weekday=weekday,hour=hour),

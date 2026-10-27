@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BarChart3, RefreshCw } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
+import InteractionStatistics from "../components/statistics/InteractionStatistics";
 import MemberStatistics from "../components/statistics/MemberStatistics";
 import StatisticsCharts from "../components/statistics/StatisticsCharts";
 import { coverageLabel, weekdays } from "../components/statistics/chartOptions";
@@ -69,7 +70,7 @@ export default function ServerStatisticsPage() {
       setLoading(true);
       setError("");
       try {
-        const response = await api.get("/responsable/statistics", { params: { start, end, exclude_categories: excludedKey, granularity, compare, include_members:view==="members", category_id:category || undefined, channel_id:channel || undefined, member_id:member || undefined, weekday:weekday === "" ? undefined : Number(weekday), hour:hour === "" ? undefined : Number(hour) }, signal: current.signal });
+        const response = await api.get("/responsable/statistics", { params: { start, end, exclude_categories: excludedKey, granularity, compare, include_members:view==="members", include_interactions:view==="interactions", category_id:category || undefined, channel_id:channel || undefined, member_id:member || undefined, weekday:weekday === "" ? undefined : Number(weekday), hour:hour === "" ? undefined : Number(hour) }, signal: current.signal });
         if (active && !current.signal.aborted) setData(response.data);
       } catch (requestError) {
         if (active && !current.signal.aborted) setError(getErrorMessage(requestError));
@@ -92,7 +93,7 @@ export default function ServerStatisticsPage() {
 
   return <main className="ss-page">
     <header className="ss-header"><div><p className="ss-eyebrow">ESPACE RESPONSABLE · ACTIVITÉ DU SERVEUR</p><h1>Statistiques du serveur</h1><p>Participation et activité des salons · Heure de Paris</p></div><nav aria-label="Actions de la page"><Link className="ss-button" to="/">Accueil <ArrowRight size={16} /></Link><button className="ss-button" onClick={() => setVersion(value => value+1)} disabled={loading}><RefreshCw size={16} /> Actualiser</button></nav></header>
-    <nav className="ss-view-tabs" aria-label="Vue des statistiques"><button className="ss-button" aria-pressed={view==="activity"} onClick={()=>setView("activity")}>Activité du serveur</button><button className="ss-button" aria-pressed={view==="members"} onClick={()=>setView("members")}>Membres et fidélisation</button></nav>
+    <nav className="ss-view-tabs" aria-label="Vue des statistiques"><button className="ss-button" aria-pressed={view==="activity"} onClick={()=>setView("activity")}>Activité du serveur</button><button className="ss-button" aria-pressed={view==="members"} onClick={()=>setView("members")}>Membres et fidélisation</button><button className="ss-button" aria-pressed={view==="interactions"} onClick={()=>setView("interactions")}>Interactions et équilibre</button></nav>
     <section className="ss-filters" aria-label="Filtres statistiques"><div className="ss-periods" aria-label="Périodes rapides">{[["1","Aujourd’hui"],["7","7 jours"],["30","30 jours"],["year","Cette année"]].map(([value,label]) => <button type="button" className="ss-button" key={value} onClick={() => preset(value)}>{label}</button>)}</div><div className="ss-dates"><label>Du<input type="date" value={start} max={end || today} onChange={event => setStart(event.target.value)} /></label><label>Au<input type="date" value={end} min={start} max={today} onChange={event => setEnd(event.target.value)} /></label></div>
       <details className="ss-categories"><summary>Catégories affichées{excluded.length ? ` · ${excluded.length} masquée(s)` : " · Toutes"}</summary><div className="ss-category-actions"><button className="ss-button" onClick={() => setExcluded([])}>Tout afficher</button><button className="ss-button" onClick={() => setExcluded(current => [...new Set([...current, ...INTERNAL])])}>Masquer contact staff, staff et soutien</button></div><div className="ss-category-options">{(data?.categories || []).map(category => <label key={category.id}><input type="checkbox" checked={!excluded.includes(category.id)} onChange={() => toggleCategory(category.id)} />{category.name}{category.internal && <small>Espace interne</small>}</label>)}</div><p>Ces filtres modifient tous les compteurs affichés. La collecte conserve les données de toutes les catégories.</p></details>
       <div className="ss-chart-controls">
@@ -116,6 +117,7 @@ export default function ServerStatisticsPage() {
       <StatisticsCharts data={data} granularity={granularity} onPeriod={explorePeriod} onCategory={pickCategory} onChannel={setChannel} onMember={setMember} onPeak={row=>{ setWeekday(String(row.weekday)); setHour(String(row.hour)); }} onHour={row=>setHour(String(row.hour))} />
       </>}
       {view==="members" && <MemberStatistics metrics={data.member_metrics} />}
+      {view==="interactions" && <InteractionStatistics metrics={data.interaction_metrics} onMember={setMember} onCategory={pickCategory} />}
       {collection.sessions.length > 0 && <section className="ss-panel"><h2>Connexions récentes du bot</h2><p className="ss-caption">Une interruption de collecte peut expliquer une baisse des chiffres. Un arrêt brutal n’est détecté qu’après l’absence de signal du bot.</p><div className="ss-table-scroll"><table><thead><tr><th scope="col">Connecté depuis</th><th scope="col">Dernier signal</th><th scope="col">Déconnexion</th></tr></thead><tbody>{collection.sessions.map((session,index) => <tr key={`${session.started_at}-${index}`}><td>{dateTime(session.started_at)}</td><td>{dateTime(session.last_seen_at)}</td><td>{session.ended_at ? dateTime(session.ended_at) : index === 0 && collection.connected ? "En cours" : "Fin non confirmée"}</td></tr>)}</tbody></table></div></section>}
       <p className="ss-footnote">Messages humains uniquement, pièces jointes comprises. Bots, webhooks et messages système exclus. Aucun texte de message n’est conservé pour les statistiques. Registre technique : {collection.registry_days} jours ; les corrections de messages plus anciens ne sont pas répercutées.</p>
     </div>}

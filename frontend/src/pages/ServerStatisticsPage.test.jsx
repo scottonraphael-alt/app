@@ -88,3 +88,25 @@ it("charge les métriques des membres seulement après ouverture de leur onglet"
   expect(container.textContent).toContain("En attente ou non disponible");
   expect(container.textContent).not.toContain("Salons les plus actifs");
 });
+
+it("ouvre les interactions avec un chargement dédié et masque les autres vues", async () => {
+  api.get.mockResolvedValue({data:{...data,interaction_metrics:{
+    mentions:3,replies:1,signals:4,unique_pairs:2,mutual_pairs:1,reciprocity:50,effective_contributors:1.5,active_contributors:2,coverage:1,
+    diversity:[{id:"1",name:"Alex",peers:2,messages:3,outgoing_peers:2,incoming_peers:1,categories:1,mentions_sent:3,mentions_received:1,replies_sent:1}],
+    participation:[],concentration:[{top:1,actual_members:1,messages:3,share:75}],cumulative_concentration:[{contributors:1,share:75,messages:3}],
+    category_matrix:[],matrix_categories_shown:0,matrix_categories_total:0,
+    restricted:{share:0,groups:[],signals:0,total_groups:0,max_group_size:5,min_signals:3},
+    trend:{status:"insufficient",change:null,weeks:[]},quiet:{periods:[],total:0,min_samples:3,hour_threshold:3,day_threshold:20},
+    responses:{available:false,bands:[],median_seconds:null},formula:{index:"Moyenne des trois dimensions"},
+  }}});
+  await act(async () => [...container.querySelectorAll('button')].find(button=>button.textContent==="Interactions et équilibre").click());
+  const params=api.get.mock.calls.at(-1)[1].params;
+  expect(params.include_interactions).toBe(true);
+  expect(params.include_members).toBe(false);
+  expect(container.textContent).toContain("Diversité des interlocuteurs");
+  expect(container.textContent).toContain("Historique insuffisant");
+  expect(container.textContent).not.toContain("Salons les plus actifs");
+  const card=[...container.querySelectorAll('.ss-chart-card')].find(el=>el.querySelector('h2').textContent==="Diversité des interlocuteurs");
+  await act(async () => card.querySelector('button').click());
+  expect(api.get.mock.calls.at(-1)[1].params.member_id).toBe("1");
+});

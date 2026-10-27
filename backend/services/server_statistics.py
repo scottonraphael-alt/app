@@ -53,6 +53,7 @@ def utc(value):
 async def ensure_indexes():
     await db.statistics_journal.create_index('expires_at', expireAfterSeconds=0)
     await db.statistics_journal.create_index([('dirty', 1), ('expires_at', 1)])
+    await db.statistics_journal.create_index([('guild_id',1),('reply_message_id',1),('created_at',1)])
     await db.statistics_buckets.create_index([('guild_id', 1), ('kind', 1), ('hour', 1), ('category_id', 1)])
     await db.statistics_channels.create_index([('guild_id', 1), ('category_id', 1)])
     await db.statistics_members.create_index([('guild_id', 1), ('user_id', 1)])
@@ -109,12 +110,17 @@ async def record_message(message):
     resolved = getattr(getattr(message, 'reference', None), 'resolved', None)
     reply_author = getattr(resolved, 'author', None)
     reply_to = str(reply_author.id) if reply_author and not reply_author.bot and str(reply_author.id) != author_id else None
+    reference_id=getattr(getattr(message,'reference',None),'message_id',None)
+    if reference_id and reply_to is None and reply_author is None:
+        original=await db.statistics_journal.find_one({'_id':f'{guild_id()}:{reference_id}'},{'author_id':1})
+        if original and original.get('author_id') and original['author_id'] != author_id:
+            reply_to=original['author_id']
     targets = sorted(set(mentions) | ({reply_to} if reply_to else set()))
     values = metrics_for(len(message.content or ''), len(message.attachments))
     values.update(mentions=len(mentions), replies=int(reply_to is not None))
     doc = {
         **location, 'author_id': author_id, 'message_id': str(message.id),
-        'source_channel_id': str(message.channel.id), 'created_at': stamp,
+        'source_channel_id': str(message.channel.id), 'created_at': stamp, 'reply_message_id':str(reference_id) if reference_id else None,
         'hour': stamp.replace(minute=0, second=0, microsecond=0),
         'expires_at': stamp + timedelta(days=RETENTION_DAYS),
         'metrics': values, 'mention_ids': mentions, 'reply_to': reply_to,
@@ -231,6 +237,8 @@ async def connected():
     session = str(uuid4())
     stamp = now()
     await db.statistics_meta.update_one({'_id': guild_id()}, {'$setOnInsert': {'started_at': stamp}}, upsert=True)
+    await db.statistics_meta.update_one({'_id':guild_id(),'started_at':{'$exists':False}},{'$set':{'started_at':stamp}})
+    await db.statistics_meta.update_one({'_id':guild_id(),'reply_tracking_at':{'$exists':False}},{'$set':{'reply_tracking_at':stamp}})
     await db.statistics_sessions.insert_one({'_id': session, 'guild_id': guild_id(), 'started_at': stamp, 'last_seen_at': stamp})
     _session = session
 

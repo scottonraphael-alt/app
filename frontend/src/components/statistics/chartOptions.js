@@ -66,3 +66,26 @@ export function memberRegularityOption(rows) {
   return {...common,grid:{...common.grid,top:20},xAxis:{...axis,type:"category",data:rows.map(row=>row.label.replace(" jours actifs"," j").replace(" jour actif"," j")),axisLabel:{fontSize:10,interval:0}},yAxis:{...axis,type:"value",minInterval:1},
     tooltip:{...common.tooltip,formatter:p=>`${p.name}\n${number(p.value)} membres`},series:[{type:"bar",barMaxWidth:55,itemStyle:{borderRadius:[6,6,0,0]},data:rows.map(row=>row.members)}]};
 }
+
+export function diversityOption(rows) {
+  return {...rankingOption(rows),tooltip:{...common.tooltip,formatter:p=>`${p.name}\n${number(p.value)} interlocuteurs distincts`},series:[{...rankingOption(rows).series[0],data:rows.map(row=>({name:row.name,value:row.peers,row}))}]};
+}
+export function concentrationOption(rows) {
+  return {...common,tooltip:{...common.tooltip,trigger:"axis"},xAxis:{...axis,type:"category",name:"Top N",data:rows.map(row=>row.contributors)},yAxis:{...axis,type:"value",min:0,max:100,axisLabel:{formatter:"{value} %"}},series:[{name:"Messages cumulés (%)",type:"line",symbol:"none",areaStyle:{opacity:.08},data:rows.map(row=>row.share)}]};
+}
+export function participationOption(rows) {
+  return {...common,grid:{left:110,right:20,top:35,bottom:30},legend:{top:0,textStyle:{fontSize:10}},tooltip:{...common.tooltip,trigger:"axis",axisPointer:{type:"shadow"}},xAxis:{...axis,type:"value",min:0,max:100},yAxis:{...axis,type:"category",inverse:true,data:rows.map(row=>row.name),axisLabel:{width:95,overflow:"truncate",fontSize:10}},series:[['Volume','volume_score'],['Régularité','regularity_score'],['Diversité','diversity_score']].map(([name,key])=>({name,type:"bar",stack:"index",barMaxWidth:20,data:rows.map(row=>({value:row.participation_index==null ? null : row[key]/3,row}))}))};
+}
+export function categoryMatrixOption(rows) {
+  const categories=[...new Map(rows.map(row=>[row.source,row.source_name])).entries()];
+  const keys=categories.map(([key])=>key),names=categories.map(([,name])=>name);
+  return {...common,grid:{left:110,right:20,top:15,bottom:105},tooltip:{...common.tooltip,formatter:p=>`${p.data.row.source_name} → ${p.data.row.target_name}\n${number(p.data.row.shared_members)} membres en commun\n${number(p.value[2])} % de la catégorie en ligne`},
+    xAxis:{type:"category",data:names,axisLabel:{rotate:30,width:85,overflow:"truncate",fontSize:10}},yAxis:{type:"category",data:names,inverse:true,axisLabel:{width:95,overflow:"truncate",fontSize:10}},
+    visualMap:{min:0,max:100,orient:"horizontal",left:"center",bottom:0,calculable:false,inRange:{color:["#f0f4eb","#bdcfad","#527c66"]},text:["100 %","0 %"],textStyle:{fontSize:10}},series:[{type:"heatmap",data:rows.map(row=>({value:[keys.indexOf(row.target),keys.indexOf(row.source),row.source_share || 0],row})),itemStyle:{borderColor:"white",borderWidth:2}}]};
+}
+export function weeklyTrendOption(rows) {
+  return {...common,grid:{...common.grid,top:15},xAxis:{...axis,type:"category",data:rows.map(row=>row.from),axisLabel:{fontSize:10}},yAxis:{...axis,type:"value",minInterval:1},tooltip:{...common.tooltip,formatter:p=>`${p.data.row.from} → ${p.data.row.to}\n${number(p.value)} messages\n${p.data.row.reliable ? "Connexion couverte" : "Collecte incomplète"}`},series:[{type:"bar",barMaxWidth:50,data:rows.map(row=>({value:row.messages,row,itemStyle:{color:row.reliable ? colors[0] : "#c8cfc3"}}))}]};
+}
+export function responseDelayOption(rows) {
+  return {...common,grid:{...common.grid,top:20,bottom:50},xAxis:{...axis,type:"category",data:rows.map(row=>row.label),axisLabel:{fontSize:10,interval:0}},yAxis:{...axis,type:"value",minInterval:1},series:[{name:"Messages avec réponse",type:"bar",barMaxWidth:45,itemStyle:{borderRadius:[5,5,0,0]},data:rows.map(row=>row.messages)}]};
+}

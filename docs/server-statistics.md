@@ -132,13 +132,48 @@ La page recharge les agrégats toutes les minutes ; signal de connexion toutes l
   vérifié et est signalé comme ancien. La disponibilité de l'annuaire et de son dernier signal est affichée.
 
 
-## Bloc 4 : interactions et équilibre (à réaliser)
+## Bloc 4 : interactions et équilibre (livré)
 
-Mentions et réponses, diversité et réciprocité, participation entre catégories, estimation des
-cercles restreints, concentration chez les 1/5/10 premiers contributeurs, indice explicable
-(volume/régularité/diversité), déclin/reprise et périodes inhabituellement calmes.
-Délai de réponse et messages sans réponse uniquement avec une définition explicite de
-l'interaction et une couverture suffisante : aucune conversation supposée entre voisins.
+- Onglet **Interactions et équilibre**, calcul demandé avec `include_interactions=true`.
+  Les filtres communs restent appliqués ; le focus sur un membre inclut aussi les signaux reçus.
+- Signaux = mentions directes + réponses avec auteur identifié. Le même message peut fournir
+  deux signaux vers une personne ; ce n'est pas un compte de discussions uniques. Interlocuteurs
+  distincts = union dédupliquée des contacts envoyés/reçus, classement indépendant du volume.
+- Réciprocité = paires ayant des signaux dans les deux sens / paires distinctes. Les auto-liens
+  et les bots sont exclus. Mentions/réponses envoyées et reçues sont détaillées par membre.
+- Concentration : part du top 1/5/10 avec nombre réel de contributeurs, courbe cumulée et
+  contributeurs effectifs `1 / somme(parts²)`. Ce sont des descriptions, pas des prédictions
+  de l'activité qui resterait après un départ.
+- Indice descriptif = moyenne de volume logarithmique normalisé, jours actifs / jours éligibles,
+  et interlocuteurs distincts / maximum du filtre, chacun sur 100. Composantes et formule
+  accessibles. Indice inconnu sans interaction ou couverture suffisante ; non comparable
+  directement entre deux filtres différents.
+- Matrice des participants actifs en commun entre catégories. Couleur = part des membres
+  de la catégorie en ligne également actifs dans la catégorie en colonne. Quinze catégories
+  les plus fréquentées représentées, nombre total rappelé ; aucune conversation supposée.
+- Cercles restreints : composantes de 2 à 5 personnes, au moins 3 signaux, une catégorie
+  connue et aucune liaison extérieure dans le périmètre observé. Pourcentage des **signaux**,
+  pas des discussions réelles. Estimation conservatrice ; dix groupes au maximum détaillés.
+- Tendances : trois fenêtres de sept jours complets finissant à la fin de période sélectionnée
+  (aujourd'hui exclu tant qu'incomplet), dates explicites. Variation de la dernière par rapport
+  à la précédente ; hausse/baisse à ±20 %, reprise si hausse après baisse sur la fenêtre plus
+  ancienne. Comparaison désactivable ; référence insuffisante ou zéro ne fabrique pas de taux.
+- Silences inhabituels : zéro message sur une heure/journée **complètement observée** ;
+  comparaison aux mêmes jours/heures des 28 jours précédant la période. Au moins trois
+  références couvertes, moyenne ≥3 messages/heure ou ≥20 messages/jour. Pas d'alerte pour
+  une nuit habituellement calme, une coupure, une heure incomplète ou une projection en attente.
+  Trente créneaux au maximum détaillés, total exact. Aucune notification Discord ajoutée.
+- Réponses : ajout du seul `reply_message_id` au registre temporaire. La première connexion
+  après mise à jour fixe `reply_tracking_at`. Réponse non résolue en cache : auteur récupéré
+  dans le registre, sans requête Discord ni stockage de contenu.
+- Délai médian de première réponse **observée**, réponses à soi-même exclues. Pourcentage
+  sans réponse explicite sous 24 h seulement parmi les messages dont les 24 h sont terminées
+  et suffisamment couvertes. Tous les messages humains mesurables sont candidats, y compris
+  les réponses : il ne s'agit pas d'affirmer qu'ils nécessitaient une réponse.
+- Les mesures de réponse sont limitées aux 30 jours du registre et à leur propre date de
+  disponibilité. Messages supprimés, réponses supprimées et références absentes ne sont
+  pas reconstitués. Pas de faux historique pour les anciens messages.
+
 
 ## Vérification et livraison convenues
 
@@ -151,3 +186,13 @@ Vérification ciblée des configurations graphiques réelles : depuis `frontend`
 
 À reprendre après les blocs fonctionnels : problèmes d’interface signalés par l’utilisateur,
 notamment la navbar encore présente sur la page. Pas de correction de navbar dans le bloc 3.
+
+### Vérification globale après le bloc 4
+
+- 1 180 tests backend hors ligne réussis sur 25 modules : quatre blocs statistiques,
+  tickets, rôles/sessions, casiers, fichiers, imports, rappels et contrôles de sécurité.
+- 18 tests frontend réussis sur les cinq suites disponibles.
+- 16 configurations rendues par le vrai moteur ECharts en mémoire, sans screenshot.
+- Build frontend de production réussi.
+- Les dix anciens modules visant une preview externe ou un checkout `/app` ne sont pas
+  exécutés contre un déploiement tiers. Cette vérification ne vaut pas test en production.
