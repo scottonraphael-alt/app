@@ -1,445 +1,71 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { Archive, ArchiveRestore, Calendar, FolderKanban, Pencil, Plus, Trash2, UserPlus, Users, X } from "lucide-react";
-import { api, getErrorMessage } from "../api/client";
-const STATUS_LABELS = { en_cours: "En cours", termine: "Terminé", archive: "Archivé" };
-const STATUS_CLASSES = { en_cours: "status-pending", termine: "status-done", archive: "status-archived" };
-
-function MemberStack({ members }) {
-  const visible = members.slice(0, 4);
-  const extra = members.length - visible.length;
-  return (
-    <div className="project-member-stack">
-      {visible.map((member) => (
-        <span key={member.id} className="project-member-avatar" title={member.display_name || member.username}>
-          {member.avatar_url ? <img src={member.avatar_url} alt="" /> : <Users size={12} />}
-        </span>
-      ))}
-      {extra > 0 && <span className="project-member-avatar project-member-extra">+{extra}</span>}
-    </div>
-  );
-}
-
-function ProjectRow({
-  project,
-  helper,
-  isResponsableGlobal,
-  isResponsable,
-  onJoin,
-  joiningId,
-  onArchive,
-  archivingId,
-  onDelete,
-  onEdit,
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUpRight, CheckCheck, Clock3, FolderKanban, Plus, RefreshCw, Search, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '../api/client';
+import { Avatar, Empty, Panel, Priority, ProjectPage } from '../components/projects/ProjectUI';
+import ProjectForm from '../components/projects/ProjectForm';
+import { dateLabel, filterProjects, isLate, personName, progress, PROJECT_STATUS, PRIORITY } from '../components/projects/projectUtils';
+export default function ProjectsListPage({
+  helper
 }) {
-  const isMember = project.members.some((member) => member.id === helper?.id);
-  const isJoining = joiningId === project.id;
-  const isArchiving = archivingId === project.id;
-  const isArchived = project.status === "archive";
-  const canArchive = isResponsableGlobal || project.created_by?.id === helper?.id;
   const navigate = useNavigate();
-
-  const goToProject = () => navigate(`/animateur/projects/${project.id}`);
-
-  const handleRowKeyDown = (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      goToProject();
-    }
-  };
-
-  const handleJoin = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onJoin(project.id);
-  };
-
-  const handleArchive = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onArchive(project, !isArchived);
-  };
-
-  const handleDelete = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onDelete(project);
-  };
-
-  const handleEdit = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onEdit(project);
-  };
-
-  return (
-    <div
-      className={`project-list-row ${isArchived ? "project-card-archived" : ""}`}
-      onClick={goToProject}
-      onKeyDown={handleRowKeyDown}
-      role="link"
-      tabIndex={0}
-    >
-      <span className="project-list-icon">
-        <FolderKanban size={17} />
-      </span>
-
-      <div className="project-list-copy">
-        <div className="project-list-heading">
-          <strong>{project.title}</strong>
-          <span className={`status-badge ${STATUS_CLASSES[project.status]}`}>
-            {STATUS_LABELS[project.status]}
-          </span>
-        </div>
-        <p className="project-list-description">{project.description || "Aucune description."}</p>
-        <div className="project-list-meta">
-          <MemberStack members={project.members} />
-          <span className="project-list-dates">
-            <Calendar size={12} /> {project.start_date} → {project.end_date || "…"}
-          </span>
-        </div>
-      </div>
-
-      <div className="project-list-actions">
-        {!isMember && !isArchived && (
-          <button
-            type="button"
-            className="icon-action-btn"
-            onClick={handleJoin}
-            disabled={isJoining}
-            title="S'inscrire"
-          >
-            <UserPlus size={16} />
-          </button>
-        )}
-
-        {canArchive && isResponsable && (
-          <button type="button" className="icon-action-btn" onClick={handleEdit} title="Editer le titre">
-            <Pencil size={16} />
-          </button>
-        )}
-
-        {isResponsable && canArchive && (
-          <button
-            type="button"
-            className="icon-action-btn"
-            onClick={handleArchive}
-            disabled={isArchiving}
-            title={isArchived ? "Désarchiver" : "Archiver"}
-          >
-            {isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-          </button>
-        )}
-
-        {isResponsable && (
-          <button
-            type="button"
-            className="icon-action-btn is-danger"
-            onClick={handleDelete}
-            title="Supprimer"
-          >
-            <Trash2 size={16} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-function EditProjectModal({ project, onClose, onSaved }) {
-  const [title, setTitle] = useState(project.title || "");
-  const [description, setDescription] = useState(project.description || "");
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!title.trim()) {
-      toast.error("Le titre est requis.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const response = await api.patch(`/animateur/projects/${project.id}/details`, {
-        title: title.trim(),
-        description: description.trim(),
-      });
-      onSaved(response.data);
-      toast.success("Projet mis à jour.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return createPortal(
-    <div className="modal-backdrop" role="presentation" onClick={() => (!saving ? onClose() : null)}>
-      <div
-        className="modal-panel moderation-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-project-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="moderation-modal-header">
-          <div>
-            <p className="eyebrow">ESPACE ANIMATEUR</p>
-            <h2 id="edit-project-title">Modifier le projet</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Fermer" disabled={saving}>
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="moderation-modal-body">
-          <div className="moderation-field">
-            <label htmlFor="edit-project-title-input">Titre</label>
-            <input
-              id="edit-project-title-input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={160}
-              autoFocus
-            />
-          </div>
-
-          <div className="moderation-field">
-            <label htmlFor="edit-project-description-input">Description</label>
-            <textarea
-              id="edit-project-description-input"
-              className="meeting-inline-textarea"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              rows={4}
-              maxLength={4000}
-            />
-          </div>
-
-          <div className="moderation-modal-actions">
-            <button type="button" className="calm-primary-button is-secondary" onClick={onClose} disabled={saving}>
-              Annuler
-            </button>
-            <button type="button" className="calm-primary-button" onClick={handleSave} disabled={saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-export default function ProjectsListPage({ helper, isResponsableGlobal, isResponsable }) {
-  const [projects, setProjects] = useState([]);
+  const [data, setData] = useState({
+    projects: [],
+    my_tasks: []
+  });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [joiningId, setJoiningId] = useState(null);
-  const [archivingId, setArchivingId] = useState(null);
-  const [editingProject, setEditingProject] = useState(null);
-  const [viewMode, setViewMode] = useState("actifs");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [endDate, setEndDate] = useState("");
-
-  const load = () => {
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('actifs');
+  const [mine, setMine] = useState(false);
+  const [priority, setPriority] = useState('');
+  const [sort, setSort] = useState('updated');
+  const [taskFilter, setTaskFilter] = useState('all');
+  const load = async () => {
     setLoading(true);
-    api
-      .get("/animateur/projects")
-      .then((response) => setProjects(response.data))
-      .catch((error) => toast.error(getErrorMessage(error)))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
-
-  const resetForm = () => {
-    setTitle("");
-    setDescription("");
-    setStartDate(new Date().toISOString().slice(0, 10));
-    setEndDate("");
-    setShowForm(false);
-  };
-
-  const createProject = async (event) => {
-    event.preventDefault();
-    if (!title.trim()) {
-      toast.error("Ajoutez au moins un titre.");
-      return;
-    }
-    setCreating(true);
+    setError(false);
     try {
-      const response = await api.post("/animateur/projects", {
-        title, description, start_date: startDate, end_date: endDate || null,
-      });
-      setProjects((current) => [response.data, ...current]);
-      toast.success("Projet créé.");
-      resetForm();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
+      const response = await api.get('/animateur/projects/workspace/overview');
+      setData(response.data);
+    } catch (err) {
+      setError(true);
+      toast.error(getErrorMessage(err));
     } finally {
-      setCreating(false);
+      setLoading(false);
     }
   };
-
-  const joinProject = async (projectId) => {
-    if (!helper?.id) {
-      toast.error("Impossible d'identifier votre profil.");
-      return;
-    }
-    setJoiningId(projectId);
-    try {
-      const response = await api.post(`/animateur/projects/${projectId}/members`, { member_id: helper.id });
-      setProjects((current) => current.map((project) => (project.id === projectId ? response.data : project)));
-      toast.success("Vous avez rejoint le projet.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setJoiningId(null);
-    }
-  };
-
-  const archiveProject = async (project, archive) => {
-    setArchivingId(project.id);
-    try {
-      const response = await api.put(`/animateur/projects/${project.id}`, {
-        title: project.title,
-        description: project.description,
-        content_markdown: project.content_markdown,
-        end_date: project.end_date,
-        status: archive ? "archive" : "en_cours",
-      });
-      setProjects((current) => current.map((p) => (p.id === project.id ? response.data : p)));
-      toast.success(archive ? "Projet archivé." : "Projet désarchivé.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setArchivingId(null);
-    }
-  };
-const deleteProject = async (project) => {
-  const confirmed = window.confirm(`Supprimer définitivement "${project.title}" ?`);
-  if (!confirmed) return;
-
-  try {
-    await api.delete(`/animateur/projects/${project.id}`, { withCredentials: true });
-    setProjects((current) => current.filter((item) => item.id !== project.id));
-    toast.success("Projet supprimé.");
-  } catch (error) {
-    toast.error(getErrorMessage(error));
-  }
-};
-const filteredProjects = projects.filter((project) =>
-  viewMode === "archives" ? project.status === "archive" : project.status !== "archive"
-);
-  return (
-    <section className="page-content resources-page" data-testid="projects-list-page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">ESPACE ANIMATEUR</p>
-          <h1>Projets d'Events</h1>
-        </div>
-        <div className="dashboard-actions">
-          {!showForm ? (
-            <button type="button" className="calm-primary-button" onClick={() => setShowForm(true)} data-testid="new-project-button">
-              <Plus size={17} /> Nouveau projet
-            </button>
-          ) : (
-            <button type="button" className="calm-primary-button is-cancel" onClick={resetForm}>
-              <X size={17} /> Annuler
-            </button>
-          )}
-        </div>
-      </header>
-
-      <div className="project-view-tabs">
-        <button
-          type="button"
-          className={`project-view-tab ${viewMode === "actifs" ? "is-active" : ""}`}
-          onClick={() => setViewMode("actifs")}
-        >
-          Actifs
-        </button>
-        <button
-          type="button"
-          className={`project-view-tab ${viewMode === "archives" ? "is-active" : ""}`}
-          onClick={() => setViewMode("archives")}
-        >
-          <Archive size={14} /> Archivés
-        </button>
+  useEffect(() => {
+    load();
+  }, []);
+  const projects = filterProjects(data.projects, {
+    query,
+    status,
+    mine,
+    helperId: helper?.id,
+    priority,
+    sort
+  });
+  const lateTasks = data.my_tasks.filter(t => isLate(t));
+  const myTasks = data.my_tasks.filter(t => taskFilter === 'late' ? isLate(t) : taskFilter === 'review' ? t.status === 'rendu' : true);
+  const active = data.projects.filter(p => p.status === 'en_cours');
+  const projectTitle = id => data.projects.find(p => p.id === id)?.title || 'Projet';
+  return <ProjectPage title="Les idées prennent vie." intro="Préparez vos animations, répartissez les rôles et gardez le prochain rendez-vous en vue." actions={<button className="pj-btn pj-primary" onClick={() => setCreating(true)} data-testid="new-project-button"><Plus size={17} /> Nouveau projet</button>}>
+    <div className="pj-summary"><div className="pj-summary-intro"><span className="pj-kicker">L’ATELIER EN UN REGARD</span><strong>Un cap commun, chacun sa part.</strong><p>Les projets actifs et votre prochaine étape, au même endroit.</p></div><div className="pj-summary-stat"><FolderKanban size={20} /><strong>{loading ? '—' : active.length}</strong><span>projets en cours</span></div><div className="pj-summary-stat"><Users size={20} /><strong>{loading ? '—' : active.filter(p => p.members?.some(m => m.id === helper?.id)).length}</strong><span>avec vous</span></div><div className={`pj-summary-stat ${lateTasks.length ? 'pj-warm' : ''}`}><Clock3 size={20} /><strong>{loading ? '—' : lateTasks.length}</strong><span>de vos tâches en retard</span></div></div>
+    {(data.projects_truncated || data.tasks_truncated) && <p className="pj-notice">Affichage limité aux 500 projets les plus récents et aux 500 premières tâches personnelles.</p>}
+    <div className="pj-workspace">
+      <div><div className="pj-section-heading"><div><p className="pj-kicker">EXPLORER & CONSTRUIRE</p><h2>Le carnet de projets</h2></div><button className="pj-btn" onClick={load} disabled={loading}><RefreshCw size={15} /> Actualiser</button></div>
+        <div className="pj-tabs" aria-label="État des projets">{[['actifs', 'En cours'], ['termine', 'Terminés'], ['archive', 'Archives'], ['tous', 'Tous']].map(([v, l]) => <button key={v} aria-pressed={status === v} className={status === v ? 'is-active' : ''} onClick={() => setStatus(v)}>{l}<span>{data.projects.filter(p => v === 'tous' || p.status === (v === 'actifs' ? 'en_cours' : v)).length}</span></button>)}</div>
+        <div className="pj-filters"><label className="pj-search"><Search size={17} /><input aria-label="Rechercher un projet" placeholder="Un projet, une idée, un membre…" value={query} onChange={e => setQuery(e.target.value)} /></label><select aria-label="Priorité des projets" value={priority} onChange={e => setPriority(e.target.value)}><option value="">Toutes les priorités</option>{Object.entries(PRIORITY).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><select aria-label="Trier les projets" value={sort} onChange={e => setSort(e.target.value)}><option value="updated">Dernière activité</option><option value="date">Fin la plus proche</option><option value="priority">Priorité</option><option value="title">Nom du projet</option></select><button className={`pj-btn ${mine ? 'is-selected' : ''}`} aria-pressed={mine} onClick={() => setMine(v => !v)}><Users size={15} /> Mes projets</button></div>
+        {loading ? <Empty title="L’atelier se prépare…">Chargement des projets et de vos tâches.</Empty> : error ? <Empty title="Impossible de charger les projets">Utilisez Actualiser pour réessayer.</Empty> : !projects.length ? <Empty title="Une page blanche, des possibilités.">{query || mine || priority ? 'Aucun projet ne correspond à vos filtres.' : status === 'actifs' ? 'Lancez une idée avec Nouveau projet.' : 'Aucun projet dans cette catégorie.'}</Empty> : <div className="pj-projects">{projects.map(project => {
+            const p = progress(project.task_counts);
+            return <article className={`pj-project-card pj-accent-${project.priority || 'normale'}`} key={project.id}><div className="pj-card-top"><span className="pj-project-symbol"><FolderKanban size={21} /></span><span className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</span><Priority value={project.priority} /></div><Link className="pj-project-title" to={`/animateur/projects/${project.id}`}>{project.title}<ArrowUpRight size={19} /></Link><p className="pj-card-description">{project.description || 'Le point de départ d’une prochaine animation. Le brief reste à construire.'}</p>{!!project.tags?.length && <div className="pj-tags">{project.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>}<div className="pj-card-progress"><div><span>{p.total ? `${p.done} / ${p.total} tâches validées` : 'Aucune tâche pour le moment'}</span><strong>{p.percent}%</strong></div><progress value={p.percent} max="100" aria-label={`Avancement de ${project.title}`} /></div><footer><div className="pj-member-stack">{project.members?.slice(0, 4).map(m => <Avatar key={m.id} member={m} />)}{project.members?.length > 4 && <span>+{project.members.length - 4}</span>}</div><span>{project.end_date ? `Fin · ${dateLabel(project.end_date)}` : `Début · ${dateLabel(project.start_date)}`}</span></footer></article>;
+          })}</div>}
       </div>
-
-      {showForm && (
-        <form onSubmit={createProject} className="meeting-inline-form" style={{ marginBottom: 28 }}>
-          <div className="meeting-inline-form-header"><span>Nouveau projet</span></div>
-          <input
-            className="meeting-inline-input"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Titre du projet"
-            maxLength={160}
-          />
-          <textarea
-            className="meeting-inline-textarea"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description du projet"
-            rows={3}
-          />
-          <div className="case-form-grid">
-            <div>
-              <label>Date de début</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            </div>
-            <div>
-              <label>Date de fin (optionnel)</label>
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
-          <button type="submit" className="meeting-inline-submit" disabled={creating}>
-            <Plus size={16} /> {creating ? "Création…" : "Créer le projet"}
-          </button>
-        </form>
-      )}
-
-      {loading ? (
-        <p className="resources-empty">Chargement…</p>
-      ) : filteredProjects.length === 0 ? (
-        <p className="resources-empty">
-          {viewMode === "archives" ? "Aucun projet archivé." : "Aucun projet pour l'instant."}
-        </p>
-      ) : (
-        <div className="project-list">
-          {filteredProjects.map((project) => (
-            <ProjectRow
-  key={project.id}
-  project={project}
-  helper={helper}
-  isResponsableGlobal={isResponsableGlobal}
-  isResponsable={isResponsable}   // <-- ligne à ajouter
-  onJoin={joinProject}
-  joiningId={joiningId}
-  onArchive={archiveProject}
-  archivingId={archivingId}
-  onDelete={deleteProject}
-  onEdit={setEditingProject}
-/>
-          ))}
-        </div>
-      )}
-
-      {editingProject && (
-        <EditProjectModal
-          project={editingProject}
-          onClose={() => setEditingProject(null)}
-          onSaved={(updated) => {
-            setProjects((current) => current.map((p) => (p.id === updated.id ? updated : p)));
-            setEditingProject(null);
-          }}
-        />
-      )}
-    </section>
-  );
+      <aside><Panel title="Mon prochain pas" intro="Vos tâches sur les projets en cours, classées par échéance." className="pj-personal"><div className="pj-chips">{[['all', 'Tout'], ['late', 'En retard'], ['review', 'À valider']].map(([v, l]) => <button className={`pj-btn ${taskFilter === v ? 'is-selected' : ''}`} key={v} onClick={() => setTaskFilter(v)} aria-pressed={taskFilter === v}>{l}</button>)}</div>{!loading && !myTasks.length ? <Empty title="Le champ est libre.">Aucune tâche dans cette sélection.</Empty> : <div className="pj-personal-list">{myTasks.slice(0, 8).map(task => <Link key={task.id} to={`/animateur/projects/${task.project_id}?task=${encodeURIComponent(task.id)}`} className="pj-personal-task"><span className={isLate(task) ? 'pj-deadline is-late' : 'pj-deadline'}>{task.status === 'rendu' ? <CheckCheck size={15} /> : <Clock3 size={15} />} {dateLabel(task.due_date)}</span><strong>{task.title}</strong><small>{projectTitle(task.project_id)} · {task.status === 'rendu' ? 'En attente de validation' : task.blocked_reason ? 'Bloquée' : personName(task.assignee)}</small></Link>)}</div>}{myTasks.length > 8 && <p className="pj-help">{myTasks.length - 8} autres tâches à retrouver dans vos projets.</p>}</Panel><div className="pj-tip"><span className="pj-kicker">LE BON RÉFLEXE</span><h3>Une tâche, un point d’arrivée.</h3><p>Un membre, une échéance et un rendu clair. Le tableau du projet vous aide à suivre le chemin jusqu’à la validation.</p><Link to="/animateur/calendrier">Voir les échéances <ArrowUpRight size={16} /></Link></div></aside>
+    </div>{creating && <ProjectForm onClose={() => setCreating(false)} onSaved={project => {
+      setCreating(false);
+      navigate(`/animateur/projects/${project.id}`);
+    }} />}</ProjectPage>;
 }

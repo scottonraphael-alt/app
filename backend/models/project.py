@@ -20,7 +20,9 @@ class ProjectMember(BaseModel):
 
 class ProjectCreate(BaseModel):
     title: str = Field(min_length=1, max_length=160)
-    description: str = ""
+    description: str = Field(default="", max_length=4000)
+    priority: Literal["basse", "normale", "haute"] = "normale"
+    tags: list[str] = Field(default_factory=list, max_length=8)
     start_date: date
     end_date: date | None = None
 
@@ -47,6 +49,8 @@ class Project(BaseModel):
     description: str
     content_markdown: str = ""
     status: Literal["en_cours", "termine", "archive"] = "en_cours"
+    priority: Literal["basse", "normale", "haute"] = "normale"
+    tags: list[str] = Field(default_factory=list)
     start_date: date
     end_date: date | None = None
     members: list[ProjectMember] = Field(default_factory=list)
@@ -56,10 +60,11 @@ class Project(BaseModel):
 
 
 class ProjectTaskCreate(BaseModel):
-    project_id: str
+    project_id: str | None = None
     assignee_id: str
     title: str = Field(min_length=1, max_length=160)
-    description: str = ""
+    description: str = Field(default="", max_length=4000)
+    priority: Literal["basse", "normale", "haute"] = "normale"
     due_date: date
 
 
@@ -78,6 +83,9 @@ class ProjectTask(BaseModel):
     due_date: date
     assignee: ProjectMember
     status: Literal["a_faire", "en_cours", "rendu", "valide"] = "a_faire"
+    priority: Literal["basse", "normale", "haute"] = "normale"
+    blocked_reason: str = ""
+    review_note: str = ""
     submission_note: str = ""
     submission_file_url: str | None = None
     submission_file: ProjectSubmissionFile | None = None

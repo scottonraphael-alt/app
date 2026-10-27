@@ -117,6 +117,15 @@ async def initialize_indexes() -> None:
     await db.resources.create_index("id", unique=True)
     await db.resources.create_index([("is_deleted", 1), ("created_at", -1)])
 
+    await _create_index_or_log(db.projects, "id", unique=True)
+    await _create_index_or_log(db.projects, "updated_at")
+    await _create_index_or_log(db.project_tasks, "id", unique=True)
+    await _create_index_or_log(db.project_tasks, [("project_id", 1), ("due_date", 1)])
+    await _create_index_or_log(db.project_tasks, [("assignee.id", 1), ("status", 1)])
+    await _create_index_or_log(db.project_resources, [("project_id", 1), ("created_at", -1)])
+    await _create_index_or_log(db.project_notes, [("project_id", 1), ("created_at", -1)])
+    await _create_index_or_log(db.auth_logs, [("details.project_id", 1), ("created_at", -1)])
+
     await db.absences.create_index("id", unique=True)
     await db.absences.create_index([("start_date", 1), ("end_date", 1)])
 

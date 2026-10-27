@@ -95,7 +95,7 @@ function CompactProject({ project, helperId }) {
         .filter(
           (task) =>
             String(task.assignee?.id) === String(helperId) &&
-            task.status === "a_faire"
+            ["a_faire", "en_cours"].includes(task.status)
         )
         .sort((a, b) =>
           (a.due_date || "9999").localeCompare(b.due_date || "9999")
@@ -160,7 +160,7 @@ function CompactProject({ project, helperId }) {
             {tasks.map((task) => (
               <Link
                 key={task.id}
-                to={`/animateur/projects/${project.id}`}
+                to={`/animateur/projects/${project.id}?task=${encodeURIComponent(task.id)}`}
                 className="nd-anim-task-row"
               >
                 <span className="nd-anim-task-dot" aria-hidden="true" />

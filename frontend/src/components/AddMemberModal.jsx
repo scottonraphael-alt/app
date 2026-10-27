@@ -1,116 +1,50 @@
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Search, UserPlus, X } from "lucide-react";
-import { api, getErrorMessage } from "../api/client";
-
-export default function AddMemberModal({ projectId, existingIds, onAdded, onClose }) {
-  const [pool, setPool] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
-  const [addingId, setAddingId] = useState(null);
-
-  useEffect(() => {
-    api
-      .get("/animateur/members/search")
-      .then((response) => setPool(response.data))
-      .catch((error) => toast.error(getErrorMessage(error)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const results = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return pool
-      .filter((member) => !existingIds.includes(member.id))
-      .filter((member) => {
-        if (!term) return true;
-        const label = `${member.display_name || ""} ${member.username}`.toLowerCase();
-        return label.includes(term);
-      })
-      .slice(0, 30);
-  }, [pool, query, existingIds]);
-
-  const addMember = async (member) => {
-    setAddingId(member.id);
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Search, UserPlus } from 'lucide-react';
+import { api, getErrorMessage } from '../api/client';
+import { Avatar, Empty, Modal } from './projects/ProjectUI';
+import { personName } from './projects/projectUtils';
+export default function AddMemberModal({
+  projectId,
+  existingIds,
+  onAdded,
+  onClose
+}) {
+  const [pool, setPool] = useState([]),
+    [loading, setLoading] = useState(true),
+    [query, setQuery] = useState(''),
+    [busy, setBusy] = useState(false),
+    [failed, setFailed] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    setFailed(false);
     try {
-      const response = await api.post(`/animateur/projects/${projectId}/members`, {
-        member_id: member.id,
-        role: "membre",
+      const r = await api.get('/animateur/members/search');
+      setPool(r.data);
+    } catch (error) {
+      setFailed(true);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  const results = pool.filter(m => !existingIds.includes(m.id) && `${personName(m)} ${m.username}`.toLowerCase().includes(query.toLowerCase())).slice(0, 50);
+  const add = async member => {
+    setBusy(true);
+    try {
+      const r = await api.post(`/animateur/projects/${projectId}/members`, {
+        member_id: member.id
       });
-      onAdded(response.data);
-      toast.success(`${member.display_name || member.username} ajouté au projet.`);
+      onAdded(r.data);
+      toast.success(`${personName(member)} a rejoint le projet.`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
-      setAddingId(null);
+      setBusy(false);
     }
   };
-
-  return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(28, 38, 34, 0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50,
-      }}
-      onClick={onClose}
-    >
-      <div
-        className="dashboard-card"
-        style={{ width: "min(440px, 90vw)", maxHeight: "70vh", display: "flex", flexDirection: "column", gap: 14 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong style={{ fontSize: 16 }}>Ajouter un membre</strong>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Fermer">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ position: "relative" }}>
-          <Search size={16} style={{ position: "absolute", left: 12, top: 12, color: "var(--muted)" }} />
-          <input
-            className="meeting-inline-input"
-            style={{ paddingLeft: 36 }}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Rechercher un helper par pseudo…"
-            autoFocus
-          />
-        </div>
-
-        <div style={{ overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-          {loading ? (
-            <p className="dashboard-loading">Chargement…</p>
-          ) : results.length === 0 ? (
-            <p className="resources-empty">Aucun membre trouvé.</p>
-          ) : (
-            results.map((member) => (
-              <div
-                key={member.id}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: 8,
-                  borderRadius: 8, background: "#f7faf7",
-                }}
-              >
-                <span className="absence-avatar" style={{ width: 28, height: 28 }}>
-                  {member.avatar_url ? <img src={member.avatar_url} alt="" /> : null}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <strong style={{ display: "block", fontSize: 13 }}>{member.display_name || member.username}</strong>
-                  <small style={{ color: "var(--muted)" }}>@{member.username}</small>
-                </div>
-                <button
-                  type="button"
-                  className="calm-primary-button is-secondary"
-                  onClick={() => addMember(member)}
-                  disabled={addingId === member.id}
-                >
-                  <UserPlus size={14} /> {addingId === member.id ? "…" : "Ajouter"}
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <Modal title="Construire l’équipe" onClose={onClose} busy={busy}><div className="pj-task-detail"><p className="pj-help">Retrouvez les membres disposant du rôle Animateur sur Discord.</p><label className="pj-search"><Search size={17} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Un nom, un pseudo…" aria-label="Rechercher un animateur" /></label>{loading ? <Empty title="Recherche des animateurs…" /> : failed ? <Empty title="La liste n’a pas pu être chargée."><button className="pj-btn" onClick={load}>Réessayer</button></Empty> : !results.length ? <Empty title="Aucun animateur à ajouter.">Modifiez la recherche ou vérifiez les membres déjà présents.</Empty> : <div className="pj-member-list">{results.map(m => <div className="pj-member" key={m.id}><Avatar member={m} /><div><strong>{personName(m)}</strong><small>@{m.username}</small></div><button className="pj-btn" disabled={busy} onClick={() => add(m)}><UserPlus size={15} /> Ajouter</button></div>)}</div>}</div></Modal>;
 }

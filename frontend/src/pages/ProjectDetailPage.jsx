@@ -1,570 +1,242 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
-import {
-  ArrowLeft, Calendar, CheckCircle2, ClipboardList, Download, FileUp,
-  Pencil, Plus, Save, Trash2, UserMinus, UserPlus, Users, X,
-} from "lucide-react";
-import { api, getErrorMessage } from "../api/client";
-import TiptapSummaryEditor from "../components/TiptapSummaryEditor";
-import AddMemberModal from "../components/AddMemberModal";
-import SummaryReader from "../components/SummaryReader";
-
-const TASK_STATUS_LABELS = { a_faire: "À faire", en_cours: "En cours", rendu: "Rendue", valide: "Validée" };
-
-function MemberAvatar({ member, size = 26 }) {
-  const label = member?.display_name || member?.username || "";
-  return (
-    <span className="absence-avatar" style={{ width: size, height: size }} title={label}>
-      {member?.avatar_url ? <img src={member.avatar_url} alt="" /> : <Users size={Math.round(size * 0.55)} />}
-    </span>
-  );
-}
-
-function TaskCard({ task, currentHelperId, isResponsable, onSubmit, onValidate, onDelete }) {
-  const [note, setNote] = useState(task.submission_note || "");
-  const [file, setFile] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const isAssignee = task.assignee.id === currentHelperId;
-
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    try {
-      await onSubmit(task.id, note, file);
-      setFile(null);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="meeting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <MemberAvatar member={task.assignee} size={22} />
-            <strong>{task.title}</strong>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-            <Calendar size={14} /> <span>{task.due_date}</span>
-          </div>
-          {task.description && <p style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0 0" }}>{task.description}</p>}
-        </div>
-        <span className={`status-badge ${task.status === "valide" ? "status-done" : "status-pending"}`}>
-          {TASK_STATUS_LABELS[task.status]}
-        </span>
-      </div>
-
-      {task.status === "rendu" && (
-        <div style={{ fontSize: 13, color: "var(--muted)", background: "#f7faf7", padding: 10, borderRadius: 8 }}>
-          {task.submission_note && <SummaryReader content={task.submission_note} />}
-          {task.submission_file && (
-            <a
-              href={`${api.defaults.baseURL}/animateur/tasks/${task.id}/submission/download`}
-              onClick={(e) => e.stopPropagation()}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6 }}
-            >
-              <FileUp size={14} /> {task.submission_file.original_filename}
-            </a>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {isAssignee && (task.status === "a_faire" || task.status === "en_cours") && (
-          <>
-            <TiptapSummaryEditor
-              value={note}
-              onChange={setNote}
-              placeholder="Décrire le rendu, tapez / pour les commandes"
-            />
-            <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-            <button
-              type="button"
-              className="calm-primary-button is-secondary"
-              onClick={handleSubmit}
-              disabled={submitting}
-              style={{ alignSelf: "flex-start" }}
-            >
-              <FileUp size={15} /> {submitting ? "Envoi…" : "Rendre la tâche"}
-            </button>
-          </>
-        )}
-        {isResponsable && task.status === "rendu" && (
-          <button type="button" className="calm-primary-button" onClick={() => onValidate(task.id)}>
-            <CheckCircle2 size={15} /> Valider
-          </button>
-        )}
-        {isResponsable && (
-          <button type="button" className="icon-btn-danger" onClick={() => onDelete(task.id)} aria-label="Supprimer">
-            <Trash2 size={15} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ValidatedTaskRow({ task }) {
-  return (
-    <div className="meeting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <MemberAvatar member={task.assignee} size={22} />
-            <strong>{task.title}</strong>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
-            <Calendar size={14} />
-            <span>Rendu par {task.assignee.display_name || task.assignee.username} · échéance {task.due_date}</span>
-          </div>
-        </div>
-        <span className="status-badge status-done">Validée</span>
-      </div>
-
-      {task.submission_note && (
-        <div style={{ fontSize: 13, color: "var(--muted)", background: "#f7faf7", padding: 10, borderRadius: 8 }}>
-          <SummaryReader content={task.submission_note} />
-        </div>
-      )}
-
-      {task.submission_file && (
-        <a
-          href={`${api.defaults.baseURL}/animateur/tasks/${task.id}/submission/download`}
-          onClick={(e) => e.stopPropagation()}
-          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}
-        >
-          <FileUp size={14} /> {task.submission_file.original_filename}
-        </a>
-      )}
-    </div>
-  );
-}
-
-export default function ProjectDetailPage({ helper, isResponsableGlobal }) {
-  const { projectId } = useParams();
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Archive, ArrowUpRight, CalendarDays, CheckCheck, ClipboardList, Clock3, Download, FileText, LayoutGrid, List, MessageSquare, Pencil, Plus, Settings2, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, getErrorMessage } from '../api/client';
+import TiptapSummaryEditor from '../components/TiptapSummaryEditor';
+import SummaryReader from '../components/SummaryReader';
+import AddMemberModal from '../components/AddMemberModal';
+import { Avatar, Empty, Field, Panel, Priority, ProjectPage } from '../components/projects/ProjectUI';
+import ProjectForm from '../components/projects/ProjectForm';
+import ProjectTaskDialog, { TaskForm } from '../components/projects/ProjectTaskDialog';
+import { ACTIVITY_LABELS, dateLabel, isLate, personName, progress, PROJECT_STATUS, TASK_STATUS, taskCounts } from '../components/projects/projectUtils';
+const TABS = [['overview', 'Vue d’ensemble', LayoutGrid], ['tasks', 'Tâches', ClipboardList], ['brief', 'Le brief', FileText], ['team', 'L’équipe', Users], ['files', 'Fichiers', Download], ['activity', 'Journal', MessageSquare]];
+export default function ProjectDetailPage({
+  helper,
+  isResponsableGlobal
+}) {
+  const {
+    projectId
+  } = useParams();
   const navigate = useNavigate();
-
+  const [params, setParams] = useSearchParams();
   const [project, setProject] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [resources, setResources] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isEditingContent, setIsEditingContent] = useState(false);
-  const [content, setContent] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [showAddMember, setShowAddMember] = useState(false);
-
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDescription, setTaskDescription] = useState("");
-  const [taskAssigneeId, setTaskAssigneeId] = useState("");
-  const [taskDueDate, setTaskDueDate] = useState(new Date().toISOString().slice(0, 10));
-  const [creatingTask, setCreatingTask] = useState(false);
-
-  const [resourceTitle, setResourceTitle] = useState("");
+  const [failed, setFailed] = useState(false);
+  const [tab, setTab] = useState('overview');
+  const [settings, setSettings] = useState(false);
+  const [addingMember, setAddingMember] = useState(false);
+  const [taskForm, setTaskForm] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [taskFilter, setTaskFilter] = useState('all');
+  const [taskQuery, setTaskQuery] = useState('');
+  const [taskView, setTaskView] = useState('board');
+  const [editingBrief, setEditingBrief] = useState(false);
+  const [content, setContent] = useState('');
+  const [message, setMessage] = useState('');
+  const [resourceTitle, setResourceTitle] = useState('');
   const [resourceFile, setResourceFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [downloadingId, setDownloadingId] = useState(null);
-
-  const isResponsable = isResponsableGlobal || project?.created_by?.id === helper?.id;
-
-  const activeTasks = tasks.filter((task) => task.status !== "valide");
-  const validatedTasks = tasks.filter((task) => task.status === "valide");
-
+  const [uploadKey, setUploadKey] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const member = project?.created_by?.id === helper?.id || project?.members?.some(m => m.id === helper?.id);
+  const manager = isResponsableGlobal || project?.created_by?.id === helper?.id;
+  const canEdit = !!(member || isResponsableGlobal);
+  const writable = project?.status === 'en_cours';
+  const p = progress(taskCounts(tasks));
+  const selected = tasks.find(t => t.id === selectedId);
   const load = async () => {
     setLoading(true);
+    setFailed(false);
     try {
-      const [projectResponse, tasksResponse, resourcesResponse] = await Promise.all([
-        api.get(`/animateur/projects/${projectId}`),
-        api.get(`/animateur/projects/${projectId}/tasks`),
-        api.get(`/animateur/projects/${projectId}/resources`),
-      ]);
-      setProject(projectResponse.data);
-      setContent(projectResponse.data.content_markdown || "");
-      setTasks(tasksResponse.data);
-      setResources(resourcesResponse.data);
+      const [a, b, c] = await Promise.all([api.get(`/animateur/projects/${projectId}`), api.get(`/animateur/projects/${projectId}/tasks`), api.get(`/animateur/projects/${projectId}/resources`)]);
+      setProject(a.data);
+      setContent(a.data.content_markdown || '');
+      setTasks(b.data);
+      setResources(c.data);
     } catch (error) {
+      setFailed(true);
       toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTab('overview');
+    setEditingBrief(false);
+    setSelectedId(null);
+    load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [projectId]);
-
-  const saveContent = async () => {
-    setSaving(true);
-    try {
-      const response = await api.put(`/animateur/projects/${projectId}`, {
-        title: project.title,
-        description: project.description,
-        content_markdown: content,
-        end_date: project.end_date,
+  const taskParam = params.get('task');
+  useEffect(() => {
+    if (taskParam && tasks.some(t => t.id === taskParam)) {
+      setSelectedId(taskParam);
+      setTab('tasks');
+    }
+  }, [taskParam, tasks]);
+  const closeTask = () => {
+    setSelectedId(null);
+    if (taskParam) {
+      const next = new URLSearchParams(params);
+      next.delete('task');
+      setParams(next, {
+        replace: true
       });
-      setProject(response.data);
-      setIsEditingContent(false);
-      toast.success("Projet mis à jour.");
+    }
+  };
+  const updateTask = task => setTasks(v => v.some(t => t.id === task.id) ? v.map(t => t.id === task.id ? task : t) : [...v, task]);
+  const loadActivity = async () => {
+    setActivityLoading(true);
+    setActivityError(false);
+    try {
+      const r = await api.get(`/animateur/projects/${projectId}/activity`);
+      setActivity(r.data);
+    } catch (error) {
+      setActivityError(true);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+  useEffect(() => {
+    if (tab === 'activity' && canEdit) loadActivity(); /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [tab, projectId, canEdit]);
+  const act = async operation => {
+    setBusy(true);
+    try {
+      await operation();
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
-  const createTask = async (event) => {
-    event.preventDefault();
-    if (!taskTitle.trim() || !taskAssigneeId) {
-      toast.error("Titre et membre assigné requis.");
-      return;
-    }
-    setCreatingTask(true);
-    try {
-      const response = await api.post(`/animateur/projects/${projectId}/tasks`, {
-        project_id: projectId,
-        assignee_id: taskAssigneeId,
-        title: taskTitle,
-        description: taskDescription,
-        due_date: taskDueDate,
-      });
-      setTasks((current) => [...current, response.data]);
-      setTaskTitle("");
-      setTaskDescription("");
-      setTaskAssigneeId("");
-      toast.success("Tâche ajoutée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setCreatingTask(false);
-    }
-  };
-
-  const submitTask = async (taskId, note, file) => {
-    try {
-      const formData = new FormData();
-      formData.append("submission_content", note);
-      if (file) formData.append("file", file);
-      const response = await api.put(`/animateur/tasks/${taskId}/submit`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setTasks((current) => current.map((task) => (task.id === taskId ? response.data : task)));
-      toast.success("Tâche rendue.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const validateTask = async (taskId) => {
-    try {
-      const response = await api.put(`/animateur/tasks/${taskId}/validate`);
-      setTasks((current) => current.map((task) => (task.id === taskId ? response.data : task)));
-      toast.success("Tâche validée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const deleteTask = async (taskId) => {
-    try {
-      await api.delete(`/animateur/tasks/${taskId}`);
-      setTasks((current) => current.filter((task) => task.id !== taskId));
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const uploadResource = async (event) => {
-    event.preventDefault();
-    if (!resourceFile) {
-      toast.error("Choisissez un fichier.");
-      return;
-    }
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("title", resourceTitle || resourceFile.name);
-      formData.append("file", resourceFile);
-      const response = await api.post(`/animateur/projects/${projectId}/resources`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setResources((current) => [response.data, ...current]);
-      setResourceTitle("");
+  const changeStatus = status => act(async () => {
+    if (status === 'archive' && !window.confirm('Archiver le projet ? Il restera consultable, puis pourra être restauré.')) return;
+    const r = await api.patch(`/animateur/projects/${projectId}/settings`, {
+      status
+    });
+    setProject(r.data);
+    toast.success('État du projet mis à jour.');
+  });
+  const saveBrief = () => act(async () => {
+    const r = await api.patch(`/animateur/projects/${projectId}/brief`, {
+      content_markdown: content
+    });
+    setProject(r.data);
+    setEditingBrief(false);
+    toast.success('Brief enregistré.');
+  });
+  const upload = e => {
+    e.preventDefault();
+    if (!resourceFile) return;
+    act(async () => {
+      const form = new FormData();
+      form.append('title', resourceTitle.trim() || resourceFile.name);
+      form.append('file', resourceFile);
+      const r = await api.post(`/animateur/projects/${projectId}/resources`, form);
+      setResources(v => [r.data, ...v]);
+      setResourceTitle('');
       setResourceFile(null);
-      toast.success("Ressource ajoutée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setUploading(false);
-    }
+      setUploadKey(v => v + 1);
+      toast.success('Fichier ajouté.');
+    });
   };
-
-  const downloadResource = async (resource) => {
-    setDownloadingId(resource.id);
-    try {
-      const response = await api.get(`/animateur/resources/${resource.id}/download`, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = resource.original_filename || resource.title;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
-  const removeMember = async (memberId) => {
-    try {
-      const response = await api.delete(`/animateur/projects/${projectId}/members/${memberId}`);
-      setProject(response.data);
-      toast.success("Membre retiré du projet.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  if (loading) {
-    return (
-      <section className="page-content dashboard-page">
-        <p className="dashboard-loading">Chargement…</p>
-      </section>
-    );
-  }
-  if (!project) return null;
-
-  return (
-    <section className="page-content dashboard-page" data-testid="project-detail-page">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">ESPACE ANIMATEUR</p>
-          <h1>{project.title}</h1>
-          <p style={{ color: "var(--muted)", marginTop: 6 }}>{project.description}</p>
-        </div>
-        <div className="dashboard-actions">
-          <button type="button" className="btn-ghost" onClick={() => navigate("/animateur/projects")}>
-            <ArrowLeft size={17} /> Retour
-          </button>
-        </div>
-      </header>
-
-      <div className="workspace-grid" style={{ padding: 0 }}>
-        <div className="workspace-column">
-          <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>CONTENU DU PROJET</span>
-            {!isEditingContent ? (
-              <button type="button" className="btn-ghost" onClick={() => setIsEditingContent(true)}>
-                <Pencil size={15} /> Éditer
-              </button>
-            ) : (
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={() => {
-                    setContent(project.content_markdown || "");
-                    setIsEditingContent(false);
-                  }}
-                >
-                  <X size={15} /> Annuler
-                </button>
-                <button type="button" className="btn-primary" onClick={saveContent} disabled={saving}>
-                  <Save size={15} /> {saving ? "Enregistrement…" : "Enregistrer"}
-                </button>
-              </div>
-            )}
-          </div>
-          <div style={{ padding: 20 }}>
-            {isEditingContent ? (
-              <TiptapSummaryEditor
-                value={content}
-                onChange={setContent}
-                placeholder="Décrire le projet, tapez / pour les commandes"
-                autoFocus
-              />
-            ) : project.content_markdown ? (
-              <SummaryReader content={project.content_markdown} />
-            ) : (
-              <p className="resources-empty">Aucun contenu pour l'instant.</p>
-            )}
-          </div>
-
-          <div className="section-heading">
-            <span>TÂCHES INTERNES</span>
-          </div>
-          <div style={{ padding: "0 20px 20px" }}>
-            {isResponsable && (
-              <form onSubmit={createTask} className="meeting-inline-form" style={{ marginBottom: 20 }}>
-                <div className="meeting-inline-form-header">
-                  <span>Assigner une tâche</span>
-                </div>
-                <input
-                  className="meeting-inline-input"
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  placeholder="Titre de la tâche"
-                  maxLength={160}
-                />
-                <textarea
-                  className="meeting-inline-textarea"
-                  value={taskDescription}
-                  onChange={(e) => setTaskDescription(e.target.value)}
-                  placeholder="Description (optionnel)"
-                  rows={2}
-                />
-                <select
-                  className="meeting-inline-input"
-                  value={taskAssigneeId}
-                  onChange={(e) => setTaskAssigneeId(e.target.value)}
-                >
-                  <option value="">Choisir un membre</option>
-                  {project.members.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.display_name || member.username}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="date"
-                  className="meeting-inline-input"
-                  value={taskDueDate}
-                  onChange={(e) => setTaskDueDate(e.target.value)}
-                />
-                <button type="submit" className="meeting-inline-submit" disabled={creatingTask}>
-                  <Plus size={16} /> {creatingTask ? "Ajout…" : "Ajouter la tâche"}
-                </button>
-              </form>
-            )}
-            {activeTasks.length === 0 ? (
-              <p className="resources-empty">Aucune tâche en cours pour ce projet.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {activeTasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    currentHelperId={helper?.id}
-                    isResponsable={isResponsable}
-                    onSubmit={submitTask}
-                    onValidate={validateTask}
-                    onDelete={deleteTask}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="intelligence-panel">
-          <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>MEMBRES DU PROJET</span>
-            {isResponsable && (
-              <button type="button" className="btn-ghost" onClick={() => setShowAddMember(true)}>
-                <UserPlus size={15} /> Ajouter
-              </button>
-            )}
-          </div>
-          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-            {project.members.map((member) => (
-              <div key={member.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <MemberAvatar member={member} size={30} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <strong style={{ display: "block", fontSize: 13 }}>{member.display_name || member.username}</strong>
-                  <small style={{ color: "var(--muted)" }}>
-                    {member.role === "responsable" ? "Responsable" : "Membre"}
-                  </small>
-                </div>
-                {isResponsable && member.id !== project.created_by.id && (
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => removeMember(member.id)}
-                    aria-label="Retirer"
-                  >
-                    <UserMinus size={15} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="section-heading">
-            <span>RESSOURCES ANNEXES</span>
-          </div>
-          <div style={{ padding: 16 }}>
-            <form onSubmit={uploadResource} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-              <input
-                className="meeting-inline-input"
-                value={resourceTitle}
-                onChange={(e) => setResourceTitle(e.target.value)}
-                placeholder="Titre du document"
-              />
-              <input type="file" onChange={(e) => setResourceFile(e.target.files[0])} />
-              <button type="submit" className="calm-primary-button is-secondary" disabled={uploading}>
-                <FileUp size={15} /> {uploading ? "Envoi…" : "Déposer la ressource"}
-              </button>
-            </form>
-            {resources.length === 0 ? (
-              <p className="resources-empty">Aucune ressource déposée.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {resources.map((resource) => (
-                  <div
-                    key={resource.id}
-                    onClick={() => downloadResource(resource)}
-                    role="button"
-                    tabIndex={0}
-                    className="absence-meeting-row"
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, padding: 10,
-                      borderRadius: 8, background: "#f7faf7", cursor: "pointer",
-                      opacity: downloadingId === resource.id ? 0.6 : 1,
-                    }}
-                  >
-                    <ClipboardList size={16} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <strong style={{ display: "block", fontSize: 13 }}>{resource.title}</strong>
-                      <small style={{ color: "var(--muted)" }}>{resource.original_filename}</small>
-                    </div>
-                    <Download size={15} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="dashboard-card" style={{ marginTop: 24, padding: 0 }}>
-        <div className="section-heading">
-          <span>TÂCHES VALIDÉES</span>
-        </div>
-        <div style={{ padding: "0 20px 20px" }}>
-          {validatedTasks.length === 0 ? (
-            <p className="resources-empty">Aucune tâche validée pour l'instant.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {validatedTasks.map((task) => (
-                <ValidatedTaskRow key={task.id} task={task} />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {showAddMember && (
-        <AddMemberModal
-          projectId={projectId}
-          existingIds={project.members.map((m) => m.id)}
-          onAdded={(updatedProject) => setProject(updatedProject)}
-          onClose={() => setShowAddMember(false)}
-        />
-      )}
-    </section>
-  );
+  const download = resource => act(async () => {
+    const r = await api.get(`/animateur/resources/${resource.id}/download`, {
+      responseType: 'blob'
+    });
+    const url = URL.createObjectURL(r.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = resource.original_filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  const filtered = tasks.filter(t => (!taskQuery || `${t.title} ${t.description} ${personName(t.assignee)}`.toLowerCase().includes(taskQuery.toLowerCase())) && (taskFilter === 'mine' ? t.assignee?.id === helper?.id : taskFilter === 'late' ? isLate(t) : taskFilter === 'blocked' ? !!t.blocked_reason : taskFilter === 'review' ? t.status === 'rendu' : true)).sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
+  const taskCard = task => <button key={task.id} className="pj-task-card" onClick={() => setSelectedId(task.id)}><div className="pj-inline"><Priority value={task.priority} />{task.blocked_reason && <span className="pj-badge pj-alert">Bloquée</span>}</div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<footer><span className="pj-task-assignee"><Avatar member={task.assignee} /><span>{personName(task.assignee)}</span></span><span className={`pj-deadline ${isLate(task) ? 'is-late' : ''}`}>{isLate(task) && <Clock3 size={13} />} {dateLabel(task.due_date)}</span></footer></button>;
+  if (loading || failed || !project) return <ProjectPage title="L’atelier du projet" back intro="Chaque étape compte."><Empty title={loading ? 'Chargement du projet…' : 'Le projet n’a pas pu être chargé.'}>{!loading && <button className="pj-btn" onClick={load}>Réessayer</button>}</Empty></ProjectPage>;
+  return <ProjectPage title={project.title} intro={project.description || 'Une idée à construire ensemble, du premier brief au dernier détail.'} back actions={manager && writable && <button className="pj-btn" onClick={() => setSettings(true)}><Settings2 size={16} /> Paramètres</button>}>
+    <div className="pj-project-meta"><span className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</span><Priority value={project.priority} /><span><CalendarDays size={16} /> {dateLabel(project.start_date)} → {dateLabel(project.end_date)}</span><span><Users size={16} /> {project.members.length} membre{project.members.length > 1 ? 's' : ''}</span><span>Piloté par {personName(project.created_by)}</span>{project.tags?.map(tag => <span className="pj-tag" key={tag}>#{tag}</span>)}</div>
+    {!writable && <div className="pj-notice pj-archive"><Archive size={19} /><p>{project.status === 'archive' ? 'Ce projet est archivé.' : 'Ce projet est terminé.'} Les documents et les rendus restent consultables.</p>{manager && <button className="pj-btn" disabled={busy} onClick={() => changeStatus('en_cours')}>{project.status === 'archive' ? 'Restaurer le projet' : 'Rouvrir le projet'}</button>}</div>}
+    {!canEdit && writable && <div className="pj-notice"><p>Envie de contribuer ? Rejoignez l’équipe pour participer au brief et déposer des fichiers.</p><button className="pj-btn pj-primary" disabled={busy} onClick={() => act(async () => {
+        const r = await api.post(`/animateur/projects/${projectId}/members`, {
+          member_id: helper.id
+        });
+        setProject(r.data);
+        toast.success('Bienvenue dans l’équipe !');
+      })}><UserPlus size={16} /> Rejoindre</button></div>}
+    <nav className="pj-tabs pj-detail-tabs" aria-label="Rubriques du projet">{TABS.filter(([key]) => key !== 'activity' || canEdit).map(([key, label, Icon]) => <button key={key} className={tab === key ? 'is-active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => {
+        if (editingBrief && tab === 'brief' && key !== 'brief' && !window.confirm('Quitter le brief sans enregistrer ?')) return;
+        if (key !== 'brief') setEditingBrief(false);
+        setTab(key);
+      }}><Icon size={16} />{label}{key === 'tasks' && <span>{tasks.length}</span>}</button>)}</nav>
+    {tab === 'overview' && <div className="pj-detail-grid"><div><Panel title="Le cap du projet" intro="Le contexte et les décisions utiles, avant de passer à l’action." actions={<button className="pj-btn" onClick={() => setTab('brief')}>Ouvrir le brief <ArrowUpRight size={15} /></button>}><div className="pj-brief-excerpt">{project.content_markdown ? <SummaryReader key={project.updated_at} content={project.content_markdown} /> : <Empty title="Tout commence par une intention.">Précisez l’objectif, le public et le déroulé dans le brief du projet.</Empty>}</div></Panel><Panel title="Les prochaines étapes" intro="Les tâches à faire ou en cours, classées par échéance." actions={<button className="pj-btn" onClick={() => setTab('tasks')}>Toutes les tâches <ArrowUpRight size={15} /></button>}>{!tasks.some(t => ['a_faire', 'en_cours'].includes(t.status)) ? <Empty title="Le chemin est dégagé.">Aucune tâche à faire ou en cours.</Empty> : <div className="pj-next-tasks">{tasks.filter(t => ['a_faire', 'en_cours'].includes(t.status)).sort((a, b) => (a.due_date || '').localeCompare(b.due_date || '')).slice(0, 4).map(taskCard)}</div>}</Panel></div><aside><Panel title="Où en sommes-nous ?" intro="L’avancement repose sur les tâches validées."><div className="pj-big-progress"><strong>{p.percent}<small>%</small></strong><p>{p.done} tâche{p.done > 1 ? 's' : ''} validée{p.done > 1 ? 's' : ''} sur {p.total}</p><progress value={p.percent} max={100} aria-label="Progression du projet" /></div><div className="pj-stats-rows"><button onClick={() => {
+              setTaskFilter('late');
+              setTab('tasks');
+            }}><span>En retard</span><strong>{tasks.filter(t => isLate(t)).length}</strong></button><button onClick={() => {
+              setTaskFilter('blocked');
+              setTab('tasks');
+            }}><span>Bloquées</span><strong>{tasks.filter(t => !!t.blocked_reason && t.status !== 'valide').length}</strong></button><button onClick={() => {
+              setTaskFilter('review');
+              setTab('tasks');
+            }}><span>À valider</span><strong>{tasks.filter(t => t.status === 'rendu').length}</strong></button></div>{manager && writable && <div className="pj-lifecycle"><button className="pj-btn" disabled={busy || project.status !== 'termine' && p.done !== p.total} onClick={() => changeStatus(project.status === 'termine' ? 'en_cours' : 'termine')}><CheckCheck size={16} />{project.status === 'termine' ? 'Rouvrir le projet' : 'Terminer le projet'}</button><p className="pj-help">Validez toutes les tâches pour terminer le projet.</p><button className="pj-btn" disabled={busy} onClick={() => changeStatus('archive')}><Archive size={16} /> Archiver</button></div>}</Panel><Panel title="Une équipe, un projet" intro={`${project.members.length} personnes réunies autour de cette idée.`}><div className="pj-member-list">{project.members.slice(0, 5).map(m => <div className="pj-member" key={m.id}><Avatar member={m} /><strong>{personName(m)}</strong><small>{m.id === project.created_by.id ? 'Pilote' : 'Équipe'}</small></div>)}</div><button className="pj-btn" onClick={() => setTab('team')}>Voir l’équipe</button></Panel></aside></div>}
+    {tab === 'tasks' && <><div className="pj-section-heading"><div><h2>De l’idée au résultat</h2><p className="pj-help">Ouvrez une carte pour avancer, signaler un blocage ou présenter un rendu. Le pilote valide le travail.</p></div>{manager && writable && <button className="pj-btn pj-primary" onClick={() => setTaskForm({})}><Plus size={16} /> Ajouter une tâche</button>}</div><div className="pj-filters"><input aria-label="Rechercher une tâche" placeholder="Une tâche, un membre…" value={taskQuery} onChange={e => setTaskQuery(e.target.value)} /><select aria-label="Filtrer les tâches" value={taskFilter} onChange={e => setTaskFilter(e.target.value)}><option value="all">Toutes les tâches</option><option value="mine">Mes tâches</option><option value="late">En retard</option><option value="blocked">Bloquées</option><option value="review">À valider</option></select><div className="pj-chips"><button className={`pj-btn ${taskView === 'board' ? 'is-selected' : ''}`} onClick={() => setTaskView('board')} aria-pressed={taskView === 'board'}><LayoutGrid size={15} /> Tableau</button><button className={`pj-btn ${taskView === 'list' ? 'is-selected' : ''}`} onClick={() => setTaskView('list')} aria-pressed={taskView === 'list'}><List size={15} /> Liste</button></div></div>{!filtered.length ? <Empty title={tasks.length ? 'Aucune tâche dans cette sélection.' : 'Le projet attend ses premières étapes.'}>{manager && writable ? 'Ajoutez une tâche pour répartir le travail.' : 'Les tâches apparaîtront ici une fois créées.'}</Empty> : taskView === 'board' ? <div className="pj-board">{Object.entries(TASK_STATUS).map(([key, label]) => <section key={key} className={`pj-board-column pj-column-${key}`}><header><h3>{label}</h3><span>{filtered.filter(t => t.status === key).length}</span></header><div>{filtered.filter(t => t.status === key).map(taskCard)}{!filtered.some(t => t.status === key) && <p className="pj-column-empty">Rien ici pour le moment.</p>}</div></section>)}</div> : <div className="pj-task-list">{filtered.map(t => <div key={t.id}><span className={`pj-badge pj-task-${t.status}`}>{TASK_STATUS[t.status]}</span>{taskCard(t)}</div>)}</div>}</>}
+    {tab === 'brief' && <Panel title="Le brief partagé" intro="L’objectif, le déroulé, le matériel et les décisions de l’équipe." actions={canEdit && writable && <div className="pj-inline">{editingBrief ? <><button className="pj-btn" disabled={busy} onClick={() => {
+          setContent(project.content_markdown || '');
+          setEditingBrief(false);
+        }}>Annuler</button><button className="pj-btn pj-primary" disabled={busy} onClick={saveBrief}>{busy ? 'Enregistrement…' : 'Enregistrer le brief'}</button></> : <button className="pj-btn" onClick={() => {
+        setContent(project.content_markdown || '');
+        setEditingBrief(true);
+      }}><Pencil size={15} /> Modifier le brief</button>}</div>}>{editingBrief ? <TiptapSummaryEditor value={content} onChange={setContent} placeholder="Objectif, public, déroulé, matériel… Tapez / pour les outils." /> : project.content_markdown ? <SummaryReader key={project.updated_at} content={project.content_markdown} /> : <Empty title="Le point de départ du projet.">Notez ce que vous souhaitez créer, puis enrichissez le brief ensemble.</Empty>}</Panel>}
+    {tab === 'team' && <Panel title="Les personnes derrière le projet" intro="Le pilote organise le projet. Chaque membre peut enrichir le brief, déposer des fichiers et avancer sur ses tâches." actions={manager && writable && <button className="pj-btn pj-primary" onClick={() => setAddingMember(true)}><UserPlus size={16} /> Ajouter un animateur</button>}><div className="pj-team-grid">{project.members.map(m => {
+          const assigned = tasks.filter(t => t.assignee?.id === m.id);
+          return <article className="pj-team-card" key={m.id}><Avatar member={m} /><h3>{personName(m)}</h3><span className="pj-badge">{m.id === project.created_by.id ? 'Pilote du projet' : 'Équipe'}</span><p>{assigned.filter(t => t.status !== 'valide').length} tâche(s) ouverte(s) · {assigned.filter(t => t.status === 'valide').length} validée(s)</p>{manager && writable && m.id !== project.created_by.id && <button className="pj-btn pj-danger" disabled={busy} onClick={() => {
+              if (window.confirm(`Retirer ${personName(m)} du projet ? Ses tâches ouvertes doivent d’abord être réattribuées.`)) act(async () => {
+                const r = await api.delete(`/animateur/projects/${projectId}/members/${m.id}`);
+                setProject(r.data);
+              });
+            }}><UserMinus size={15} /> Retirer</button>}</article>;
+        })}</div></Panel>}
+    {tab === 'files' && <Panel title="Tout le nécessaire" intro="Centralisez les supports, visuels et documents utiles. Les fichiers des rendus restent dans leurs tâches.">{canEdit && writable && <form onSubmit={upload} className="pj-upload"><Field label="Nom du document"><input value={resourceTitle} maxLength={160} onChange={e => setResourceTitle(e.target.value)} placeholder="Ex. Visuel de l’événement" /></Field><Field label="Choisir un fichier"><input key={uploadKey} type="file" required onChange={e => setResourceFile(e.target.files?.[0] || null)} /></Field><button className="pj-btn pj-primary" disabled={busy || !resourceFile}><Plus size={16} />{busy ? 'Envoi…' : 'Ajouter le fichier'}</button></form>}{!resources.length ? <Empty title="Les supports trouveront leur place ici.">Ajoutez les documents dont l’équipe a besoin.</Empty> : <div className="pj-files">{resources.map(resource => <div className="pj-file" key={resource.id}><FileText size={24} /><div><strong>{resource.title}</strong><small>{resource.original_filename} · {(resource.size / 1024).toFixed(0)} Ko · {personName(resource.uploaded_by)}</small></div>{canEdit && <button className="pj-btn" disabled={busy} onClick={() => download(resource)}><Download size={15} /> Télécharger</button>}{manager && writable && <button className="pj-icon pj-danger" aria-label={`Supprimer ${resource.title}`} disabled={busy} onClick={() => {
+            if (window.confirm('Supprimer ce fichier du projet ?')) act(async () => {
+              await api.delete(`/animateur/resources/${resource.id}`);
+              setResources(v => v.filter(r => r.id !== resource.id));
+            });
+          }}><Trash2 size={16} /></button>}</div>)}</div>}</Panel>}
+    {tab === 'activity' && canEdit && <Panel title="Le fil de l’équipe" intro="Partagez une décision ou un point d’étape. Les dernières actions complètent ce journal ; les responsables disposent aussi des logs IRIS.">{writable && <form className="pj-comment" onSubmit={e => {
+        e.preventDefault();
+        act(async () => {
+          await api.post(`/animateur/projects/${projectId}/activity`, {
+            message
+          });
+          setMessage('');
+          await loadActivity();
+        });
+      }}><Field label="Un point à partager avec l’équipe"><textarea maxLength={2000} rows={3} required value={message} onChange={e => setMessage(e.target.value)} placeholder="Une décision prise, un détail à ne pas oublier…" /></Field><button className="pj-btn pj-primary" disabled={busy || !message.trim()}>Publier dans le journal</button></form>}{activityLoading ? <Empty title="Chargement du journal…" /> : activityError ? <Empty title="Le journal n’a pas pu être chargé."><button className="pj-btn" onClick={loadActivity}>Réessayer</button></Empty> : !activity.length ? <Empty title="Les premières traces de l’équipe.">Vos points d’étape et les actions du projet apparaîtront ici.</Empty> : <ol className="pj-timeline">{activity.map(a => <li key={a.id}><span className={`pj-timeline-dot ${a.event_type === 'project.comment.added' ? 'is-note' : ''}`} /><div><p><strong>{a.username || 'Un membre'}</strong> {ACTIVITY_LABELS[a.event_type] || 'a mis à jour le projet'}{a.details?.title && ` · ${a.details.title}`}</p><time>{new Date(a.created_at).toLocaleString('fr-FR', {
+                timeZone: 'Europe/Paris',
+                dateStyle: 'medium',
+                timeStyle: 'short'
+              })}</time>{a.details?.message && <blockquote>{a.details.message}</blockquote>}</div></li>)}</ol>}</Panel>}
+    {isResponsableGlobal && tab === 'overview' && <details className="pj-danger-zone"><summary>Administration du projet</summary><p>La suppression efface le projet, ses tâches et ses fichiers associés. Préférez l’archivage pour conserver le travail de l’équipe.</p><button className="pj-btn pj-danger" disabled={busy} onClick={() => {
+        if (window.confirm(`Supprimer définitivement « ${project.title} » et toutes ses tâches ?`)) act(async () => {
+          await api.delete(`/animateur/projects/${projectId}`);
+          navigate('/animateur/projects');
+        });
+      }}>Supprimer définitivement</button></details>}
+    {settings && <ProjectForm project={project} onClose={() => setSettings(false)} onSaved={updated => {
+      setProject(updated);
+      setSettings(false);
+    }} />} {addingMember && <AddMemberModal projectId={projectId} existingIds={project.members.map(m => m.id)} onAdded={setProject} onClose={() => setAddingMember(false)} />}
+    {taskForm && <TaskForm project={project} task={taskForm.id ? taskForm : undefined} onClose={() => setTaskForm(null)} onSaved={task => {
+      updateTask(task);
+      setTaskForm(null);
+    }} />} {selected && !taskForm && <ProjectTaskDialog key={selected.id} task={selected} helper={helper} manager={manager} members={project.members} writable={writable} onSaved={updateTask} onClose={closeTask} onEdit={() => setTaskForm(selected)} onDelete={id => {
+      setTasks(v => v.filter(t => t.id !== id));
+      closeTask();
+    }} />}</ProjectPage>;
 }

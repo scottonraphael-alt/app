@@ -105,6 +105,10 @@ const EVENT_LABELS = {
   "auth.session.check_failed": "Vérification session échouée",
   "authz.forbidden": "Accès refusé",
 
+  "project.settings.updated": "Paramètres du projet modifiés",
+  "project.task.updated": "Tâche mise à jour",
+  "project.member.removed": "Membre retiré du projet",
+  "project.comment.added": "Note publiée dans le journal du projet",
   "project.viewed": "Projet consulté",
   "project.created": "Projet créé",
   "project.details.updated": "Projet modifié",
