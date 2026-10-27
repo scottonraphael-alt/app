@@ -8,6 +8,8 @@ import logging
 from datetime import timedelta
 from weakref import WeakKeyDictionary
 
+import discord
+
 from database import db
 from services import server_statistics as stats
 
@@ -16,6 +18,7 @@ _locks = WeakKeyDictionary()
 _snapshot_task = None
 _snapshot_session = None
 _retry_after = None
+_snapshot_failures = 0
 
 
 def lock():
@@ -121,14 +124,15 @@ async def record_remove(payload):
 
 
 async def synchronize_roster(client):
-    """L'annuaire initial est lu via le Gateway, sans télécharger de messages."""
+    """Annuaire complet via l’API REST paginée, sans dépendre des chunks Gateway."""
     tracking=await tracking_start()
     await db.statistics_meta.update_one({'_id':stats.guild_id()},{'$set':{'membership_syncing':True}})
     guild=client.get_guild(int(stats.guild_id()))
     if guild is None:
         raise RuntimeError('Serveur Discord indisponible pour le comptage des membres')
     scan_started=stats.now()
-    members=await guild.chunk(cache=True)
+    # Finish every REST page before reconciling absences: a partial scan is not a departure.
+    members=[member async for member in guild.fetch_members(limit=None)]
     ids=set()
     for member in members:
         if member.bot:
@@ -154,16 +158,27 @@ async def synchronize_roster(client):
 
 
 async def snapshot_attempt(client, session):
-    global _snapshot_session,_retry_after
+    global _snapshot_session,_retry_after,_snapshot_failures
     try:
         await asyncio.wait_for(synchronize_roster(client),timeout=180)
         _snapshot_session=session
         _retry_after=None
-    except Exception:
-        _retry_after=stats.now()+timedelta(minutes=1)
-        logger.exception('Annuaire statistique indisponible ; nouvelle tentative dans une minute')
+        _snapshot_failures=0
+    except Exception as error:
+        _snapshot_failures+=1
+        minutes=min(15,2**min(_snapshot_failures-1,4))
+        _retry_after=stats.now()+timedelta(minutes=minutes)
+        if isinstance(error,TimeoutError):
+            detail='Le chargement complet des membres a dépassé le délai autorisé. Nouvelle tentative automatique.'
+            logger.warning('Annuaire REST Discord : délai dépassé ; nouvelle tentative dans %s minute(s)',minutes)
+        elif isinstance(error,(discord.Forbidden,discord.ClientException)):
+            detail='Accès à l’annuaire refusé. Vérifiez SERVER MEMBERS INTENT dans le portail développeur Discord et Intents.members dans le bot.'
+            logger.warning('Annuaire REST Discord refusé (%s) ; vérifier les intents membres ; nouvelle tentative dans %s minute(s)',type(error).__name__,minutes)
+        else:
+            detail='Annuaire des membres temporairement indisponible'
+            logger.exception('Annuaire statistique indisponible ; nouvelle tentative dans %s minute(s)',minutes)
         try:
-            await db.statistics_meta.update_one({'_id':stats.guild_id()},{'$set':{'membership_error':'Annuaire des membres temporairement indisponible','membership_syncing':False}})
+            await db.statistics_meta.update_one({'_id':stats.guild_id()},{'$set':{'membership_error':detail,'membership_syncing':False}})
         except Exception:
             logger.warning('État de l’annuaire impossible à enregistrer')
 
@@ -178,12 +193,14 @@ def ensure_snapshot(client, session):
 
 
 async def stop():
-    global _snapshot_task,_snapshot_session
+    global _snapshot_task,_snapshot_session,_retry_after,_snapshot_failures
     if _snapshot_task:
         _snapshot_task.cancel()
         await asyncio.gather(_snapshot_task,return_exceptions=True)
     _snapshot_task=None
     _snapshot_session=None
+    _retry_after=None
+    _snapshot_failures=0
 
 
 async def process_observations(limit=200):

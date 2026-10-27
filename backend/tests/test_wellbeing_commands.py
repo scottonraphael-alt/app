@@ -160,3 +160,50 @@ def test_pause_turn_preserves_full_tool_content():
         assert await ai.research(NS(messages=messages),'Trouble',ai.INFO_DOMAINS)
         assert messages.create.call_args.kwargs['messages'][1]=={'role':'assistant','content':[tool]}
     h.run(check())
+
+
+def test_invalid_contact_does_not_discard_other_valid_grounded_results(monkeypatch,caplog):
+    class Client:
+        def __init__(self,**kw):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+    monkeypatch.setattr(ai,'AsyncAnthropic',Client)
+    url='https://hospital.example.jp/support'
+    good={'nom':'Centre Tokyo','adresse':'1 Rue Exemple, Tokyo, Japon','telephone':'03 1234 5678','source_url':url,'description':'Additional description'}
+    bad={'name':'PRIVATE TEST VALUE','address':None,'phone':['03 1234 5678'],'url':url}
+    monkeypatch.setattr(ai,'research',AsyncMock(return_value=[{'url':url,'title':'Centre Tokyo','quotes':['Centre Tokyo, 1 Rue Exemple, Tokyo, Japon','Téléphone : 03 1234 5678']}]))
+    monkeypatch.setattr(ai,'extract',AsyncMock(return_value={'items':[bad,good]}))
+    results=h.run(ai.structures('Tokyo','Japon'))
+    assert len(results)==1 and results[0].name=='Centre Tokyo'
+    assert 'contact rejected' in caplog.text and 'PRIVATE TEST VALUE' not in caplog.text
+
+
+def test_all_invalid_contacts_produce_specific_safe_error(caplog):
+    with pytest.raises(HTTPException) as error:ai.contact_candidates({'items':[{'name':'PRIVATE TEST VALUE','address':None}]})
+    assert 'champs manquants ou invalides' in error.value.detail
+    assert 'PRIVATE TEST VALUE' not in caplog.text
+
+
+def test_result_delivery_failure_identifies_stage_and_reference(monkeypatch):
+    monkeypatch.setattr(service,'log_request',AsyncMock());monkeypatch.setattr(service,'reserve_ai',AsyncMock())
+    monkeypatch.setattr(ai,'structures',AsyncMock(return_value=[]))
+    async def check():
+        modal=ui.RequestModal(12,int(config.DISCORD_GUILD_ID),'ville');modal.query._value='Tokyo';modal.country._value='Japon'
+        it=interaction();it.edit_original_response.side_effect=[RuntimeError('PRIVATE TEST VALUE'),None]
+        await modal.on_submit(it)
+        content=str(it.edit_original_response.call_args.kwargs['view'].to_components())
+        assert str(it.id) in content and 'delivery' in content and '3114' in content
+        assert 'PRIVATE TEST VALUE' not in content
+    h.run(check())
+
+
+def test_unicode_and_markdown_contact_cards_fit_v2_limit():
+    def content_units(value):
+        if isinstance(value,dict):return sum(len(item.encode('utf-16-le'))//2 if key=='content' else content_units(item) for key,item in value.items())
+        if isinstance(value,list):return sum(content_units(item) for item in value)
+        return 0
+    async def check():
+        item=ai.Structure(name='😀_'*80,address='😀_'*125,phone='0123456789',url='https://hospital.example.jp/')
+        view=ui.local_card('Tokyo','Japon',[item]*5)
+        assert content_units(view.to_components())<4000
+    h.run(check())

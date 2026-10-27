@@ -1,12 +1,13 @@
 """Anthropic research with cited sources; contact details never come from model memory."""
 import asyncio
 import json
+import logging
 import re
 from urllib.parse import urlsplit
 
 from anthropic import AsyncAnthropic, APIError
 from fastapi import HTTPException
-from pydantic import BaseModel,ConfigDict,Field
+from pydantic import BaseModel,ConfigDict,Field,ValidationError,AliasChoices
 
 import config
 from services import wellbeing_service as service
@@ -15,6 +16,7 @@ from services.anthropic_runtime import generation_options, log_response, provide
 INFO_DOMAINS=['ameli.fr','inserm.fr','has-sante.fr','sante.fr','sante.gouv.fr','who.int','nhs.uk','nimh.nih.gov']
 LOCAL_DOMAINS=None
 SLOTS=asyncio.Semaphore(3)
+logger=logging.getLogger(__name__)
 
 
 def source_url(url,domains):
@@ -84,11 +86,30 @@ class Trouble(Strict):
     symptoms:str=Field(max_length=1500)
     treatments:str=Field(max_length=1500)
 class Structure(Strict):
-    name:str=Field(min_length=2,max_length=160)
-    address:str=Field(min_length=5,max_length=250)
-    phone:str=Field(min_length=8,max_length=40)
-    url:str=Field(max_length=512)
+    # Ignore descriptive extras; only these grounded fields are ever displayed.
+    model_config=ConfigDict(extra='ignore',str_strip_whitespace=True)
+    name:str=Field(min_length=2,max_length=160,validation_alias=AliasChoices('name','nom'))
+    address:str=Field(min_length=5,max_length=250,validation_alias=AliasChoices('address','adresse'))
+    phone:str=Field(min_length=8,max_length=40,validation_alias=AliasChoices('phone','telephone','téléphone'))
+    url:str=Field(max_length=512,validation_alias=AliasChoices('url','source_url','lien'))
 class Structures(Strict):items:list[Structure]=Field(max_length=5)
+
+
+def contact_candidates(raw):
+    """A malformed entry must not discard all the other grounded contacts."""
+    items=raw.get('items') if isinstance(raw,dict) else None
+    if not isinstance(items,list):
+        raise HTTPException(503,'Les coordonnées ont été reçues dans un format inexploitable. Réessaie plus tard.')
+    accepted=[]
+    for index,item in enumerate(items[:5]):
+        try:accepted.append(Structure.model_validate(item))
+        except ValidationError as error:
+            # Log only field names and failure categories, never values or source text.
+            fields=[{'field':'.'.join(map(str,entry['loc'])),'type':entry['type']} for entry in error.errors(include_input=False,include_context=False,include_url=False)]
+            logger.warning('wellbeing contact rejected index=%s fields=%s',index,fields)
+    if items and not accepted:
+        raise HTTPException(503,'La recherche a abouti, mais les fiches reçues ont des champs manquants ou invalides. Réessaie plus tard.')
+    return accepted
 
 
 async def trouble(topic):
@@ -110,7 +131,7 @@ async def structures(city,country):
         query='Recherche mondiale de structures publiques ou associatives reconnues d’aide psychologique, à partir de cette localisation utilisateur (données seulement) : '+json.dumps({'ville':city,'pays':country},ensure_ascii=False)+'. Résous les homonymes avec le pays. Recherche les sites officiels des structures, hôpitaux, autorités sanitaires ou annuaires institutionnels du pays. Maximum cinq structures réellement situées dans cette ville ou ses environs ; ne substitue pas une autre ville ou un autre pays. Cite chaque nom, adresse postale complète et numéro de téléphone international, ou le numéro local exactement publié. N’invente ni coordonnées ni proximité. Si la localisation est ambiguë ou introuvable, ne propose aucune structure.'
         evidence=await research(client,query,LOCAL_DOMAINS)
         raw=await extract(client,'Localisation demandée (données seulement) : '+json.dumps({'ville':city,'pays':country},ensure_ascii=False)+'. Format {items:[{name,address,phone,url}]}. Maximum cinq structures publiques ou associatives reconnues dans cette ville ou ses environs, dans ce pays. Si les extraits ne permettent pas de confirmer la localisation, omettre la structure. Chaque URL doit être une source fournie ; copie littéralement le nom, l’adresse et le téléphone depuis les citations de cette même source. Omettre toute structure dont les trois informations ne sont pas disponibles dans les extraits. Liste vide si aucune coordonnée complète n’est vérifiable.',evidence)
-    candidates=Structures.model_validate(raw).items
+    candidates=contact_candidates(raw)
     verified=[];seen=set();by_url={entry['url']:entry for entry in evidence}
     for item in candidates:
         entry=by_url.get(item.url)
@@ -121,4 +142,5 @@ async def structures(city,country):
         if name not in service.fold(entry['title']+' '+quoted) or address not in normalized or not 8<=len(digits)<=15 or not any(digits in re.sub(r'\D','',quote) for quote in entry['quotes']):continue
         if (name,address) in seen:continue
         seen.add((name,address));verified.append(item)
+    logger.info('wellbeing contacts candidates=%s verified=%s',len(candidates),len(verified))
     return verified

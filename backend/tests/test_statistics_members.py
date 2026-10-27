@@ -12,8 +12,10 @@ def person(id,joined,bot=False): return Obj(id=int(id),joined_at=stamp(joined) i
 class Client:
     def __init__(self,people): self.people=people
     def get_guild(self,id):
-        async def chunk(cache=True): return self.people
-        return Obj(chunk=chunk)
+        async def fetch_members(*,limit):
+            assert limit is None
+            for member in self.people:yield member
+        return Obj(fetch_members=fetch_members)
 @pytest.fixture
 def clock(monkeypatch):
     h.reset_db(); h.reset_discord()
@@ -67,17 +69,17 @@ def test_reconciliation_preserves_unknown_interval(clock):
     current=metrics('2026-10-09','2026-10-10')
     assert current['population']==1 and current['departures']==0
 
-def test_departure_during_chunk_wins_over_snapshot(clock):
+def test_departure_during_rest_scan_wins_over_snapshot(clock):
     a=person(1,'2026-09-01T00:00:00')
     class RacingClient:
         def get_guild(self,id):
-            async def chunk(cache=True):
+            async def fetch_members(*,limit):
                 from datetime import timedelta
                 original=stats.now; stats.now=lambda:original()+timedelta(seconds=1)
                 try: await members.record_remove(Obj(guild_id=int(h.GUILD_ID),user=a))
                 finally: stats.now=original
-                return [a]
-            return Obj(chunk=chunk)
+                yield a
+            return Obj(fetch_members=fetch_members)
     h.run(members.synchronize_roster(RacingClient()))
     assert h.run(h.db.statistics_members.find_one({'user_id':'1'}))['is_present'] is False
 
@@ -192,3 +194,36 @@ def test_gateway_callbacks_forward_join_and_raw_departure(clock,monkeypatch):
     h.run(moderation_bot.on_member_join(p))
     h.run(moderation_bot.on_raw_member_remove(Obj(guild_id=int(h.GUILD_ID),user=p)))
     assert calls==[('join',1),('leave',1)]
+
+
+def test_incomplete_rest_scan_never_marks_existing_members_as_departed(clock):
+    a=person(1,'2026-09-01T00:00:00');b=person(2,'2026-09-01T00:00:00');snapshot(a,b)
+    class PartialClient:
+        def get_guild(self,id):
+            async def fetch_members(*,limit):
+                yield a
+                raise TimeoutError()
+            return Obj(fetch_members=fetch_members)
+    clock('2026-10-03T12:00:00')
+    h.run(members.snapshot_attempt(PartialClient(),'partial-session'))
+    assert h.run(h.db.statistics_members.count_documents({'is_present':True}))==2
+    meta=h.run(h.db.statistics_meta.find_one({'_id':h.GUILD_ID}))
+    assert meta['membership_error'] and not meta['membership_syncing']
+
+
+def test_snapshot_backoff_and_timeout_log_do_not_repeat_tracebacks(clock,monkeypatch,caplog):
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(members,'_snapshot_failures',0)
+    monkeypatch.setattr(members,'synchronize_roster',AsyncMock(side_effect=TimeoutError()))
+    async def check():
+        from datetime import timedelta
+        await members.snapshot_attempt(None,'session')
+        assert members._retry_after==stats.now()+timedelta(minutes=1)
+        await members.snapshot_attempt(None,'session')
+        assert members._retry_after==stats.now()+timedelta(minutes=2)
+        assert all(record.exc_info is None for record in caplog.records)
+        members.synchronize_roster.side_effect=None
+        members.synchronize_roster.return_value=None
+        await members.snapshot_attempt(None,'session')
+        assert members._retry_after is None and members._snapshot_failures==0
+    h.run(check())

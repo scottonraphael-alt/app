@@ -212,3 +212,9 @@ Vérification ciblée des configurations graphiques réelles : depuis `frontend`
 - Build frontend de production réussi.
 - Les dix anciens modules visant une preview externe ou un checkout `/app` ne sont pas
   exécutés contre un déploiement tiers. Cette vérification ne vaut pas test en production.
+
+### Synchronisation de l’annuaire Discord
+
+L’annuaire est chargé par l’API REST paginée (`fetch_members(limit=None)`), sans attendre les chunks du Gateway. Toutes les pages doivent être reçues avant de rapprocher les absences ; un téléchargement interrompu ne transforme pas les membres absents d’une page en départs. Les événements d’arrivée/départ reçus pendant ce téléchargement restent prioritaires.
+
+`SERVER MEMBERS INTENT` doit être activé dans le portail développeur Discord, en plus de `Intents.members` côté bot. Les permissions du rôle sur le serveur ne remplacent pas cet intent. Après un échec, les tentatives sont espacées progressivement de 1 à 15 minutes. Un dépassement du délai est signalé sans répéter une longue trace d’annulation ; les statistiques d’activité continuent de fonctionner.

@@ -38,3 +38,9 @@ Pour les familles compatibles, les réponses JSON évitent la réflexion préala
 Les résumés envoient un signal de progression toutes les dix secondes même si aucun texte n’est encore arrivé, et conservent la synthèse précédente en cas d’échec. Le site attend une confirmation d’enregistrement explicite. Les diagnostics techniques enregistrent le modèle, la raison d’arrêt, les tokens de sortie et la référence de requête, sans enregistrer les prompts ni les réponses privées.
 
 Références : [capacités et limites des modèles](https://platform.claude.com/docs/en/models/overview), [réflexion et budget de sortie](https://platform.claude.com/docs/en/build-with-claude/thinking).
+
+### Validation des coordonnées et diagnostic Discord
+
+Les fiches sont validées séparément : une fiche invalide n’empêche plus l’affichage des autres fiches vérifiées. Les noms de champs français/anglais sont acceptés et les descriptions supplémentaires sont ignorées ; les contrôles sur les coordonnées citées restent obligatoires. Les messages respectent la limite Discord V2 même lorsque les noms ou adresses contiennent des emojis ou du Markdown.
+
+En cas d’échec, le message privé indique une référence et l’étape concernée (`ai`, `render`, `delivery`, etc.). Le log `wellbeing request failed` reprend cette référence, le type d’exception et, pour Discord, le statut et le code de l’erreur. Les erreurs de validation consignent les champs concernés sans leur valeur. Une panne d’enregistrement du statut technique ne remplace plus une réponse déjà affichée par un message d’erreur.

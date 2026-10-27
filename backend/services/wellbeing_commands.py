@@ -103,41 +103,66 @@ class RequestModal(discord.ui.Modal):
         if not await permitted(interaction,self.actor_id,self.guild_id):return
         await interaction.response.defer(ephemeral=True,thinking=True)
         identifier=str(interaction.id)
+        phase="input"
+        delivered=False
         try:
             query=self.query.value.strip()
             country=self.country.value.strip() if self.kind=='ville' else ''
             if not query or (self.kind=='ville' and not country):raise HTTPException(422,'Les champs sont obligatoires.')
             raw=self.query.value if self.kind=='trouble' else f'Ville : {self.query.value}\nPays : {self.country.value}'
+            phase="logging"
             await service.log_request(interaction.guild,interaction.user,self.kind,raw,identifier)
+            phase="rate_limit"
             await service.reserve_ai(interaction.guild_id,interaction.user.id)
+            phase="ai"
             if self.kind=='trouble':
                 result,sources=await asyncio.wait_for(ai.trouble(query),timeout=210)
                 for index,(title,key) in enumerate([('📖 Présentation du trouble','presentation'),('🔎 Les symptômes','symptoms'),('🌱 Les traitements et prises en charge','treatments')]):
                     body=f'### {clean(result.name,120)}\n{service.clip(getattr(result,key),1500)}\n\n-# Information générale ; elle ne permet pas de poser un diagnostic. Un professionnel peut évaluer ta situation.'
                     # Source URLs have already been restricted to institutional domains.
                     body+='\n'+ '\n'.join(f'[Source {i+1}]({source["url"]})' for i,source in enumerate(sources) if len(source['url'])<=512)
+                    phase="render"
                     view=card(title,body)
+                    phase="delivery"
                     if index==0:await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
                     else:await interaction.followup.send(view=view,ephemeral=True,allowed_mentions=NO_MENTIONS)
             else:
                 results=await asyncio.wait_for(ai.structures(query,country),timeout=210)
-                await interaction.edit_original_response(view=local_card(query,country,results),allowed_mentions=NO_MENTIONS)
+                phase="render"
+                view=local_card(query,country,results)
+                phase="delivery"
+                await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
+            delivered=True
+            phase='save'
             await service.db.wellbeing_requests.update_one({'_id':identifier},{'$set':{'status':'completed'}})
         except Exception as error:
-            logger.warning('Wellbeing request failed: %s',type(error).__name__)
-            detail=error.detail if isinstance(error,HTTPException) else 'La recherche n’a pas pu être vérifiée. Réessaie plus tard ou précise davantage la ville et le pays.'
-            await interaction.edit_original_response(view=card('⚠️ Recherche indisponible',clean(detail,1100),crisis=self.kind=='ville'),allowed_mentions=NO_MENTIONS)
-            await service.db.wellbeing_requests.update_one({'_id':identifier},{'$set':{'status':'failed'}})
+            logger.warning('wellbeing request failed reference=%s kind=%s phase=%s type=%s status=%s discord_code=%s',
+                identifier,self.kind,phase,type(error).__name__,getattr(error,'status',getattr(error,'status_code',None)),getattr(error,'code',None))
+            if delivered:return  # A bookkeeping failure must not replace an already delivered answer.
+            if isinstance(error,HTTPException):detail=error.detail
+            elif isinstance(error,TimeoutError):detail='La recherche a dépassé son délai. Réessaie plus tard.'
+            elif phase=='delivery':detail='Discord n’a pas pu afficher les résultats. Réessaie plus tard.'
+            elif phase=='render':detail='Les résultats ont été reçus, mais leur mise en forme a échoué.'
+            else:detail='La réponse IA n’a pas pu être traitée. Réessaie plus tard.'
+            body=clean(detail,1100)+f'\n\n-# Référence : {identifier} · Étape : {phase}'
+            await interaction.edit_original_response(view=card('⚠️ Recherche indisponible',body,crisis=self.kind=='ville'),allowed_mentions=NO_MENTIONS)
+            try:await service.db.wellbeing_requests.update_one({'_id':identifier},{'$set':{'status':'failed','error_phase':phase,'error_type':type(error).__name__}})
+            except Exception:logger.warning('wellbeing failure state not saved reference=%s',identifier)
 
 
 def local_card(city,country,results):
-    parts=[text('## 📍 Des structures pour t’accompagner'),text(f'### {clean(city,100)} · {clean(country,60)}')]
+    header=['## 📍 Des structures pour t’accompagner',f'### {clean(city,100)} · {clean(country,60)}']
+    footer='-# Coordonnées issues de sources consultées par l’IA ; vérifie les horaires et les conditions d’accueil avant de te déplacer. Cette liste n’est pas exhaustive.'
+    parts=[text(value) for value in header]
+    units=lambda value:len(value.encode('utf-16-le'))//2
+    used=sum(units(value) for value in header+[HELPLINE,footer])
     if not results:parts.append(text('Aucune structure avec des coordonnées complètes n’a pu être vérifiée pour cette recherche. Précise la région ou une grande ville proche, ou consulte le service de santé public local.'))
     for item in results[:5]:
-        parts.extend([discord.ui.Separator(),discord.ui.Section(
-            text(f'### {clean(item.name,160)}\n📍 {clean(item.address,250)}\n☎️ {clean(item.phone,40)}'),
-            accessory=discord.ui.Button(label='Source et coordonnées',url=item.url))])
-    parts.extend([discord.ui.Separator(),text(HELPLINE),text('-# Coordonnées issues de sources consultées par l’IA ; vérifie les horaires et les conditions d’accueil avant de te déplacer. Cette liste n’est pas exhaustive.')])
+        detail=f'### {clean(item.name,160)}\n📍 {clean(item.address,250)}\n☎️ {clean(item.phone,40)}'
+        if used+units(detail)>3900:break
+        used+=units(detail)
+        parts.extend([discord.ui.Separator(),discord.ui.Section(text(detail),accessory=discord.ui.Button(label='Source et coordonnées',url=item.url))])
+    parts.extend([discord.ui.Separator(),text(HELPLINE),text(footer)])
     view=discord.ui.LayoutView(timeout=600);view.add_item(discord.ui.Container(*parts,accent_colour=0x78618C));return view
 
 
