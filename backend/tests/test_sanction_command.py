@@ -217,6 +217,7 @@ def test_registration_single_guild_upsert_preserves_other_commands(monkeypatch):
     async def check():
         client=discord.Client(intents=discord.Intents.none());client._connection.application_id=123;await ui.install(client)
         assert captured[0][0].endswith(f'/applications/123/guilds/{h.GUILD_ID}/commands') and captured[0][1]['json']['name']=='sanction'
+        assert [entry[1]['json']['name'] for entry in captured]==['sanction','infos-troubles','crise']
         assert client.sanction_tree.get_command('sanction',guild=discord.Object(id=int(h.GUILD_ID)))
         await client.close()
     h.run(check())

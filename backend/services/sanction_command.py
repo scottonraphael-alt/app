@@ -343,7 +343,7 @@ async def sanction(interaction:discord.Interaction):
 
 
 async def install(client):
-    """Upsert this one guild command; never bulk-sync/delete another application's commands."""
+    """Upsert the guild commands individually; never bulk-sync/delete another application's commands."""
     if not config.DISCORD_GUILD_ID:return
     tree=getattr(client,'sanction_tree',None)
     if tree is None:
@@ -352,10 +352,14 @@ async def install(client):
         command=app_commands.Command(name='sanction',description='Préparer une sanction privée et consulter le casier d’un membre',callback=sanction)
         command.guild_only=True
         tree.add_command(command,guild=discord.Object(id=int(config.DISCORD_GUILD_ID)))
-    command=tree.get_command('sanction',guild=discord.Object(id=int(config.DISCORD_GUILD_ID)))
+    from services.wellbeing_commands import register
+    guild=discord.Object(id=int(config.DISCORD_GUILD_ID))
+    register(tree,guild)
     async with httpx.AsyncClient(timeout=15) as http:
-        response=await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{config.DISCORD_GUILD_ID}/commands',
-            headers={'Authorization':f'Bot {config.DISCORD_BOT_TOKEN}'},json=command.to_dict(tree))
-        if response.is_error:raise RuntimeError(f'Enregistrement /sanction refusé par Discord (HTTP {response.status_code}).')
+        for name in ('sanction','infos-troubles','crise'):
+            command=tree.get_command(name,guild=guild)
+            response=await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{config.DISCORD_GUILD_ID}/commands',
+                headers={'Authorization':f'Bot {config.DISCORD_BOT_TOKEN}'},json=command.to_dict(tree))
+            if response.is_error:raise RuntimeError(f'Enregistrement /{name} refusé par Discord (HTTP {response.status_code}).')
     client.sanction_registered=True
-    logger.info('Commande /sanction enregistrée pour le serveur configuré.')
+    logger.info('Commandes /sanction, /infos-troubles et /crise enregistrées.')
