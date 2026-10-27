@@ -26,7 +26,9 @@ export function Modal({
   title,
   children,
   onClose,
-  busy = false
+  busy = false,
+  eyebrow = 'ATELIER DES PROJETS',
+  className = ''
 }) {
   const root = useRef(null);
   const close = useRef(onClose);
@@ -60,7 +62,7 @@ export function Modal({
         first?.focus();
       }
     }
-  }}><div className="pj-modal" role="dialog" aria-modal="true" aria-labelledby="pj-modal-title" ref={root}><header><div><p className="cz-eyebrow">ATELIER DES PROJETS</p><h2 id="pj-modal-title">{title}</h2></div><button className="pj-icon" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
+  }}><div className={`pj-modal ${className}`} role="dialog" aria-modal="true" aria-labelledby="pj-modal-title" ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id="pj-modal-title">{title}</h2></div><button className="pj-icon" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
 }
 export function Avatar({
   member

@@ -16,11 +16,12 @@ DATE_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 MIN_YEAR, MAX_YEAR = 2000, 2100  # évite les dépassements de datetime sur des saisies absurdes
 
 # Catégories du journal (clés acceptées par `categories`) → filtre sur `event_type`.
-# « autres » = tout ce qui n'entre dans aucune des quatre autres catégories.
+# « autres » = tout ce qui n'entre dans aucune des catégories nommées.
 CATEGORY_CLAUSES = {
     "connexions": {"event_type": {"$regex": r"^auth\.(?:login\.|session\.|logout$)"}},
     "acces_refuses": {"event_type": {"$in": ["authz.forbidden", "auth.login.failure"]}},
     "casiers": {"event_type": {"$regex": r"^casier\."}},
+    "annonces": {"event_type": {"$regex": r"^announcement\."}},
     "projets": {"event_type": {"$regex": r"^project\."}},
     "tickets": {"event_type": {"$regex": r"^ticket\."}},
 }
@@ -30,6 +31,7 @@ CATEGORY_KEYS = (*CATEGORY_CLAUSES, "autres")
 # « toutes les valeurs texte d'un sous-document » sans $expr, que mongomock ne gère pas bien).
 # Source : routers/animateur.py, routers/auth.py, services/auth_service.py et services/casier_audit.py.
 SEARCH_DETAIL_FIELDS = (
+    "announcement_id", "publication_id", "asset_id", "channel_id",
     "ticket_id",
     "helper_id",
     "previous_helper_id",

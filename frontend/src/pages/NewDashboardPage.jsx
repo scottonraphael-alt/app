@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   BarChart3,
+  Megaphone,
   Archive,
   CalendarDays,
   FileText,
@@ -249,6 +250,12 @@ const pills = [
             className="nd-responsable-actions"
             aria-label="Outils du responsable"
           >
+            <Link to="/responsable/annonces" className="nd-responsable-link">
+              <Megaphone size={18} aria-hidden="true" />
+              <span>Composer une annonce Discord</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+
             <Link to="/responsable/statistiques" className="nd-responsable-link">
               <BarChart3 size={18} aria-hidden="true" />
               <span>Statistiques du serveur</span>

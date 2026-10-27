@@ -1,3 +1,4 @@
+import { ANNOUNCEMENT_AUDIT_LABELS, announcementLogSummary } from '../components/announcements/auditLabels';
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -49,6 +50,7 @@ const CATEGORIES = [
     hint: "Accès refusés et connexions échouées",
   },
   { key: "casiers", label: "Casiers", hint: "Modifications de casiers" },
+  { key: "annonces", label: "Annonces", hint: "Composition, fichiers, publications et programmations Discord" },
   { key: "projets", label: "Projets", hint: "Projets, tâches et ressources" },
   { key: "tickets", label: "Tickets", hint: "Consultations, recherches et actions manuelles sur les suivis" },
   { key: "autres", label: "Autres", hint: "Tous les autres événements" },
@@ -98,6 +100,7 @@ const TICKET_EVENT_LABELS = {
 };
 
 const EVENT_LABELS = {
+  ...ANNOUNCEMENT_AUDIT_LABELS,
   ...PROJECT_AUDIT_LABELS,
   "auth.login.started": "Connexion démarrée",
   "auth.login.success": "Connexion réussie",
@@ -390,6 +393,11 @@ function describeEvent(log) {
     return { parts: [actor, " · ", label, ...forMember], extras };
   }
 
+  if (type.startsWith("announcement.")) {
+    const description = announcementLogSummary(type,d);
+    return {parts:[actor," · ",description.text],extras:description.extras};
+  }
+
   if (type.startsWith("project.")) {
     const description = projectLogSummary(type,d);
     if (description) return {parts:[actor," ",description.text],extras:description.extras};
@@ -592,6 +600,7 @@ function categoryLabel(type) {
   if (isAlertEvent(type)) return "Accès refusés";
   if (/^auth\.(login\.|session\.|logout$)/.test(type)) return "Connexions";
   if (/^casier\./.test(type)) return "Casiers";
+  if (/^announcement\./.test(type)) return "Annonces";
   if (/^project\./.test(type)) return "Projets";
   if (/^ticket\./.test(type)) return "Tickets";
 

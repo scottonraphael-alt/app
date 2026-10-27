@@ -6,12 +6,13 @@ from starlette.middleware.cors import CORSMiddleware
 import logging
 from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
-from routers import server_statistics, admin, auth, members, profiles, resources, staff, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives
+from routers import announcements, server_statistics, admin, auth, members, profiles, resources, staff, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives
 from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
 from services.ticket_reminders import run_ticket_reminders
 from services.project_reminders import run_project_reminders
+from services.announcement_publishing import run_announcements
 from services.ticket_avatars import run_ticket_avatar_cache
 from services.moderation_bot import start_moderation_bot, stop_moderation_bot
 
@@ -71,6 +72,7 @@ _ticket_refresh_task = None
 _ticket_import_task = None
 _ticket_reminders_task = None
 _project_reminders_task = None
+_announcements_task = None
 _ticket_avatars_task = None
 @app.get("/api/")
 async def root() -> dict[str, str]:
@@ -92,6 +94,7 @@ app.include_router(animateur.tasks_router, prefix="/api")
 app.include_router(animateur.resources_router, prefix="/api")
 app.include_router(animateur.members_router, prefix="/api")
 app.include_router(responsable.router, prefix="/api")
+app.include_router(announcements.router, prefix="/api")
 app.include_router(server_statistics.router, prefix="/api")
 app.include_router(casier.router, prefix="/api")
 app.include_router(channel_archives.router, prefix="/api")
@@ -118,7 +121,7 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup() -> None:
-    global _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task
+    global _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task, _announcements_task
     await initialize_indexes()
     # Mise en cohérence des dossiers archivés avant cette règle.
     await db.tickets.update_many(
@@ -142,6 +145,7 @@ async def startup() -> None:
     _ticket_avatars_task = asyncio.create_task(run_ticket_avatar_cache())
     _ticket_reminders_task = asyncio.create_task(run_ticket_reminders())
     _project_reminders_task = asyncio.create_task(run_project_reminders())
+    _announcements_task = asyncio.create_task(run_announcements())
     _ticket_import_task = asyncio.create_task(run_ticket_import())
     _ticket_refresh_task = asyncio.create_task(run_ticket_refresh())
     _bot_task = asyncio.create_task(start_moderation_bot())
@@ -154,7 +158,7 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    ticket_tasks = [task for task in (_ticket_import_task, _ticket_refresh_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task) if task]
+    ticket_tasks = [task for task in (_ticket_import_task, _ticket_refresh_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task, _announcements_task) if task]
     for task in ticket_tasks:
         task.cancel()
     await asyncio.gather(*ticket_tasks, return_exceptions=True)

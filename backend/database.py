@@ -117,6 +117,12 @@ async def initialize_indexes() -> None:
     await db.resources.create_index("id", unique=True)
     await db.resources.create_index([("is_deleted", 1), ("created_at", -1)])
 
+    await _create_index_or_log(db.announcement_drafts, "id", unique=True)
+    await _create_index_or_log(db.announcement_drafts, [("is_template", 1), ("updated_at", -1)])
+    await _create_index_or_log(db.announcement_assets, "id", unique=True)
+    await _create_index_or_log(db.announcement_assets, "created_at")
+    await _create_index_or_log(db.announcement_publications, [("status", 1), ("scheduled_at", 1)])
+    await _create_index_or_log(db.announcement_publications, [("draft_id", 1), ("created_at", -1)])
     await _create_index_or_log(db.project_reminder_runs, "created_at")
     await _create_index_or_log(db.project_task_comments, "project_id")
     await _create_index_or_log(db.project_task_comments, "id", unique=True)
