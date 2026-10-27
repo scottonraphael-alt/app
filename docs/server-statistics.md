@@ -57,12 +57,33 @@ La page recharge les agrégats toutes les minutes ; signal de connexion toutes l
 - Les noms ne constituent pas une synchronisation complète de l'annuaire Discord.
 - Une réponse dont l'auteur n'est pas fourni ne crée pas de lien d'interaction supposé.
 
-## Bloc 2 : graphiques Apache ECharts (à réaliser)
+## Bloc 2 : graphiques Apache ECharts (livré)
 
-Courbes heure/jour/semaine/mois/année, comparaison de périodes de même durée (journée en
-cours comparée jusqu'à la même heure), heatmap jours/heures, salons/catégories, membres,
-distribution des longueurs. Graphiques cliquables, filtres communs, transitions discrètes,
-mobile, tableaux accessibles et couverture de collecte. Une seule bibliothèque principale.
+- Apache ECharts 6.1.0, imports des seuls graphiques/composants utilisés, rendu SVG.
+- Courbe avec zoom glissant et regroupement heure/jour/semaine/mois/année ; semaines
+  commençant le lundi. Les heures répétées d'automne gardent un décalage UTC distinct.
+- Heatmap lundi–dimanche × 24 heures, profil horaire, distribution des quatre tranches de
+  longueur, moyenne en caractères et classements membres/salons/catégories.
+- Filtres API supplémentaires : `channel_id`, `member_id`, `category_id`, `weekday` (0=lundi),
+  `hour`, `granularity`, `compare`. Les clics filtrent tous les graphiques et indicateurs.
+  Les fils restent regroupés dans leur salon parent. Version tableau avec boutons clavier
+  pour chaque interaction, graphiques adaptatifs et respect du mouvement réduit.
+- Comparaison avec les N jours calendaires précédents, mêmes filtres. Lorsque la période
+  inclut aujourd'hui, les variations s'arrêtent à la dernière heure **complète** sur les deux
+  périodes : les agrégats horaires ne permettent pas une comparaison à la minute fiable.
+  Les totaux de la page incluent l'heure en cours ; la différence de fenêtre est indiquée.
+- Les pourcentages demandent au moins 98 % de temps de connexion couvert sur chaque
+  fenêtre et aucune erreur de collecte connue affectant ces données. Base zéro : aucun
+  pourcentage infini. Une base insuffisante ne dessine pas une fausse courbe précédente.
+- Les courbes des périodes précédentes sont alignées par jour calendaire, sans comparer
+  artificiellement les heures manquantes/répétées des changements d'heure. En vue horaire,
+  la comparaison est limitée aux indicateurs et n'ajoute pas de seconde courbe ambiguë.
+- Couverture reconstituée à partir des connexions (fusion des fenêtres qui se chevauchent) ;
+  arrêts sans fin confirmée arrêtés au dernier signal. Les données sans connexion observée
+  apparaissent comme manquantes ; les contributions effectivement reçues restent visibles.
+  Cette mesure décrit la connexion, pas une garantie de livraison de chaque événement.
+- Pas de bibliothèque distante/CDN, aucun contenu des messages transmis à ECharts.
+
 
 ## Bloc 3 : membres et rétention (à réaliser)
 
@@ -84,3 +105,6 @@ l'interaction et une couverture suffisante : aucune conversation supposée entre
 Tests ciblés par bloc, sans screenshots. Commit prêt à push après chaque bloc. Test global
 uniquement après le bloc 4. Ne pas poursuivre automatiquement le bloc suivant avant le feu
 vert de l'utilisateur. Les données du bloc 1 continuent à s'accumuler entre les livraisons.
+
+Vérification ciblée des configurations graphiques réelles : depuis `frontend`,
+`npm run test:statistics-charts` (SVG en mémoire, sans navigateur ni screenshot).
