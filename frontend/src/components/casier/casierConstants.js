@@ -363,6 +363,27 @@ export const AI_FLAGS_PAGE_SIZE = 30;
 
 // Réutilisé par ResponsableAuthLogsPage (libellés, groupe « Casiers » du filtre).
 export const CASIER_EVENT_LABELS = {
+  "casier.command.opened": "Commande /sanction ouverte",
+  "casier.command.member.selected": "Membre sélectionné pour une sanction",
+  "casier.command.member.changed": "Sélection du membre changée",
+  "casier.command.type.selected": "Type de sanction sélectionné",
+  "casier.command.modal.submitted": "Sanction préparée dans Discord",
+  "casier.command.evidence.uploaded": "Justificatif de sanction enregistré sur Iris",
+  "casier.command.confirmed": "Application de sanction confirmée",
+  "casier.command.cancelled": "Parcours de sanction annulé",
+  "casier.command.expired": "Préparation de sanction expirée",
+  "casier.command.view.expired": "Parcours privé de sanction expiré",
+  "casier.command.denied": "Commande de sanction refusée",
+  "casier.command.failed": "Exécution de sanction interrompue ou à vérifier",
+  "casier.command.discord.applied": "Action de modération confirmée par Discord",
+  "casier.command.reconciled": "Bannissement confirmé après vérification",
+  "casier.command.ban.released": "Fin de bannissement temporaire traitée",
+  "casier.command.role.granted": "Rôle temporaire de sanction attribué",
+  "casier.command.role.revoked": "Rôle temporaire de sanction retiré",
+  "casier.command.role.failed": "Retrait du rôle temporaire à reprendre",
+  "casier.command.log.sent": "Log de sanction publié sur Discord",
+  "casier.command.log.failed": "Publication du log de sanction à reprendre",
+
   "casier.created": "Casier créé",
   "casier.sanction.created": "Sanction ajoutée",
   "casier.sanction.note.created": "Information ajoutée",
@@ -388,6 +409,6 @@ export function casierEventTone(eventType) {
   if (!isCasierEvent(eventType)) return "";
   if (/\.(created|uploaded|resynced)$/.test(eventType)) return "status-done";
   if (/\.(updated|closed|reviewed)$/.test(eventType)) return "status-pending";
-  if (/\.deleted$/.test(eventType)) return "status-bad";
+  if (/\.(deleted|failed|denied)$/.test(eventType)) return "status-bad";
   return "";
 }

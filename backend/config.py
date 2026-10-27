@@ -126,6 +126,11 @@ DISCORD_MODERATION_CHANNEL_TYPES = parse_moderation_channels(
     os.getenv("DISCORD_MODERATION_CHANNELS", "")
 )
 
+# Rôles temporaires du parcours privé /sanction (retirés après l'action).
+SANCTION_TEMP_ROLE_ID = os.getenv("SANCTION_TEMP_ROLE_ID", "1550298577098514482")
+SANCTION_PERMANENT_BAN_ROLE_ID = os.getenv("SANCTION_PERMANENT_BAN_ROLE_ID", "1550298773635211305")
+SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID = os.getenv("SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID", "1321630097744199721")
+
 # --- Casier : fichiers des sanctions ---
 # Plafond par fichier copié depuis un log Discord (25 Mo par défaut).
 CASIER_ATTACHMENT_MAX_BYTES = _int_env("CASIER_ATTACHMENT_MAX_BYTES", 25 * 1024 * 1024, minimum=1)

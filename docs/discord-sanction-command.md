@@ -1,0 +1,51 @@
+# Commande privée `/sanction`
+
+La commande est enregistrée sur le serveur `DISCORD_GUILD_ID` par le bot Iris au démarrage du backend. L’enregistrement utilise un upsert de cette seule commande : aucune synchronisation globale ne supprime les autres commandes de l’application. Installer les dépendances mises à jour (`discord.py>=2.7.1,<3`) pour les modals avec upload natif.
+
+## Parcours
+
+1. L’exécuteur reçoit un message V2 **éphémère**, avec un sélecteur d’utilisateur.
+2. Après vérification des accès, ce premier message est supprimé et remplacé par un résumé privé du casier : compteurs des cinq types, fiches S actives, trois dernières sanctions et motifs.
+3. Le choix d’un type ouvre directement son modal : motif (1 000 caractères), explication interne (4 000), jusqu’à cinq justificatifs uploadés, durée pour mute/ban et suppression éventuelle de messages pour un ban.
+4. Une confirmation privée récapitule les effets avant application. Aucun changement Discord, rôle temporaire ou sanction du casier n’est appliqué lors de la simple préparation.
+5. Après confirmation : contrôle des rôles, rôle temporaire, action Discord, retrait du rôle, enregistrement du casier et publication d’un log V2 dans le salon configuré pour ce type.
+
+Le rappel à l’ordre et l’avertissement ajoutent une entrée au casier. Le mute applique un timeout Discord (durée positive, 28 jours maximum). Le kick expulse le membre. Le bannissement est définitif ou temporaire, de 1 minute à 365 jours. Pour le ban, les suppressions proposées sont aucune, dernière heure, 24 heures ou 7 jours. Les suppressions de messages sont irréversibles ; la confirmation les indique.
+
+Les justificatifs acceptent les formats du casier : PNG, JPG/JPEG, GIF, WebP, PDF et TXT. Limite `CASIER_UPLOAD_MAX_BYTES` (10 Mo par défaut), validation du contenu et de l’extension existante du casier. Ils sont d’abord stockés temporairement sous `iris/sanction-commands/`, puis attachés à la sanction et conservés sous `iris/casiers/`. L’explication devient une information complémentaire de la sanction. Un abandon ou une annulation supprime les fichiers de préparation. Les délais et contrôles de confidentialité sont vérifiés côté serveur.
+
+## Rôles et sécurité
+
+Accès : rôles Staff, Opérateur/Opérateur+, Coordinateur/Admin et Responsable configurés pour Iris, rôle admin spécifique ci-dessous, ou propriétaire du serveur. Les permissions natives ordinaires ne sont pas requises sur le rôle staff de base. Chaque interaction reste liée à l’exécuteur et au serveur. Un staff ne peut sanctionner **aucun autre staff**, y compris depuis un compte Responsable : sont protégés les rôles d’équipe configurés, les rôles de modération, les bots et le propriétaire du serveur. Le membre doit être présent ; la commande ne permet pas de bannir arbitrairement un ID externe.
+
+Les rôles et hiérarchies sont relus depuis Discord lors de la sélection, de la soumission, de la confirmation et après l’élévation temporaire. Le bot doit avoir les permissions natives pour les actions, `Gérer les rôles`, un rôle supérieur au rôle temporaire et à la cible, et pouvoir écrire dans les salons de logs.
+
+Valeurs configurées par défaut, correspondant aux IDs demandés :
+
+| Usage | Rôle |
+| --- | --- |
+| Accès temporaire, toutes les sanctions sauf ban définitif | `1550298577098514482` |
+| Accès temporaire, ban définitif | `1550298773635211305` |
+| Autorisation obligatoire pour le ban définitif | `1321630097744199721` |
+
+Les variables optionnelles `SANCTION_TEMP_ROLE_ID`, `SANCTION_PERMANENT_BAN_ROLE_ID` et `SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID` permettent de déplacer cette configuration. Aucun nouvel env n’est nécessaire avec ces IDs.
+
+L’obligation de retirer le rôle est enregistrée **avant** son attribution. Le retrait est tenté immédiatement après l’action puis dans un `finally`, même si Discord refuse la sanction. Un échec est persisté et repris par la maintenance du backend ; une nouvelle sanction de cet exécuteur est bloquée jusqu’au nettoyage. Après un arrêt du processus, les élévations non terminées sont retirées à la reprise ; un rôle temporaire n’est donc pas assorti d’une expiration native Discord. Un rôle que l’exécuteur possédait déjà n’est pas retiré. L’élévation automatique réduit la durée d’exposition des permissions ; elle ne remplace pas l’authentification et la protection du compte staff autorisé à appeler `/sanction`.
+
+## Logs
+
+Les salons sont ceux de `DISCORD_MODERATION_CHANNELS`, avec les cinq clés existantes (`avertissement`, `rappel_a_lordre`, `mute`, `kick`, `bannissement`). Un type sans salon configuré ne peut pas être appliqué. Les logs V2 comprennent l’exécuteur, le membre, le motif, la durée, un extrait de l’explication, le nombre de justificatifs et un lien vers le casier Iris. Aucune mention ne notifie. Les justificatifs complets restent consultables sur Iris ; ils ne sont pas rediffusés dans Discord.
+
+Une livraison de log interrompue est reprise avec un nonce stable. La sanction Discord n’est jamais réappliquée pour réparer un log. Les messages portent la référence de la commande pour que l’import automatique des salons ne crée pas une deuxième sanction dans le casier. La reprise d’un log après une longue interruption et une réponse perdue peut produire un log en double si la fenêtre d’idempotence Discord est dépassée ; la référence protège l’entrée du casier.
+
+Les étapes, refus, annulations, uploads, élévations, retraits, erreurs et résultats sont aussi journalisés dans **Iris → Responsable → Logs → Casiers**, avec l’exécuteur, la cible, la commande et le rôle concerné.
+
+## Reprise et limites
+
+Une validation répétée ou concurrente ne répète pas une sanction. L’action est persistée avec un identifiant unique ; les verrous par exécuteur et membre empêchent les chevauchements pendant l’application. Un échec de base après une action Discord confirmée reprend uniquement l’écriture du casier et des fichiers. Les mises en sourdine existantes ne sont pas remplacées/raccourcies.
+
+Un résultat Discord incertain n’est pas renvoyé automatiquement. Un ban peut être confirmé par sa raison native unique et finalisé sans le réappliquer ; les autres résultats incertains demandent une vérification humaine des logs et de Discord. Les preuves d’une action incertaine restent conservées pour cette vérification.
+
+La maintenance vérifie les bannissements temporaires toutes les 30 secondes et les lève à échéance, y compris après redémarrage. Avant chaque levée, elle vérifie que la raison native du bannissement est toujours exactement celle de cette commande : un bannissement remplacé par un autre modérateur est conservé. Le backend doit rester actif pour la reprise des logs, les retraits de rôles et les levées de ban.
+
+Validation : tests hors ligne uniquement, avec faux membres, fausses permissions et faux appels Discord. Aucun rôle n’est réellement donné et aucun membre n’est sanctionné lors des tests.

@@ -535,6 +535,8 @@ async def add_sanction(
     attachments: list[dict] | None = None,
     ai_flag_id: str | None = None,
     moderator: dict | None = None,
+    command_id: str | None = None,
+    initial_note: str | None = None,
 ) -> dict:
     """Ajoute une sanction, en créant le casier au besoin, et renvoie le casier mis à jour.
 
@@ -550,8 +552,12 @@ async def add_sanction(
         raise ValueError(f"Type de sanction invalide : {sanction_type}")
     if sanction_id is not None and not (isinstance(sanction_id, str) and _HEX_ID.fullmatch(sanction_id)):
         raise ValueError("Identifiant de sanction invalide.")
+    if command_id is not None and not re.fullmatch(r'[0-9]{15,22}', command_id):
+        raise ValueError("Identifiant de commande invalide.")
 
     casier = await get_or_create_casier(discord_id, snapshot, created_by)
+    if command_id and any(s.get('command_id') == command_id for s in _items(casier, 'sanctions')):
+        return casier
 
     if dedupe_message_id:
         already_logged = any(
@@ -580,8 +586,18 @@ async def add_sanction(
         "notes": [],
         "ai_flag_id": ai_flag_id or None,
     }
+    if command_id:
+        sanction['command_id'] = command_id
+    if initial_note and initial_note.strip():
+        sanction['notes'] = [{
+            'id': new_id(), 'content': _note_content(initial_note), 'created_at': created_at,
+            'created_by': created_by or dict(BOT_AUTHOR), 'updated_at': None,
+            'updated_by': None, 'deleted_at': None, 'deleted_by': None,
+        }]
 
     query = {"_id": casier["_id"]}
+    if command_id:
+        query['sanctions.command_id'] = {'$ne': command_id}
     if dedupe_message_id:
         # Garde atomique : un second traitement concurrent du même message n'ajoute rien.
         query["sanctions.source.message_id"] = {"$ne": dedupe_message_id}

@@ -60,6 +60,7 @@ import discord
 import httpx
 
 from config import DISCORD_BOT_TOKEN, DISCORD_MODERATION_CHANNEL_TYPES
+from database import db
 from services import casier_log_parser
 from services.casier_service import add_sanction
 
@@ -108,7 +109,16 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-moderation_client = discord.Client(intents=intents)
+class IrisModerationClient(discord.Client):
+    async def setup_hook(self):
+        from services.sanction_command import install
+        try:
+            await install(self)
+        except Exception:
+            logger.exception("Impossible d’enregistrer /sanction ; les autres fonctions du bot restent actives.")
+
+
+moderation_client = IrisModerationClient(intents=intents)
 
 
 async def fetch_raw_message(channel_id: int, message_id: int) -> dict | None:
@@ -262,6 +272,12 @@ async def on_ready():
     # Sans danger si on_ready est rappelé après une reconnexion.
     server_statistics.start(moderation_client)
     ai_moderation.start(moderation_client)
+    if not getattr(moderation_client, "sanction_registered", False):
+        from services.sanction_command import install
+        try:
+            await install(moderation_client)
+        except Exception:
+            logger.exception("Nouvelle tentative d’enregistrement de /sanction impossible.")
 
 
 @moderation_client.event
@@ -383,6 +399,14 @@ async def handle_sanction_log_message(message: discord.Message):
     if not discord_id:
         logger.debug("Aucun ID détecté dans le message %s (salon %s).", message.id, message.channel.id)
         return
+
+    # Our /sanction already records its casier entry atomically. Do not ingest its
+    # own V2 log (or another trusted bot echoing the native audit reason) a second time.
+    command_ref = re.search(r'Iris /sanction (?:\[([0-9]{15,22})\]|· Référence : ([0-9]{15,22}))', full_text)
+    if command_ref:
+        operation = await db.sanction_commands.find_one({'_id': command_ref[1] or command_ref[2], 'member_id': discord_id, 'type': sanction_type})
+        if operation:
+            return
 
     member = None
     if message.guild:

@@ -31,7 +31,7 @@ CATEGORY_KEYS = (*CATEGORY_CLAUSES, "autres")
 # « toutes les valeurs texte d'un sous-document » sans $expr, que mongomock ne gère pas bien).
 # Source : routers/animateur.py, routers/auth.py, services/auth_service.py et services/casier_audit.py.
 SEARCH_DETAIL_FIELDS = (
-    "announcement_id", "publication_id", "asset_id", "channel_id",
+    "announcement_id", "publication_id", "asset_id", "channel_id", "command_id", "role_id",
     "ticket_id",
     "helper_id",
     "previous_helper_id",
