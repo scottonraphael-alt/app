@@ -251,3 +251,8 @@ it('ouvre le nouvel onglet Déroulé dans la fiche du projet',async()=>{
   await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
   await click('Déroulé');expect(container.textContent).toContain('Le fil de l’animation');expect(container.textContent).toContain('Préparer le déroulé');
 });
+it('réserve les réglages Discord aux responsables et propose la duplication au pilote',async()=>{
+  await act(async()=>root.render(<ProjectsListPage helper={{id:'member'}}/>));expect(container.textContent).not.toContain('Rappels Discord');
+  await act(async()=>root.render(<ProjectsListPage helper={{id:'member'}} isResponsableGlobal/>));expect(container.textContent).toContain('Rappels Discord');
+  await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));expect(container.textContent).toContain('Dupliquer');
+});

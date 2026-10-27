@@ -56,3 +56,14 @@ def instantiate_tasks(template, project_id, creator, start_date, end_date, now):
              "assignee": creator, "status": "a_faire", "submission_note": "", "blocked_reason": "", "review_note": "",
              "checklist": [{"id": str(uuid4()), "title": title, "done": False} for title in task.get("checklist", [])],
              "created_at": now, "updated_at": now} for task in template.get("tasks", [])]
+
+
+def project_blueprint(project, tasks):
+    anchor = date.fromisoformat(project.get("end_date") or project["start_date"])
+    return {"description": project.get("description", ""), "content_markdown": project.get("content_markdown", ""),
+            "tags": project.get("tags", []), "rundown": {"start_time": (project.get("rundown") or {}).get("start_time", "20:00"),
+            "items": [{"title": item["title"], "duration_minutes": item["duration_minutes"], "notes": item.get("notes", "")}
+                      for item in (project.get("rundown") or {}).get("items", [])]},
+            "tasks": [{"title": task["title"], "description": task.get("description", ""), "priority": task.get("priority", "normale"),
+                       "offset_days": (date.fromisoformat(task.get("due_date") or anchor.isoformat()) - anchor).days,
+                       "checklist": [item["title"] for item in task.get("checklist", [])]} for task in tasks]}

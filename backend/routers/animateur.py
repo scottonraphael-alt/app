@@ -6,8 +6,8 @@ import tempfile
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query, status
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 
 from config import DISCORD_ANIMATEUR_ROLE_ID
@@ -16,7 +16,7 @@ from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCre
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.audit_service import log_auth_event
 from services.project_audit import ProjectAuditRoute
-from services.project_templates import BUILTIN_TEMPLATES, get_template, instantiate_tasks
+from services.project_templates import BUILTIN_TEMPLATES, get_template, instantiate_tasks, project_blueprint
 from services.auth_service import (
     current_responsable,
     current_helper,
@@ -189,13 +189,17 @@ async def create_project(
     request: Request,
     helper: AuthenticatedHelper = Depends(current_project_editor),
 ):
+    return await _create_project_record(payload, request, helper)
+
+
+async def _create_project_record(payload, request, helper, *, blueprint=None):
     values = payload.model_dump(mode="json")
     title = payload.title.strip()
     if not title:
         raise HTTPException(status_code=422, detail="Le titre est requis.")
     start_date, end_date = values["start_date"], values["end_date"]
 
-    template = await get_template(payload.template_id) if payload.template_id else None
+    template = blueprint if blueprint is not None else (await get_template(payload.template_id) if payload.template_id else None)
     now = _now()
     identity = _helper_identity(helper)
     project = {
@@ -245,7 +249,7 @@ async def create_project(
         },
     )
 
-    if template:
+    if template and blueprint is None:
         await log_auth_event("project.template.applied", request, helper=helper, status_code=201,
                              details={"project_id": project["id"], "project_title": project["title"],
                                       "template_id": template["id"], "title": template["name"],
@@ -418,6 +422,7 @@ async def delete_project(
     await db.project_tasks.delete_many({"project_id": project_id})
     await db.project_resources.delete_many({"project_id": project_id})
     await db.project_notes.delete_many({"project_id": project_id})
+    await db.project_task_comments.delete_many({"project_id": project_id})
 
     result = await db.projects.delete_one({"id": project_id})
     if result.deleted_count == 0:
@@ -716,6 +721,7 @@ async def delete_task(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Tâche introuvable.")
 
+    await db.project_task_comments.delete_many({"task_id": task_id})
     await log_auth_event(
         "project.task.deleted",
         request,
@@ -1027,7 +1033,7 @@ async def workspace_activity(project_id: str, helper: AuthenticatedHelper = Depe
     await _ensure_project_member_or_responsable(project, helper)
     # Team journal deliberately excludes access logs, IP addresses and browser data.
     entries = await db.auth_logs.find(
-        {"details.project_id": project_id, "event_type": {"$nin": ["project.viewed", "project.comment.added", "project.action.failed", "project.activity.viewed", "project.tasks.viewed", "project.resources.viewed", "project.task.downloaded", "project.resource.downloaded"], "$not": {"$regex": r"^project\.ui\."}}},
+        {"details.project_id": project_id, "event_type": {"$nin": ["project.viewed", "project.comment.added", "project.action.failed", "project.activity.viewed", "project.tasks.viewed", "project.resources.viewed", "project.task.downloaded", "project.resource.downloaded", "project.task.comments.viewed"], "$not": {"$regex": r"^project\.ui\."}}},
         {"_id": 0, "id": 1, "event_type": 1, "created_at": 1, "username": 1,
          "details.title": 1, "details.message": 1, "details.after.status": 1},
     ).sort("created_at", -1).to_list(100)
@@ -1165,16 +1171,8 @@ async def save_project_template(project_id: str, payload: TemplateSave, request:
     tasks = await db.project_tasks.find({"project_id": project_id}, {"_id": 0}).sort("due_date", 1).to_list(51)
     if len(tasks) > 50:
         raise HTTPException(status_code=422, detail="Un modèle peut contenir au maximum 50 tâches.")
-    anchor = date.fromisoformat(project.get("end_date") or project["start_date"])
-    template = {"id": str(uuid4()), "name": name, "description": project.get("description", ""),
-                "content_markdown": project.get("content_markdown", ""), "tags": project.get("tags", []),
-                "created_by": _helper_identity(helper), "created_at": _now(),
-                "rundown": {"start_time": (project.get("rundown") or {}).get("start_time", "20:00"),
-                            "items": [{"title": item["title"], "duration_minutes": item["duration_minutes"], "notes": item.get("notes", "")}
-                                      for item in (project.get("rundown") or {}).get("items", [])]},
-                "tasks": [{"title": task["title"], "description": task.get("description", ""), "priority": task.get("priority", "normale"),
-                           "offset_days": (date.fromisoformat(task.get("due_date") or anchor.isoformat()) - anchor).days,
-                           "checklist": [item["title"] for item in task.get("checklist", [])]} for task in tasks]}
+    template = {**project_blueprint(project, tasks), "id": str(uuid4()), "name": name,
+                "created_by": _helper_identity(helper), "created_at": _now()}
     await db.project_templates.insert_one(template)
     await log_auth_event("project.template.created", request, helper=helper, status_code=201,
                          details={"project_id": project_id, "project_title": project["title"], "template_id": template["id"], "title": name, "task_count": len(tasks)})
@@ -1276,3 +1274,162 @@ def _validate_rundown_span(event_date, start_time, total_minutes):
         datetime.fromisoformat(f"{event_date.isoformat()}T{start_time}") + timedelta(minutes=total_minutes)
     except (OverflowError, ValueError):
         raise HTTPException(status_code=422, detail="La fin du déroulé dépasse la plage de dates possible.")
+
+
+class ProjectDuplicate(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    start_date: date
+    end_date: date | None = None
+    include_tasks: bool = True
+
+    @field_validator("end_date")
+    @classmethod
+    def dates_in_order(cls, value, info):
+        if value and info.data.get("start_date") and value < info.data["start_date"]:
+            raise ValueError("La date de fin doit suivre la date de début.")
+        return value
+
+
+@router.post("/{project_id}/duplicate", status_code=201, response_model=Project)
+async def duplicate_project(project_id: str, payload: ProjectDuplicate, request: Request,
+                            helper: AuthenticatedHelper = Depends(current_project_editor)):
+    original = await _get_project(project_id)
+    await _ensure_project_manager(original, helper)
+    tasks = await db.project_tasks.find({"project_id": project_id}, {"_id": 0}).sort("due_date", 1).to_list(501) if payload.include_tasks else []
+    if len(tasks) > 500:
+        raise HTTPException(status_code=422, detail="La duplication est limitée à 500 tâches. Choisissez de ne pas reprendre les tâches.")
+    values = ProjectCreate(title=payload.title, start_date=payload.start_date, end_date=payload.end_date,
+                           description=original.get("description", ""), priority=original.get("priority", "normale"), tags=original.get("tags", []))
+    created = await _create_project_record(values, request, helper, blueprint=project_blueprint(original, tasks))
+    await log_auth_event("project.duplicated", request, helper=helper, status_code=201,
+                         details={"project_id": created.id, "project_title": created.title, "source_project_id": project_id,
+                                  "source_title": original["title"], "title": created.title, "task_count": len(tasks)})
+    return created
+
+
+class TaskCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("body")
+    @classmethod
+    def non_blank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Le commentaire ne peut pas être vide.")
+        return value
+
+
+class TaskCommentUpdate(TaskCommentCreate):
+    expected_updated_at: str = Field(min_length=1, max_length=80)
+
+
+async def _comment_task(task_id, helper):
+    task = await db.project_tasks.find_one({"id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(status_code=404, detail="Tâche introuvable.")
+    project = await _get_project(task["project_id"])
+    await _ensure_project_member_or_responsable(project, helper)
+    return task, project
+
+
+@tasks_router.get("/{task_id}/comments")
+async def task_comments(task_id: str, page: int = Query(default=1, ge=1, le=100000),
+                        helper: AuthenticatedHelper = Depends(current_project_editor)):
+    await _comment_task(task_id, helper)
+    query = {"task_id": task_id}
+    total = await db.project_task_comments.count_documents(query)
+    items = await db.project_task_comments.find(query, {"_id": 0}).sort([("created_at", -1), ("id", -1)]).skip((page - 1) * 20).limit(20).to_list(20)
+    return {"items": items, "total": total, "page": page, "page_size": 20}
+
+
+@tasks_router.post("/{task_id}/comments", status_code=201)
+async def add_task_comment(task_id: str, payload: TaskCommentCreate, request: Request,
+                           helper: AuthenticatedHelper = Depends(current_project_editor)):
+    task, project = await _comment_task(task_id, helper)
+    _ensure_active(project)
+    now = _now()
+    comment = {"id": str(uuid4()), "project_id": project["id"], "task_id": task_id, "body": payload.body,
+               "author": _helper_identity(helper), "created_at": now, "updated_at": now}
+    await db.project_task_comments.insert_one(comment)
+    await log_auth_event("project.task.comment.created", request, helper=helper, status_code=201,
+                         details={"project_id": project["id"], "project_title": project["title"], "task_id": task_id,
+                                  "title": task["title"], "comment_id": comment["id"], "after": {"body": payload.body}})
+    comment.pop("_id", None)
+    return comment
+
+
+async def _editable_comment(comment_id, helper):
+    comment = await db.project_task_comments.find_one({"id": comment_id}, {"_id": 0})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Commentaire introuvable.")
+    task, project = await _comment_task(comment["task_id"], helper)
+    _ensure_active(project)
+    if comment.get("author", {}).get("id") != helper.id:
+        await _ensure_project_manager(project, helper)
+    return comment, task, project
+
+
+@tasks_router.patch("/comments/{comment_id}")
+async def edit_task_comment(comment_id: str, payload: TaskCommentUpdate, request: Request,
+                            helper: AuthenticatedHelper = Depends(current_project_editor)):
+    comment, task, project = await _editable_comment(comment_id, helper)
+    updates = {"body": payload.body, "updated_at": _now(), "edited_by": _helper_identity(helper)}
+    result = await db.project_task_comments.update_one({"id": comment_id, "updated_at": payload.expected_updated_at}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Le commentaire a changé. Rechargez la discussion.")
+    await log_auth_event("project.task.comment.updated", request, helper=helper, status_code=200,
+                         details={"project_id": project["id"], "project_title": project["title"], "task_id": task["id"], "title": task["title"],
+                                  "comment_id": comment_id, "before": {"body": comment["body"]}, "after": {"body": payload.body}})
+    return {**comment, **updates}
+
+
+@tasks_router.delete("/comments/{comment_id}", status_code=204)
+async def delete_task_comment(comment_id: str, request: Request,
+                              helper: AuthenticatedHelper = Depends(current_project_editor)):
+    comment, task, project = await _editable_comment(comment_id, helper)
+    await db.project_task_comments.delete_one({"id": comment_id})
+    await log_auth_event("project.task.comment.deleted", request, helper=helper, status_code=204,
+                         details={"project_id": project["id"], "project_title": project["title"], "task_id": task["id"], "title": task["title"],
+                                  "comment_id": comment_id, "before": {"body": comment["body"]}})
+
+
+class ProjectReminderSettings(BaseModel):
+    enabled: bool = Field(strict=True)
+    channel_id: str = Field(pattern=r"^[0-9]{15,22}$")
+    expected_updated_at: str | None = Field(default=None, max_length=80)
+
+
+@router.get("/workspace/reminders")
+async def get_project_reminder_settings(_: AuthenticatedHelper = Depends(current_responsable)):
+    from services import project_reminders
+    settings = await project_reminders.settings()
+    run = await db.project_reminder_runs.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+    return {**settings, "last_run": run}
+
+
+@router.put("/workspace/reminders")
+async def update_project_reminder_settings(payload: ProjectReminderSettings, request: Request,
+                                           helper: AuthenticatedHelper = Depends(current_responsable)):
+    from services import project_reminders
+    previous = await project_reminders.settings()
+    if payload.enabled:
+        channel = await DiscordService().fetch_text_channel(payload.channel_id)
+        if channel.get("type") not in (0, 5):
+            raise HTTPException(status_code=422, detail="Choisissez un salon textuel du serveur Iris.")
+    await db.project_reminder_settings.update_one({"_id": "global"}, {"$setOnInsert": previous}, upsert=True)
+    updates = {"enabled": payload.enabled, "channel_id": payload.channel_id, "updated_at": _now(), "updated_by": _helper_identity(helper)}
+    result = await db.project_reminder_settings.update_one({"_id": "global", "updated_at": payload.expected_updated_at}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Les réglages ont changé. Rechargez-les.")
+    await log_auth_event("project.reminders.settings.updated", request, helper=helper, status_code=200,
+                         details={"before": {key: previous.get(key) for key in ("enabled", "channel_id")},
+                                  "after": {key: updates[key] for key in ("enabled", "channel_id")}})
+    return {**updates, "last_run": await db.project_reminder_runs.find_one({}, {"_id": 0}, sort=[("created_at", -1)])}
+
+
+@router.get("/workspace/reminders/preview")
+async def preview_project_reminders(_: AuthenticatedHelper = Depends(current_responsable)):
+    from services import project_reminders
+    now = datetime.now(timezone.utc)
+    rows = await project_reminders.reminder_rows(now)
+    return {"rows": rows[:200], "task_count": len(rows), "helper_count": len({row["helper_id"] for row in rows}), "truncated": len(rows) > 200}

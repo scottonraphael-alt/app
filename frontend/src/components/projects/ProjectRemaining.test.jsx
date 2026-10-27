@@ -1,0 +1,53 @@
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import ProjectDuplicate,{duplicateEnd} from './ProjectDuplicate';
+import TaskComments from './TaskComments';
+import ProjectReminderSettings from './ProjectReminderSettings';
+import { api } from '../../api/client';
+jest.mock('react-router-dom',()=>({Link:({to,children,...props})=><a href={to} {...props}>{children}</a>}),{virtual:true});
+jest.mock('../../api/client',()=>({api:{get:jest.fn(),post:jest.fn(),patch:jest.fn(),put:jest.fn(),delete:jest.fn()},getErrorMessage:()=> 'Erreur de projet'}));
+jest.mock('sonner',()=>({toast:{success:jest.fn(),error:jest.fn()}}));
+global.IS_REACT_ACT_ENVIRONMENT=true;
+const helper={id:'m',username:'Alex',display_name:'Alex'};
+const project={id:'p',title:'Soirée',start_date:'2026-10-27',end_date:'2026-10-30'};
+const comment={id:'c',body:'Question initiale',author:helper,created_at:'2026-10-27T10:00:00Z',updated_at:'2026-10-27T10:00:00Z'};
+let root,container;
+beforeEach(()=>{jest.clearAllMocks();container=document.createElement('div');document.body.appendChild(container);root=createRoot(container);api.post.mockResolvedValue({data:{...project,id:'new'}});});
+afterEach(async()=>{await act(async()=>root.unmount());container.remove();});
+const click=async text=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes(text));expect(b).toBeTruthy();await act(async()=>b.click());};
+const field=label=>[...document.querySelectorAll('label')].find(l=>l.querySelector(':scope > span')?.textContent===label)?.querySelector('input,textarea,select');
+const fill=async(el,value)=>{expect(el).toBeTruthy();const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;await act(async()=>{Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});};
+const submit=async(form=document.querySelector('form'))=>{await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));};
+const openDiscussion=async()=>{await act(async()=>{const details=container.querySelector('details');details.open=true;details.dispatchEvent(new Event('toggle'));});};
+it('duplique avec de nouvelles dates en conservant la durée et permet de ne pas reprendre les tâches',async()=>{
+  expect(duplicateEnd(project,'2026-12-31')).toBe('2027-01-03');
+  const created=jest.fn();await act(async()=>root.render(<ProjectDuplicate project={project} onClose={jest.fn()} onCreated={created}/>));
+  await fill(field('Nouveau début'),'2026-11-01');expect(field('Nouvelle fin prévue').value).toBe('2026-11-04');
+  await act(async()=>document.querySelector('input[type="checkbox"]').click());await submit();
+  expect(api.post).toHaveBeenCalledWith('/animateur/projects/p/duplicate',expect.objectContaining({start_date:'2026-11-01',end_date:'2026-11-04',include_tasks:false}));expect(created).toHaveBeenCalledWith(expect.objectContaining({id:'new'}));
+});
+it('charge les commentaires à l’ouverture et permet de publier et modifier un message',async()=>{
+  let items=[comment];api.get.mockImplementation(()=>Promise.resolve({data:{items,total:items.length,page:1,page_size:20}}));
+  api.post.mockImplementation((path,body)=>{items=[{...comment,id:'new',body:body.body},...items];return Promise.resolve({data:items[0]});});
+  api.patch.mockImplementation((path,body)=>{items=items.map(c=>c.id==='c'?{...c,body:body.body,updated_at:'2026-10-27T11:00:00Z'}:c);return Promise.resolve({data:items[0]});});
+  await act(async()=>root.render(<TaskComments taskId="t" helper={helper} manager={false} writable/>));
+  expect(api.get).not.toHaveBeenCalled();await openDiscussion();expect(container.textContent).toContain('Question initiale');
+  await fill(field('Ajouter un commentaire'),'Voici la précision');await submit(container.querySelector('form'));
+  expect(api.post).toHaveBeenCalledWith('/animateur/tasks/t/comments',{body:'Voici la précision'});
+  const edits=container.querySelectorAll('[aria-label="Modifier le commentaire de Alex"]');await act(async()=>edits[edits.length-1].click());
+  await fill(field('Modifier le commentaire'),'Question précisée');const form=field('Modifier le commentaire').closest('form');await submit(form);
+  expect(api.patch).toHaveBeenCalledWith('/animateur/tasks/comments/c',{body:'Question précisée',expected_updated_at:comment.updated_at});
+});
+it('ne propose pas d’écriture dans une discussion de projet clos',async()=>{
+  api.get.mockResolvedValue({data:{items:[comment],total:1,page:1}});
+  await act(async()=>root.render(<TaskComments taskId="t" helper={helper} manager writable={false}/>));await openDiscussion();
+  expect(container.textContent).toContain('Question initiale');expect(container.querySelector('form')).toBeNull();expect(container.querySelector('[aria-label="Modifier le commentaire de Alex"]')).toBeNull();
+});
+it('prévisualise les rappels sans envoi et enregistre une désactivation',async()=>{
+  api.get.mockImplementation(path=>Promise.resolve({data:path.endsWith('/preview')?{rows:[{task_id:'t',project_id:'p',title:'Préparer',project_title:'Soirée',helper_name:'Alex',timing:'Aujourd’hui',due_date:'2026-10-27'}],task_count:1,helper_count:1}:{enabled:true,channel_id:'1534270215490244829',updated_at:null,last_run:null}}));
+  api.put.mockResolvedValue({data:{enabled:false,channel_id:'1534270215490244829',updated_at:'v1',last_run:null}});
+  await act(async()=>root.render(<ProjectReminderSettings onClose={jest.fn()}/>));
+  expect(field('ID du salon Discord').value).toBe('1534270215490244829');await click('Prévisualiser sans envoyer');expect(document.body.textContent).toContain('Préparer');expect(api.post).not.toHaveBeenCalled();
+  await act(async()=>document.querySelector('input[type="checkbox"]').click());await submit();
+  expect(api.put).toHaveBeenCalledWith('/animateur/projects/workspace/reminders',{enabled:false,channel_id:'1534270215490244829',expected_updated_at:null});
+});

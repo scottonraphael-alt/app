@@ -161,3 +161,6 @@ TICKET_SUMMARY_MODEL = os.getenv("TICKET_SUMMARY_MODEL", "claude-haiku-5-5").str
 # Rappels de suivi Discord (dimanche midi, Europe/Paris).
 TICKET_REMINDER_CHANNEL_ID = "1499495750151966862"
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://iris.loasis.app").rstrip("/")
+
+# Récapitulatif quotidien des tâches d’animation (10 h, Europe/Paris).
+PROJECT_REMINDER_CHANNEL_ID = "1534270215490244829"

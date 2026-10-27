@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { api, getErrorMessage } from '../../api/client';
 import SummaryReader from '../SummaryReader';
 import TiptapSummaryEditor from '../TiptapSummaryEditor';
+import TaskComments from './TaskComments';
 import ChecklistEditor from './ChecklistEditor';
 import { Field, Modal, Priority } from './ProjectUI';
 import { dateLabel, personName, PRIORITY, TASK_STATUS, todayKey } from './projectUtils';
@@ -100,6 +101,7 @@ export default function ProjectTaskDialog({
           review_note: review.trim(),
           assignee_id: reopenAssignee
         })}>Renvoyer en cours</button></section>}
+    {(manager || members.some(member=>member.id===helper?.id)) && <TaskComments key={task.id} taskId={task.id} helper={helper} manager={manager} writable={writable}/>}
     {manager && writable && <footer className="pj-form-actions">{working && <button className="pj-btn" disabled={busy} onClick={onEdit}>Modifier la tâche</button>}<button className="pj-btn pj-danger" disabled={busy} onClick={() => {
           if (projectConfirm('Supprimer définitivement cette tâche et son rendu ?')) act(async () => {
             await api.delete(`/animateur/tasks/${task.id}`);

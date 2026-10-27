@@ -9,6 +9,7 @@ import SummaryReader from '../components/SummaryReader';
 import AddMemberModal from '../components/AddMemberModal';
 import { Avatar, Empty, Field, Panel, Priority, ProjectPage } from '../components/projects/ProjectUI';
 import ProjectTasksList from '../components/projects/ProjectTasksList';
+import ProjectDuplicate from '../components/projects/ProjectDuplicate';
 import ProjectRundown from '../components/projects/ProjectRundown';
 import ProjectReview from '../components/projects/ProjectReview';
 import ProjectTemplateSave from '../components/projects/ProjectTemplateSave';
@@ -36,6 +37,7 @@ export default function ProjectDetailPage({
   const [tab, setTab] = useState('overview');
   const [settings, setSettings] = useState(false);
   const [savingTemplate,setSavingTemplate]=useState(false);
+  const [duplicating,setDuplicating]=useState(false);
   const [addingMember, setAddingMember] = useState(false);
   const [taskForm, setTaskForm] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -166,7 +168,7 @@ export default function ProjectDetailPage({
   const filtered = tasks.filter(t => (!taskQuery || `${t.title} ${t.description} ${personName(t.assignee)}`.toLowerCase().includes(taskQuery.toLowerCase())) && (taskFilter === 'mine' ? t.assignee?.id === helper?.id : taskFilter === 'late' ? isLate(t) : taskFilter === 'blocked' ? !!t.blocked_reason : taskFilter === 'review' ? t.status === 'rendu' : true)).sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
   const taskCard = task => <button key={task.id} className={`pj-task-card ${task.blocked_reason ? 'is-blocked' : ''}`} onClick={() => setSelectedId(task.id)}><div className="pj-inline">{task.priority && task.priority !== 'normale' && <Priority value={task.priority} />}{task.blocked_reason && <span className="pj-badge pj-alert">Bloquée</span>}{!!task.checklist?.length && <span className="pj-checklist-progress">{task.checklist.filter(item=>item.done).length}/{task.checklist.length} étapes</span>}</div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<footer><span className="pj-task-assignee"><Avatar member={task.assignee} /><span>{personName(task.assignee)}</span></span><span className={`pj-deadline ${isLate(task) ? 'is-late' : ''}`}>{isLate(task) && <Clock3 size={13} />} {dateLabel(task.due_date)}</span></footer></button>;
   if (loading || failed || !project) return <ProjectPage projectId={projectId} page="project" title="L’atelier du projet" back intro="Chaque étape compte."><Empty title={loading ? 'Chargement du projet…' : 'Le projet n’a pas pu être chargé.'}>{!loading && <button className="pj-btn" onClick={load}>Réessayer</button>}</Empty></ProjectPage>;
-  return <ProjectPage projectId={projectId} page="project" title={project.title} intro={project.description || 'Une idée à construire ensemble, du premier brief au dernier détail.'} back actions={manager && <>{writable && <button className="pj-btn" onClick={() => setSettings(true)}><Settings2 size={16} /> Paramètres</button>}<button className="pj-btn" onClick={()=>setSavingTemplate(true)}><ClipboardList size={16}/> En faire un modèle</button></>}>
+  return <ProjectPage projectId={projectId} page="project" title={project.title} intro={project.description || 'Une idée à construire ensemble, du premier brief au dernier détail.'} back actions={manager && <>{writable && <button className="pj-btn" onClick={() => setSettings(true)}><Settings2 size={16} /> Paramètres</button>}<button className="pj-btn" onClick={()=>setDuplicating(true)}><Plus size={16}/> Dupliquer</button><button className="pj-btn" onClick={()=>setSavingTemplate(true)}><ClipboardList size={16}/> En faire un modèle</button></>}>
     <div className="pj-project-meta"><span className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</span><Priority value={project.priority} /><span><CalendarDays size={16} /> {dateLabel(project.start_date)} → {dateLabel(project.end_date)}</span><span><Users size={16} /> {project.members.length} membre{project.members.length > 1 ? 's' : ''}</span><span>Piloté par {personName(project.created_by)}</span>{project.tags?.map(tag => <span className="pj-tag" key={tag}>#{tag}</span>)}</div>
     {!writable && <div className="pj-notice pj-archive"><Archive size={19} /><p>{project.status === 'archive' ? 'Ce projet est archivé.' : 'Ce projet est terminé.'} Les documents et les rendus restent consultables.</p>{manager && <button className="pj-btn" disabled={busy} onClick={() => changeStatus('en_cours')}>{project.status === 'archive' ? 'Restaurer le projet' : 'Rouvrir le projet'}</button>}</div>}
     {!canEdit && writable && <div className="pj-notice"><p>Envie de contribuer ? Rejoignez l’équipe pour participer au brief et déposer des fichiers.</p><button className="pj-btn pj-primary" disabled={busy} onClick={() => act(async () => {
@@ -236,6 +238,7 @@ export default function ProjectDetailPage({
           navigate('/animateur/projects');
         });
       }}>Supprimer définitivement</button></details>}
+    {duplicating && <ProjectDuplicate project={project} onClose={()=>setDuplicating(false)} onCreated={copy=>{setDuplicating(false);navigate(`/animateur/projects/${copy.id}`);}}/>}
     {savingTemplate && <ProjectTemplateSave project={project} onClose={()=>setSavingTemplate(false)}/>}
     {settings && <ProjectForm project={project} onClose={() => setSettings(false)} onSaved={updated => {
       setProject(updated);

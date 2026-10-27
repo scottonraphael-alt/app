@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 async def project_context(params):
-    details = {key: value for key, value in params.items() if key in {"project_id", "task_id", "resource_id", "member_id"}}
-    for key, collection in (("task_id", db.project_tasks), ("resource_id", db.project_resources)):
+    details = {key: value for key, value in params.items() if key in {"project_id", "task_id", "resource_id", "member_id", "comment_id"}}
+    for key, collection in (("comment_id", db.project_task_comments), ("task_id", db.project_tasks), ("resource_id", db.project_resources)):
         if details.get(key):
-            item = await collection.find_one({"id": details[key]}, {"_id": 0, "project_id": 1, "title": 1, "original_filename": 1})
+            item = await collection.find_one({"id": details[key]}, {"_id": 0, "project_id": 1, "task_id": 1, "title": 1, "original_filename": 1})
             if item:
                 details.update(item)
     if details.get("project_id"):
@@ -27,6 +27,12 @@ async def project_context(params):
 
 
 def read_event(path):
+    if path.endswith("/workspace/reminders"):
+        return "project.reminders.settings.viewed"
+    if path.endswith("/workspace/reminders/preview"):
+        return "project.reminders.previewed"
+    if path.endswith("/comments"):
+        return "project.task.comments.viewed"
     if path.endswith("/workspace/templates"):
         return "project.templates.viewed"
     if path.endswith("/submission/download"):

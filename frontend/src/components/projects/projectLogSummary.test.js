@@ -29,3 +29,9 @@ it('décrit le changement d’heure et des séquences du déroulé',()=>{
   const result=projectLogSummary('project.rundown.updated',{title:'Soirée',before:{start_time:'20:00',items:[]},after:{start_time:'21:00',items:[{title:'Accueil',duration_minutes:10,speaker:{username:'Alex'}}]}});
   expect(result.text).toContain('le déroulé du projet');expect(result.extras).toContainEqual(['Heure de départ','20:00 → 21:00']);expect(result.extras.find(([label])=>label==='Séquences')[1]).toContain('Accueil (10 min · Alex)');
 });
+it('décrit commentaires, duplication et récapitulatifs automatiques',()=>{
+  const comment=projectLogSummary('project.task.comment.updated',{title:'Préparer',before:{body:'Avant'},after:{body:'Après'}});
+  expect(comment.extras).toContainEqual(['Commentaire','Avant → Après']);
+  expect(projectLogSummary('project.duplicated',{title:'Nouvelle édition',source_title:'Ancienne'}).extras).toContainEqual(['Projet d’origine','Ancienne']);
+  expect(projectLogSummary('project.reminders.sent',{result:{task_count:3,helper_count:2}}).extras).toContainEqual(['Destinataires','3 tâches · 2 personnes']);
+});

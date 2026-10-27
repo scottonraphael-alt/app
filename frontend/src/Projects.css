@@ -457,3 +457,28 @@ body.projects-no-nav .app-shell > .app-main { grid-column:1/-1!important; margin
 .pj-sequence-time .pj-sequence-end { color:#8b7248; line-height:1.65; overflow-wrap:anywhere; }
 @media(max-width:1050px) { .pj-sequence-fields { grid-template-columns:minmax(0,1fr) minmax(150px,1fr); } .pj-sequence-fields > .pj-field:first-child { grid-column:1/-1; } }
 @media(max-width:600px) { .pj-sequence-fields { grid-template-columns:1fr; } .pj-sequence-duration > div { max-width:350px; } }
+
+/* Discussion stays inside the task; previews never publish Discord messages. */
+.pj-task-comments { border:1px solid #e3d9ed; border-radius:14px; background:#fcfafd; color:#735d85; }
+.pj-task-comments > summary { padding:16px 18px; cursor:pointer; font-size:13px; font-weight:500; background:#f5eff9; border-radius:14px; }
+.pj-task-comments[open] > summary { border-bottom:1px solid #e9dfef; border-radius:14px 14px 0 0; }
+.pj-comments-content { padding:20px; }
+.pj-comments-content .pj-section-heading { align-items:flex-start; gap:12px; margin-bottom:18px; }
+.pj-comments-content .pj-section-heading > p { flex:1; }
+.pj-comments-list { padding:0; margin:0; list-style:none; max-height:380px; overflow:auto; }
+.pj-comments-list > li { padding:17px 0; border-bottom:1px solid #eee7f2; }
+.pj-comments-list header { display:flex; align-items:center; flex-wrap:wrap; gap:9px; }
+.pj-comments-list header > div:not(.pj-inline) { flex:1; min-width:0; }
+.pj-comments-list strong { display:block; font-size:12px; color:#735b86; overflow-wrap:anywhere; }
+.pj-comments-list time { display:block; color:#84758d; font-size:10px; margin-top:4px; line-height:1.5; }
+.pj-comments-list > li > p { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.8; color:#6f6477; font-size:13px; margin:13px 0 0; }
+.pj-comments-list form { display:flex; flex-direction:column; gap:10px; margin-top:13px; }
+.pj-comments-list .pj-icon { width:30px; height:30px; }
+.pj-comments-content .pj-pagination { padding-inline:0; background:transparent; }
+.pj-reminder-last { padding:16px; border:1px solid #e1d9ed; border-radius:12px; background:#f8f4fc; font-size:12px; color:#7a668a; }
+.pj-reminder-last p { line-height:1.7; margin:7px 0 0; overflow-wrap:anywhere; }
+.pj-reminder-preview { padding:15px 0 0; color:#657a5e; font-size:13px; }
+.pj-reminder-preview > ul { list-style:none; margin:12px 0; padding:0; max-height:250px; overflow:auto; }
+.pj-reminder-preview li { padding:12px 0; border-bottom:1px solid #e8eee1; overflow-wrap:anywhere; }
+.pj-reminder-preview a { color:#58744f; font-weight:500; }
+.pj-reminder-preview small { display:block; color:#7c8973; font-size:11px; line-height:1.7; margin-top:5px; }
