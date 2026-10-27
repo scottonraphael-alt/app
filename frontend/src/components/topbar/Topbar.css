@@ -52,3 +52,18 @@
 .tb-note-body { color: #64706a; overflow-wrap: anywhere; }
 .tb-note time { color: #8a948e; font-size: 11px; }
 @media (max-width: 640px) { .tb-bar { align-items: flex-start; } }
+
+.tb-right { display: flex; align-items: center; gap: 8px; flex: none; }
+.tb-identity { display: flex; align-items: center; gap: 4px; padding-left: 8px; border-left: 1px solid #e2e8e2; }
+.tb-account { display: flex; align-items: center; gap: 8px; padding: 3px 8px 3px 3px; border-radius: 999px; color: inherit; text-decoration: none; }
+.tb-account:hover { background: #e8efea; }
+.tb-avatar { width: 26px; height: 26px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #e8efea; color: #3b564b; flex: none; }
+.tb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.tb-account-text { display: grid; line-height: 1.15; min-width: 0; }
+.tb-account-text strong { font-size: 12px; font-weight: 600; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-account-text small { font-size: 10px; color: #64706a; }
+@media (max-width: 640px) { .tb-account-text { display: none; } }
+
+/* Plus de sidebar : le shell occupe toute la largeur. */
+.app-shell { display: block !important; grid-template-columns: minmax(0, 1fr) !important; padding: 0 !important; }
+.app-main { grid-column: auto !important; margin: 0 !important; width: 100%; max-width: none; }

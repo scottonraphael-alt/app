@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ArrowUpRight, RadioTower, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, ShieldCheck } from "lucide-react";
+import logo from "../assets/logo.png";
+import "./Login.css";
 
 // Le backend ne renvoie qu'un code : le texte affiché vient toujours d'ici.
 const AUTH_ERROR_MESSAGES = {
@@ -30,43 +32,34 @@ export default function LoginPage() {
   }, []);
 
   return (
-    <main className="login-page" data-testid="login-page">
-      <section className="login-grid">
-        <div className="login-identity">
-          <div className="login-mark"><img src="https://customer-assets-lqy194kg.emergentagent.net/job_iris-logs/artifacts/jhsbq3v9_image.png" alt="Iris" data-testid="login-iris-logo" /></div>
-          <p className="eyebrow">IRIS / ESPACE DE GESTION</p>
-          <h1>Un espace de gestion, pour accompagner avec soin.</h1>
-          <p className="login-description">
-            Centralisez les taches réalisées aux sein du Staff de L'Oasis.
-          </p>
-          <div className="login-specs">
-            <span><RadioTower size={15} /> ESPACE CONFIDENTIEL</span>
-            <span><ShieldCheck size={15} /> ACCÈS SÉCURISÉ</span>
+    <main className="lg-page" data-testid="login-page">
+      <section className="lg-card">
+        <img className="lg-logo" src={logo} alt="Iris" data-testid="login-iris-logo" />
+        <p className="lg-eyebrow">Iris · Espace de gestion</p>
+        <h1>Bienvenue sur Iris</h1>
+        <p className="lg-lead">
+          L’espace de travail du Staff de L’Oasis, pour centraliser les tâches et accompagner avec soin.
+        </p>
+
+        {authError && (
+          <div className="lg-error" role="alert" data-testid="auth-error-message">
+            <AlertTriangle size={18} />
+            <p>{authError}</p>
           </div>
-        </div>
-        <div className="login-action">
-          <h2>Accéder à votre espace</h2>
-          <p>Connectez-vous avec Discord. L’accès est réservé aux membres ayant un rôle Staff sur le serveur.</p>
+        )}
 
-
-          
-          {authError && (
-            <div className="auth-error-card" data-testid="auth-error-message">
-              <AlertTriangle size={18} />
-              <p>{authError}</p>
-            </div>
-          )}
-<a
-            className="discord-button"
-            href={`${backendUrl}/api/auth/discord/login`}
-            data-testid="discord-login-button"
-          >
-            Continuer avec Discord <ArrowUpRight size={18} />
-          </a>
-          <small>Une connexion Discord et un rôle interne sont requis.</small>
-        </div>
+        <a
+          className="lg-button"
+          href={`${backendUrl}/api/auth/discord/login`}
+          data-testid="discord-login-button"
+        >
+          Se connecter avec Discord <ArrowUpRight size={18} />
+        </a>
+        <p className="lg-note">
+          <ShieldCheck size={14} /> Accès réservé aux membres du Staff ayant un rôle autorisé.
+        </p>
       </section>
-      <footer data-testid="login-footer">IRIS · ESPACE CONFIDENTIEL · L'OASIS 2026</footer>
+      <footer className="lg-footer" data-testid="login-footer">IRIS · ESPACE CONFIDENTIEL · L'OASIS 2026</footer>
     </main>
   );
 }

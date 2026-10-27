@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bell, Check, CheckCheck, Pencil, Plus, Star, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, Check, CheckCheck, LogOut, Pencil, Plus, Radio, Star, X } from "lucide-react";
 
 import { api } from "../../api/client";
 import "./Topbar.css";
@@ -164,11 +164,29 @@ function NotificationBell() {
   );
 }
 
-export default function Topbar() {
+export default function Topbar({ helper, roleLabel, onLogout }) {
   return (
     <header className="tb-bar" data-testid="topbar">
       <FavoritesBar />
-      <NotificationBell />
+      <div className="tb-right">
+        <NotificationBell />
+        {(helper || onLogout) && (
+          <div className="tb-identity" data-testid="helper-identity">
+            <Link className="tb-account" to="/profile" data-testid="helper-profile-link" title="Ouvrir mon profil">
+              <span className="tb-avatar">
+                {helper?.avatar_url ? <img src={helper.avatar_url} alt="" /> : <Radio size={13} />}
+              </span>
+              <span className="tb-account-text">
+                <strong>{helper?.global_name || helper?.username}</strong>
+                <small>{roleLabel}</small>
+              </span>
+            </Link>
+            <button type="button" className="tb-icon-btn" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout} data-testid="logout-button">
+              <LogOut size={16} />
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 }
