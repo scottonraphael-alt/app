@@ -348,3 +348,28 @@ body.projects-no-nav .app-shell > .app-main { grid-column:1/-1!important; margin
 }
 
 .pj-row-title > strong,.pj-task-row-title > strong { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* Gentle colour on separate surfaces, with explicit blocked-task treatment. */
+.pj-personal .pj-panel-head { background:#f2ebf8; border-bottom-color:#e4d8ef; }
+.pj-summary-stat:nth-child(1) { background:#f1f7f2; border-color:#dbe8de; }
+.pj-summary-stat:nth-child(2) { background:#f6f1fa; border-color:#e5dced; }
+.pj-summary-stat.pj-warm { background:#fff7e9; border-color:#efdfbf; }
+.pj-project-list-head { background:#edf4ee; color:#52715a; }
+.pj-task-table-head { background:#edf2f9; color:#566f91; }
+.pj-detail-tabs > button:nth-child(2).is-active { background:#eaf1fa; border-color:#d3e0f0; color:#516e93; }
+.pj-detail-tabs > button:nth-child(3).is-active { background:#f2eaf9; border-color:#e2d4ee; color:#7a5b92; }
+.pj-detail-tabs > button:nth-child(5).is-active { background:#fcf2e3; border-color:#efdfc4; color:#866432; }
+.pj-task-card.is-blocked,.pj-task-row.is-blocked,.pj-personal-task.is-blocked { background:#fff4ce; border-color:#e8d396; }
+.pj-task-card.is-blocked:hover,.pj-task-row.is-blocked:hover,.pj-personal-task.is-blocked:hover { background:#ffedb4; }
+.pj-personal-task.is-blocked { border:1px solid #e8d396; border-radius:10px; padding:12px; margin:8px 0; }
+.pj-task-row.is-blocked { box-shadow:inset 3px 0 #d4ad48; }
+.pj-upload { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:end; }
+.pj-upload > .pj-field { margin:0; min-width:0; }
+.pj-upload > .pj-field > span { min-height:18px; line-height:18px; }
+.pj-page .pj-upload input { height:48px; min-height:48px; margin:0; box-sizing:border-box; }
+.pj-page .pj-upload input[type=file] { padding:8px 10px; line-height:30px; }
+.pj-page .pj-upload input[type=file]::file-selector-button { height:30px; padding:0 12px; line-height:30px; vertical-align:top; }
+.pj-upload > .pj-btn { height:48px; min-height:48px; margin:0; align-self:end; }
+.pj-task-row .pj-task-assignee,.pj-task-row > .pj-deadline,.pj-task-row > .pj-badge { align-self:center; }
+@media(max-width:850px) { .pj-upload { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .pj-upload > .pj-btn { grid-column:1/-1; justify-self:end; } }
+@media(max-width:600px) { .pj-upload { grid-template-columns:minmax(0,1fr); } .pj-upload > .pj-btn { width:100%; } }

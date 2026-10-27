@@ -95,6 +95,7 @@ const tasks = [{
 let root, container;
 beforeEach(() => {
   jest.clearAllMocks();
+  api.post.mockResolvedValue({data:null});
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -231,4 +232,18 @@ it('pagine indépendamment les projets et le volet personnel', async () => {
   await click('Tous');
   expect(container.querySelectorAll('.pj-project-row')).toHaveLength(8);
   expect(container.querySelector('.pj-project-row').textContent).toContain('Projet 1');
+});
+
+it('journalise les interactions et marque les tâches bloquées dans les deux vues', async () => {
+  api.get.mockImplementation(url=>Promise.resolve({data:url.endsWith('/tasks')?[{...tasks[0],blocked_reason:'Attente du visuel'}]:url.endsWith('/resources')?[]:project}));
+  await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+  await click('Tâches');
+  expect(container.querySelector('.pj-task-row.is-blocked')).not.toBeNull();
+  expect(api.post).toHaveBeenCalledWith('/animateur/projects/workspace/events',expect.objectContaining({kind:'clicked',project_id:'p',page:'project',label:expect.stringContaining('Tâches')}));
+  await click('Tableau');
+  expect(container.querySelector('.pj-task-card.is-blocked')).not.toBeNull();
+  const count=api.post.mock.calls.length;
+  const outside=document.createElement('button');outside.textContent='Hors module';document.body.appendChild(outside);
+  await act(async()=>outside.click());outside.remove();
+  expect(api.post).toHaveBeenCalledTimes(count);
 });

@@ -15,6 +15,7 @@ from database import db
 from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCreate
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.audit_service import log_auth_event
+from services.project_audit import ProjectAuditRoute
 from services.auth_service import (
     current_responsable,
     current_helper,
@@ -26,10 +27,10 @@ from services.discord_service import DiscordService
 from services.file_response_service import safe_content_type, stream_local_file
 from services.storage_service import extension_from_filename, put_object_from_file, sanitize_extension
 
-router = APIRouter(prefix="/animateur/projects", tags=["animateur-projects"])
-tasks_router = APIRouter(prefix="/animateur/tasks", tags=["animateur-tasks"])
-resources_router = APIRouter(prefix="/animateur/resources", tags=["animateur-resources"])
-members_router = APIRouter(prefix="/animateur/members", tags=["animateur-members"])
+router = APIRouter(prefix="/animateur/projects", tags=["animateur-projects"], route_class=ProjectAuditRoute)
+tasks_router = APIRouter(prefix="/animateur/tasks", tags=["animateur-tasks"], route_class=ProjectAuditRoute)
+resources_router = APIRouter(prefix="/animateur/resources", tags=["animateur-resources"], route_class=ProjectAuditRoute)
+members_router = APIRouter(prefix="/animateur/members", tags=["animateur-members"], route_class=ProjectAuditRoute)
 
 
 def _upload_limit_mb() -> int:
@@ -955,7 +956,7 @@ async def workspace_task_update(task_id: str, payload: WorkspaceTaskPatch, reque
     if not result.matched_count:
         raise HTTPException(status_code=409, detail="La tâche a changé. Rechargez-la.")
     await log_auth_event("project.task.updated", request, helper=helper, status_code=200,
-                         details={"project_id": project["id"], "task_id": task_id, "title": task["title"],
+                         details={"project_id": project["id"], "project_title": project.get("title"), "task_id": task_id, "title": task["title"],
                                   "before": {key: task.get(key) for key in updates if key != "updated_at"},
                                   "after": {key: value for key, value in updates.items() if key != "updated_at"}})
     return {**task, **updates}
@@ -976,7 +977,8 @@ async def workspace_remove_member(project_id: str, member_id: str, request: Requ
     updates = {"members": [m for m in project["members"] if m["id"] != member_id], "updated_at": _now()}
     await db.projects.update_one({"id": project_id}, {"$set": updates})
     await log_auth_event("project.member.removed", request, helper=helper, status_code=200,
-                         details={"project_id": project_id, "member_id": member_id})
+                         details={"project_id": project_id, "project_title": project.get("title"), "member_id": member_id,
+                                  "member_username": next((m.get("display_name") or m.get("username") for m in project.get("members", []) if m["id"] == member_id), member_id)})
     return Project(**{**project, **updates})
 
 
@@ -986,7 +988,7 @@ async def workspace_activity(project_id: str, helper: AuthenticatedHelper = Depe
     await _ensure_project_member_or_responsable(project, helper)
     # Team journal deliberately excludes access logs, IP addresses and browser data.
     entries = await db.auth_logs.find(
-        {"details.project_id": project_id, "event_type": {"$nin": ["project.viewed", "project.comment.added"]}},
+        {"details.project_id": project_id, "event_type": {"$nin": ["project.viewed", "project.comment.added", "project.action.failed", "project.activity.viewed", "project.tasks.viewed", "project.resources.viewed", "project.task.downloaded", "project.resource.downloaded"], "$not": {"$regex": r"^project\.ui\."}}},
         {"_id": 0, "id": 1, "event_type": 1, "created_at": 1, "username": 1,
          "details.title": 1, "details.message": 1, "details.after.status": 1},
     ).sort("created_at", -1).to_list(100)
@@ -1013,7 +1015,7 @@ async def workspace_comment(project_id: str, payload: WorkspaceComment, request:
             "username": helper.username, "helper_id": helper.id, "created_at": _now()}
     await db.project_notes.insert_one(note)
     await log_auth_event("project.comment.added", request, helper=helper, status_code=201,
-                         details={"project_id": project_id, "note_id": note["id"]})
+                         details={"project_id": project_id, "project_title": project.get("title"), "note_id": note["id"], "comment_length": len(message)})
     return {"ok": True}
 
 
@@ -1035,3 +1037,23 @@ async def workspace_brief(project_id: str, payload: WorkspaceBrief, request: Req
                                   "before": {"content_length": len(project.get("content_markdown", ""))},
                                   "after": {"content_length": len(payload.content_markdown)}})
     return Project(**{**project, **updates})
+
+
+class ProjectUiEvent(BaseModel):
+    kind: Literal["clicked", "changed", "submitted", "toggled", "edited", "shortcut"]
+    page: Literal["projects", "project", "calendar"]
+    project_id: str | None = Field(default=None, max_length=80)
+    label: str = Field(min_length=1, max_length=180)
+    value: str | None = Field(default=None, max_length=100)
+    length: int | None = Field(default=None, ge=0, le=10000000)
+
+
+@router.post("/workspace/events", status_code=204)
+async def workspace_ui_event(payload: ProjectUiEvent, request: Request,
+                             helper: AuthenticatedHelper = Depends(current_project_editor)):
+    details = payload.model_dump(exclude_none=True, exclude={"kind"})
+    if payload.project_id:
+        project = await _get_project(payload.project_id)
+        details["project_title"] = project.get("title")
+    details["source"] = "client"
+    await log_auth_event("project.ui." + payload.kind, request, helper=helper, status_code=204, details=details)

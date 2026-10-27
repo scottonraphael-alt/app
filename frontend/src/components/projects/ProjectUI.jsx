@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useProjectAudit } from './projectAudit';
 import { personName, PRIORITY } from './projectUtils';
 import '../../Casier.css';
 import '../../Projects.css';
@@ -10,13 +11,16 @@ export function ProjectPage({
   intro,
   children,
   actions,
-  back = false
+  back = false,
+  projectId = null,
+  page = 'projects'
 }) {
+  useProjectAudit(projectId, page);
   useEffect(() => {
     document.body.classList.add('projects-no-nav');
     return () => document.body.classList.remove('projects-no-nav');
   }, []);
-  return <section className="cz-page pj-page"><header className="cz-header"><div className="cz-header-copy"><p className="cz-eyebrow">ESPACE ANIMATEUR · ATELIER DES PROJETS</p><h1>{title}</h1><p className="cz-intro">{intro}</p></div><div className="cz-header-actions">{back && <Link className="pj-btn" to="/animateur/projects"><ArrowLeft size={16} /> Projets</Link>}<Link className="pj-btn" to="/animateur/calendrier"><CalendarDays size={16} /> Calendrier</Link><Link className="cz-home" to="/">Accueil <ArrowRight size={17} /></Link>{actions}</div></header>{children}</section>;
+  return <section className="cz-page pj-page" data-project-id={projectId || undefined} data-audit-page={page}><header className="cz-header"><div className="cz-header-copy"><p className="cz-eyebrow">ESPACE ANIMATEUR · ATELIER DES PROJETS</p><h1>{title}</h1><p className="cz-intro">{intro}</p></div><div className="cz-header-actions">{back && <Link className="pj-btn" to="/animateur/projects"><ArrowLeft size={16} /> Projets</Link>}<Link className="pj-btn" to="/animateur/calendrier"><CalendarDays size={16} /> Calendrier</Link><Link className="cz-home" to="/">Accueil <ArrowRight size={17} /></Link>{actions}</div></header>{children}</section>;
 }
 export function Modal({
   title,

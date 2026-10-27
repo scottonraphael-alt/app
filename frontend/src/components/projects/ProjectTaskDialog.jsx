@@ -1,3 +1,4 @@
+import { projectConfirm } from './projectAudit';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '../../api/client';
@@ -95,7 +96,7 @@ export default function ProjectTaskDialog({
           assignee_id: reopenAssignee
         })}>Renvoyer en cours</button></section>}
     {manager && writable && <footer className="pj-form-actions">{working && <button className="pj-btn" disabled={busy} onClick={onEdit}>Modifier la tâche</button>}<button className="pj-btn pj-danger" disabled={busy} onClick={() => {
-          if (window.confirm('Supprimer définitivement cette tâche et son rendu ?')) act(async () => {
+          if (projectConfirm('Supprimer définitivement cette tâche et son rendu ?')) act(async () => {
             await api.delete(`/animateur/tasks/${task.id}`);
             onDelete(task.id);
           });

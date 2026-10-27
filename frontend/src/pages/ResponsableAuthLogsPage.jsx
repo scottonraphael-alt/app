@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { api, getErrorMessage } from "../api/client";
+import { PROJECT_AUDIT_LABELS, projectLogSummary } from "../components/projects/projectLogSummary";
 import {
   CASIER_EVENT_LABELS,
   casierEventTone,
@@ -97,6 +98,7 @@ const TICKET_EVENT_LABELS = {
 };
 
 const EVENT_LABELS = {
+  ...PROJECT_AUDIT_LABELS,
   "auth.login.started": "Connexion démarrée",
   "auth.login.success": "Connexion réussie",
   "auth.login.failure": "Connexion échouée",
@@ -388,6 +390,10 @@ function describeEvent(log) {
     return { parts: [actor, " · ", label, ...forMember], extras };
   }
 
+  if (type.startsWith("project.")) {
+    const description = projectLogSummary(type,d);
+    if (description) return {parts:[actor," ",description.text],extras:description.extras};
+  }
   let parts;
 
   switch (type) {

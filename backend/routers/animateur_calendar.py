@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends
 from database import db
 from models.ticket import AuthenticatedHelper
 from routers.animateur import current_project_editor
+from services.project_audit import ProjectAuditRoute
 
-router = APIRouter(prefix="/animateur/calendar-events", tags=["animateur-calendar"])
+router = APIRouter(prefix="/animateur/calendar-events", tags=["animateur-calendar"], route_class=ProjectAuditRoute)
 
 
 @router.get("")

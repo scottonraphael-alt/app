@@ -1,3 +1,4 @@
+import { projectConfirm } from '../components/projects/projectAudit';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Archive, ArrowUpRight, CalendarDays, CheckCheck, ClipboardList, Clock3, Download, FileText, LayoutGrid, List, MessageSquare, Pencil, Plus, Settings2, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
@@ -117,7 +118,7 @@ export default function ProjectDetailPage({
     }
   };
   const changeStatus = status => act(async () => {
-    if (status === 'archive' && !window.confirm('Archiver le projet ? Il restera consultable, puis pourra être restauré.')) return;
+    if (status === 'archive' && !projectConfirm('Archiver le projet ? Il restera consultable, puis pourra être restauré.')) return;
     const r = await api.patch(`/animateur/projects/${projectId}/settings`, {
       status
     });
@@ -159,9 +160,9 @@ export default function ProjectDetailPage({
     URL.revokeObjectURL(url);
   });
   const filtered = tasks.filter(t => (!taskQuery || `${t.title} ${t.description} ${personName(t.assignee)}`.toLowerCase().includes(taskQuery.toLowerCase())) && (taskFilter === 'mine' ? t.assignee?.id === helper?.id : taskFilter === 'late' ? isLate(t) : taskFilter === 'blocked' ? !!t.blocked_reason : taskFilter === 'review' ? t.status === 'rendu' : true)).sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
-  const taskCard = task => <button key={task.id} className="pj-task-card" onClick={() => setSelectedId(task.id)}><div className="pj-inline">{task.priority && task.priority !== 'normale' && <Priority value={task.priority} />}{task.blocked_reason && <span className="pj-badge pj-alert">Bloquée</span>}</div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<footer><span className="pj-task-assignee"><Avatar member={task.assignee} /><span>{personName(task.assignee)}</span></span><span className={`pj-deadline ${isLate(task) ? 'is-late' : ''}`}>{isLate(task) && <Clock3 size={13} />} {dateLabel(task.due_date)}</span></footer></button>;
-  if (loading || failed || !project) return <ProjectPage title="L’atelier du projet" back intro="Chaque étape compte."><Empty title={loading ? 'Chargement du projet…' : 'Le projet n’a pas pu être chargé.'}>{!loading && <button className="pj-btn" onClick={load}>Réessayer</button>}</Empty></ProjectPage>;
-  return <ProjectPage title={project.title} intro={project.description || 'Une idée à construire ensemble, du premier brief au dernier détail.'} back actions={manager && writable && <button className="pj-btn" onClick={() => setSettings(true)}><Settings2 size={16} /> Paramètres</button>}>
+  const taskCard = task => <button key={task.id} className={`pj-task-card ${task.blocked_reason ? 'is-blocked' : ''}`} onClick={() => setSelectedId(task.id)}><div className="pj-inline">{task.priority && task.priority !== 'normale' && <Priority value={task.priority} />}{task.blocked_reason && <span className="pj-badge pj-alert">Bloquée</span>}</div><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<footer><span className="pj-task-assignee"><Avatar member={task.assignee} /><span>{personName(task.assignee)}</span></span><span className={`pj-deadline ${isLate(task) ? 'is-late' : ''}`}>{isLate(task) && <Clock3 size={13} />} {dateLabel(task.due_date)}</span></footer></button>;
+  if (loading || failed || !project) return <ProjectPage projectId={projectId} page="project" title="L’atelier du projet" back intro="Chaque étape compte."><Empty title={loading ? 'Chargement du projet…' : 'Le projet n’a pas pu être chargé.'}>{!loading && <button className="pj-btn" onClick={load}>Réessayer</button>}</Empty></ProjectPage>;
+  return <ProjectPage projectId={projectId} page="project" title={project.title} intro={project.description || 'Une idée à construire ensemble, du premier brief au dernier détail.'} back actions={manager && writable && <button className="pj-btn" onClick={() => setSettings(true)}><Settings2 size={16} /> Paramètres</button>}>
     <div className="pj-project-meta"><span className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</span><Priority value={project.priority} /><span><CalendarDays size={16} /> {dateLabel(project.start_date)} → {dateLabel(project.end_date)}</span><span><Users size={16} /> {project.members.length} membre{project.members.length > 1 ? 's' : ''}</span><span>Piloté par {personName(project.created_by)}</span>{project.tags?.map(tag => <span className="pj-tag" key={tag}>#{tag}</span>)}</div>
     {!writable && <div className="pj-notice pj-archive"><Archive size={19} /><p>{project.status === 'archive' ? 'Ce projet est archivé.' : 'Ce projet est terminé.'} Les documents et les rendus restent consultables.</p>{manager && <button className="pj-btn" disabled={busy} onClick={() => changeStatus('en_cours')}>{project.status === 'archive' ? 'Restaurer le projet' : 'Rouvrir le projet'}</button>}</div>}
     {!canEdit && writable && <div className="pj-notice"><p>Envie de contribuer ? Rejoignez l’équipe pour participer au brief et déposer des fichiers.</p><button className="pj-btn pj-primary" disabled={busy} onClick={() => act(async () => {
@@ -172,7 +173,7 @@ export default function ProjectDetailPage({
         toast.success('Bienvenue dans l’équipe !');
       })}><UserPlus size={16} /> Rejoindre</button></div>}
     <nav className="pj-tabs pj-detail-tabs" aria-label="Rubriques du projet">{TABS.filter(([key]) => key !== 'activity' || canEdit).map(([key, label, Icon]) => <button key={key} className={tab === key ? 'is-active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => {
-        if (editingBrief && tab === 'brief' && key !== 'brief' && !window.confirm('Quitter le brief sans enregistrer ?')) return;
+        if (editingBrief && tab === 'brief' && key !== 'brief' && !projectConfirm('Quitter le brief sans enregistrer ?')) return;
         if (key !== 'brief') setEditingBrief(false);
         setTab(key);
       }}><Icon size={16} />{label}{key === 'tasks' && <span>{tasks.length}</span>}</button>)}</nav>
@@ -197,14 +198,14 @@ export default function ProjectDetailPage({
     {tab === 'team' && <Panel title="Les personnes derrière le projet" intro="Le pilote organise le projet. Chaque membre peut enrichir le brief, déposer des fichiers et avancer sur ses tâches." actions={manager && writable && <button className="pj-btn pj-primary" onClick={() => setAddingMember(true)}><UserPlus size={16} /> Ajouter un animateur</button>}><div className="pj-team-grid">{project.members.map(m => {
           const assigned = tasks.filter(t => t.assignee?.id === m.id);
           return <article className="pj-team-card" key={m.id}><Avatar member={m} /><h3>{personName(m)}</h3><span className="pj-badge">{m.id === project.created_by.id ? 'Pilote du projet' : 'Équipe'}</span><p>{assigned.filter(t => t.status !== 'valide').length} tâche(s) ouverte(s) · {assigned.filter(t => t.status === 'valide').length} validée(s)</p>{manager && writable && m.id !== project.created_by.id && <button className="pj-btn pj-danger" disabled={busy} onClick={() => {
-              if (window.confirm(`Retirer ${personName(m)} du projet ? Ses tâches ouvertes doivent d’abord être réattribuées.`)) act(async () => {
+              if (projectConfirm(`Retirer ${personName(m)} du projet ? Ses tâches ouvertes doivent d’abord être réattribuées.`)) act(async () => {
                 const r = await api.delete(`/animateur/projects/${projectId}/members/${m.id}`);
                 setProject(r.data);
               });
             }}><UserMinus size={15} /> Retirer</button>}</article>;
         })}</div></Panel>}
     {tab === 'files' && <Panel title="Tout le nécessaire" intro="Centralisez les supports, visuels et documents utiles. Les fichiers des rendus restent dans leurs tâches.">{canEdit && writable && <form onSubmit={upload} className="pj-upload"><Field label="Nom du document"><input value={resourceTitle} maxLength={160} onChange={e => setResourceTitle(e.target.value)} placeholder="Ex. Visuel de l’événement" /></Field><Field label="Choisir un fichier"><input key={uploadKey} type="file" required onChange={e => setResourceFile(e.target.files?.[0] || null)} /></Field><button className="pj-btn pj-primary" disabled={busy || !resourceFile}><Plus size={16} />{busy ? 'Envoi…' : 'Ajouter le fichier'}</button></form>}{!resources.length ? <Empty title="Les supports trouveront leur place ici.">Ajoutez les documents dont l’équipe a besoin.</Empty> : <div className="pj-files">{resources.map(resource => <div className="pj-file" key={resource.id}><FileText size={24} /><div><strong>{resource.title}</strong><small>{resource.original_filename} · {(resource.size / 1024).toFixed(0)} Ko · {personName(resource.uploaded_by)}</small></div>{canEdit && <button className="pj-btn" disabled={busy} onClick={() => download(resource)}><Download size={15} /> Télécharger</button>}{manager && writable && <button className="pj-icon pj-danger" aria-label={`Supprimer ${resource.title}`} disabled={busy} onClick={() => {
-            if (window.confirm('Supprimer ce fichier du projet ?')) act(async () => {
+            if (projectConfirm('Supprimer ce fichier du projet ?')) act(async () => {
               await api.delete(`/animateur/resources/${resource.id}`);
               setResources(v => v.filter(r => r.id !== resource.id));
             });
@@ -224,7 +225,7 @@ export default function ProjectDetailPage({
                 timeStyle: 'short'
               })}</time>{a.details?.message && <blockquote>{a.details.message}</blockquote>}</div></li>)}</ol>}</Panel>}
     {isResponsableGlobal && tab === 'overview' && <details className="pj-danger-zone"><summary>Administration du projet</summary><p>La suppression efface le projet, ses tâches et ses fichiers associés. Préférez l’archivage pour conserver le travail de l’équipe.</p><button className="pj-btn pj-danger" disabled={busy} onClick={() => {
-        if (window.confirm(`Supprimer définitivement « ${project.title} » et toutes ses tâches ?`)) act(async () => {
+        if (projectConfirm(`Supprimer définitivement « ${project.title} » et toutes ses tâches ?`)) act(async () => {
           await api.delete(`/animateur/projects/${projectId}`);
           navigate('/animateur/projects');
         });

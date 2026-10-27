@@ -173,3 +173,53 @@ def test_assignee_can_submit_without_staff_role():
     owner=client(); p=create(owner); other=add_other(p)
     t=task(owner,p,assignee_id=h.USER_IDS["responsable"])
     assert other.put(f"/api/animateur/tasks/{t['id']}/submit",data={"submission_content":"Prêt"}).status_code == 200
+
+
+def test_ui_events_are_separate_from_server_mutations_and_require_project_access():
+    c=client(); p=create(c)
+    payload={"kind":"clicked","page":"project","project_id":p["id"],"label":"Modifier le brief"}
+    assert c.post('/api/animateur/projects/workspace/events',json=payload).status_code == 204
+    entry=h.run(h.db.auth_logs.find_one({"event_type":"project.ui.clicked"}))
+    assert entry['helper_id'] == h.USER_IDS['animateur']
+    assert entry['details']['source'] == 'client'
+    assert entry['details']['project_title'] == p['title']
+    assert c.post('/api/animateur/projects/workspace/events',json={**payload,"kind":"project.deleted"}).status_code == 422
+    assert client('helper').post('/api/animateur/projects/workspace/events',json=payload).status_code == 403
+    assert c.post('/api/animateur/projects/workspace/events',json={**payload,"project_id":"missing"}).status_code == 404
+
+
+def test_reads_refusals_and_validation_errors_are_audited():
+    c=client(); p=create(c); t=task(c,p)
+    for suffix in ('tasks','resources','activity'):
+        assert c.get(f'/api/animateur/projects/{p["id"]}/{suffix}').status_code == 200
+    assert c.get('/api/animateur/projects/workspace/overview').status_code == 200
+    assert c.get('/api/animateur/calendar-events').status_code == 200
+    other=add_other(p)
+    assert other.patch(f'/api/animateur/tasks/{t["id"]}',json={"title":"no"}).status_code == 403
+    assert c.patch(f'/api/animateur/tasks/{t["id"]}',json={"priority":"unknown"}).status_code == 422
+    events=set(h.run(h.db.auth_logs.distinct('event_type')))
+    assert {'project.tasks.viewed','project.resources.viewed','project.activity.viewed','project.calendar.viewed','project.workspace.viewed'} <= events
+    failures=h.run(h.db.auth_logs.find({'event_type':'project.action.failed'}).to_list(None))
+    assert {entry['status_code'] for entry in failures} == {403,422}
+    assert all(entry['details']['source'] == 'server' and entry['details']['project_id'] == p['id'] for entry in failures)
+
+
+def test_downloads_are_audited_and_ui_events_do_not_pollute_team_journal(monkeypatch):
+    from services import storage_service
+    from pathlib import Path
+    import tempfile
+    c=client(); p=create(c); t=task(c,p)
+    with tempfile.TemporaryDirectory() as folder:
+        monkeypatch.setattr(storage_service,'STORAGE_ROOT',Path(folder))
+        file=b'%PDF test'
+        uploaded=c.post(f'/api/animateur/projects/{p["id"]}/resources',data={'title':'Support'},files={'file':('support.pdf',file,'application/pdf')})
+        assert uploaded.status_code == 201, uploaded.text
+        resource=uploaded.json()
+        assert c.get(f'/api/animateur/resources/{resource["id"]}/download').status_code == 200
+        assert c.put(f'/api/animateur/tasks/{t["id"]}/submit',files={'file':('rendu.pdf',file,'application/pdf')}).status_code == 200
+        assert c.get(f'/api/animateur/tasks/{t["id"]}/submission/download').status_code == 200
+    assert c.post('/api/animateur/projects/workspace/events',json={'kind':'changed','page':'project','project_id':p['id'],'label':'Filtre','value':'En retard'}).status_code == 204
+    events=set(h.run(h.db.auth_logs.distinct('event_type')))
+    assert {'project.resource.downloaded','project.task.downloaded','project.ui.changed'} <= events
+    journal=c.get(f'/api/animateur/projects/{p["id"]}/activity').json()
+    assert not any(entry['event_type'].startswith('project.ui.') or entry['event_type'].endswith('.downloaded') for entry in journal)

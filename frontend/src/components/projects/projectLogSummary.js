@@ -1,0 +1,55 @@
+import { dateLabel, personName, PRIORITY, PROJECT_STATUS, TASK_STATUS } from './projectUtils';
+
+export const PROJECT_AUDIT_LABELS = {
+  'project.action.failed': 'Action sur un projet : échec',
+  'project.task.downloaded': 'Rendu téléchargé',
+  'project.resource.downloaded': 'Ressource téléchargée',
+  'project.tasks.viewed': 'Tâches consultées',
+  'project.resources.viewed': 'Fichiers consultés',
+  'project.activity.viewed': 'Journal du projet consulté',
+  'project.workspace.viewed': 'Liste des projets consultée',
+  'project.calendar.viewed': 'Calendrier des projets consulté',
+  'project.members.searched': 'Animateurs recherchés',
+  'project.ui.clicked': 'Interaction dans les projets',
+  'project.ui.changed': 'Champ ou filtre modifié',
+  'project.ui.submitted': 'Formulaire envoyé',
+  'project.ui.toggled': 'Volet ouvert ou fermé',
+  'project.ui.edited': 'Éditeur utilisé',
+  'project.ui.shortcut': 'Raccourci utilisé',
+};
+const fields = {title:'Titre',description:'Description',priority:'Priorité',tags:'Étiquettes',start_date:'Date de début',end_date:'Date de fin',status:'État',assignee:'Attribution',blocked_reason:'Blocage',review_note:'Consigne de correction'};
+function formatValue(key,value) {
+  if (value == null || value === '') return key === 'blocked_reason' ? 'aucun blocage' : 'non renseigné';
+  if (key === 'status') return TASK_STATUS[value] || PROJECT_STATUS[value] || value;
+  if (key === 'priority') return PRIORITY[value] || value;
+  if (key === 'assignee') return personName(value);
+  if (key.endsWith('_date')) return dateLabel(value);
+  return Array.isArray(value) ? value.join(', ') || 'aucune' : String(value);
+}
+export function projectLogSummary(type,d) {
+  const title = d.title || d.after?.title || d.before?.title;
+  const target = title ? ` « ${title} »` : '';
+  const extras=[];
+  if (d.project_title) extras.push(['Projet',d.project_title]);
+  if (type === 'project.task.updated' || type === 'project.settings.updated') {
+    for (const key of Object.keys(d.after || {})) {
+      if (fields[key] && JSON.stringify(d.before?.[key]) !== JSON.stringify(d.after[key])) extras.push([fields[key],`${formatValue(key,d.before?.[key])} → ${formatValue(key,d.after[key])}`]);
+    }
+    return {text:`a modifié ${type === 'project.task.updated' ? 'la tâche' : 'les paramètres du projet'}${target}`,extras};
+  }
+  if (type === 'project.member.removed') return {text:`a retiré ${d.member_username || d.member_id || 'un membre'} du projet`,extras};
+  if (type === 'project.comment.added') return {text:'a publié une note dans le journal du projet',extras};
+  if (type.startsWith('project.ui.')) {
+    extras.push(['Origine','Interaction déclarée par l’interface']);
+    if (d.value != null) extras.push(['Sélection',d.value]);
+    if (d.length != null) extras.push(['Taille',`${d.length} ${d.label?.toLowerCase().includes('fichier')?'fichier(s)':'caractères'}`]);
+    return {text:`· ${PROJECT_AUDIT_LABELS[type] || 'Interaction'} : ${d.label || ''}`,extras};
+  }
+  if (PROJECT_AUDIT_LABELS[type]) {
+    if (d.reason) extras.push(['Motif',d.reason]);
+    if (d.operation) extras.push(['Opération',d.operation]);
+    if (d.original_filename) extras.push(['Fichier',d.original_filename]);
+    return {text:`· ${PROJECT_AUDIT_LABELS[type]}${target}`,extras};
+  }
+  return null;
+}

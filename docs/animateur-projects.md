@@ -31,3 +31,14 @@ Les suppressions de tâches/ressources/projets retirent les références MongoDB
 ## Vérification
 
 Tests hors ligne : `backend/tests/test_project_workspace.py`, régressions fichiers et logs, `ProjectsWorkspace.test.jsx`, `projectUtils.test.js`, puis compilation de production. Aucun envoi Discord ni screenshot de rendu.
+
+
+## Audit exhaustif des parcours du module
+
+Les écritures métier restent journalisées côté serveur (création, brief, paramètres, état du projet, membres, tâches, blocages, corrections, rendus, validations, fichiers et notes). Les résumés responsables détaillent les champs modifiés et les valeurs avant/après en français.
+
+Les routes du module utilisent `ProjectAuditRoute` : consultations des collections, du calendrier et du journal, téléchargements de ressources/rendus, refus de permissions, erreurs de validation et échecs internes d'une session identifiée sont audités. Les erreurs de streaming survenant après l'ouverture d'une réponse peuvent rester dans les logs techniques du serveur ; un téléchargement journalisé décrit la réponse servie, pas sa réception complète par le navigateur.
+
+Le périmètre de l'interface (`.pj-page`, dialogues et éditeurs du module) enregistre clics, navigation, onglets, pagination, filtres/champs validés, envois de formulaires, annulations/confirmations, volets, raccourcis et sortie d'éditeur. Ces événements `project.ui.*` portent explicitement `source=client` ; ils décrivent une interaction, jamais une preuve de réussite métier. Les textes des champs et éditeurs ne sont pas recopiés dans ces événements : seules leur taille et les sélections de filtres sont enregistrées. La capture est retirée en quittant le module. L'envoi d'interactions dépend de la connexion du navigateur.
+
+Le journal d'équipe exclut les événements d'interface, consultations répétées et refus ; les responsables disposent de l'ensemble dans les logs IRIS.
