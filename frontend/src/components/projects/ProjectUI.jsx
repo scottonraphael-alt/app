@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CalendarDays, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { personName, PRIORITY } from './projectUtils';
 import '../../Casier.css';
 import '../../Projects.css';
@@ -91,4 +91,21 @@ export function Panel({
   className = ''
 }) {
   return <section className={`pj-panel ${className}`}><header className="pj-panel-head"><div><h2>{title}</h2>{intro && <p>{intro}</p>}</div>{actions}</header><div className="pj-panel-body">{children}</div></section>;
+}
+
+
+export function usePage(items, pageSize, resetKey) {
+  const [requestedPage, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [resetKey]);
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(items.length / pageSize)));
+  return { page, setPage, items: items.slice((page - 1) * pageSize, page * pageSize) };
+}
+
+export function Pagination({ page, pageSize, total, onChange, label }) {
+  if (!total) return null;
+  const pages = Math.ceil(total / pageSize);
+  return <nav className="pj-pagination" aria-label={`Pagination des ${label}`}>
+    <span role="status">{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} sur {total} {label}</span>
+    {pages > 1 && <div><button className="pj-icon" onClick={() => onChange(page - 1)} disabled={page <= 1} aria-label={`Page précédente des ${label}`}><ChevronLeft size={17}/></button><span>{page} / {pages}</span><button className="pj-icon" onClick={() => onChange(page + 1)} disabled={page >= pages} aria-label={`Page suivante des ${label}`}><ChevronRight size={17}/></button></div>}
+  </nav>;
 }

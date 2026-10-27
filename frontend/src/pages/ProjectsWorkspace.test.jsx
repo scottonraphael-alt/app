@@ -126,7 +126,7 @@ it('charge le carnet sans requêtes par projet et propose les archives', async (
   expect(container.querySelector('a[href="/"]')).not.toBeNull();
   expect(api.get).toHaveBeenCalledTimes(1);
   await click('Archives');
-  expect(container.querySelectorAll('.pj-project-card')).toHaveLength(0);
+  expect(container.querySelectorAll('.pj-project-row')).toHaveLength(0);
 });
 it('ouvre une création accessible et restaure le focus', async () => {
   await act(async () => root.render(<ProjectsListPage helper={{
@@ -145,6 +145,8 @@ it('permet au pilote de consulter et valider un rendu depuis le tableau', async 
     id: 'owner'
   }} />));
   await click('Tâches');
+  expect(container.querySelectorAll('.pj-task-row')).toHaveLength(2);
+  await click('Tableau');
   expect(container.querySelectorAll('.pj-board-column')).toHaveLength(4);
   await click('Les visuels');
   expect(document.querySelector('[role="dialog"]').textContent).toContain('Valider le rendu');
@@ -191,4 +193,42 @@ it('propose le mois, l’agenda et les échéances personnelles', async () => {
   await act(async () => container.querySelector('input[type="checkbox"]').click());
   expect(container.textContent).not.toContain('Début du projet');
   expect(container.textContent).toContain('Échéance de tâche');
+});
+
+it('pagine quinze tâches en liste et revient à la première page après un filtre', async () => {
+  const many = Array.from({ length:15 }, (_, i) => ({ ...tasks[0], id:`t-${i}`, title:`Étape ${i+1}`, status:i === 14 ? 'rendu' : 'a_faire' }));
+  api.get.mockImplementation(url => Promise.resolve({data:url.endsWith('/tasks') ? many : url.endsWith('/resources') ? [] : project}));
+  await act(async () => root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+  await click('Tâches');
+  expect(container.querySelectorAll('.pj-task-row')).toHaveLength(8);
+  expect(container.querySelector('.pj-task-row').textContent).toContain('Étape 1');
+  await act(async () => container.querySelector('[aria-label="Page suivante des tâches du projet"]').click());
+  expect(container.querySelectorAll('.pj-task-row')).toHaveLength(7);
+  expect(container.querySelector('.pj-task-row').textContent).toContain('Étape 9');
+  const filter = container.querySelector('[aria-label="Filtrer les tâches"]');
+  await act(async () => { filter.value='review'; filter.dispatchEvent(new Event('change',{bubbles:true})); });
+  expect(container.querySelectorAll('.pj-task-row')).toHaveLength(1);
+  expect(container.querySelector('.pj-task-row').textContent).toContain('Étape 15');
+  expect(container.querySelector('.pj-pagination').textContent).toContain('1–1 sur 1');
+  await click('Tableau');
+  expect(container.querySelectorAll('.pj-board-body[tabindex="0"]')).toHaveLength(4);
+  expect(container.querySelectorAll('.pj-task-card')).toHaveLength(1);
+});
+
+it('pagine indépendamment les projets et le volet personnel', async () => {
+  const manyProjects=Array.from({length:9},(_,i)=>({...project,id:`p-${i}`,title:`Projet ${i+1}`}));
+  const manyTasks=Array.from({length:12},(_,i)=>({...tasks[0],id:`t-${i}`,title:`Ma tâche ${i+1}`}));
+  api.get.mockResolvedValue({data:{projects:manyProjects,my_tasks:manyTasks}});
+  await act(async () => root.render(<ProjectsListPage helper={{id:'member'}}/>));
+  expect(container.querySelectorAll('.pj-project-row')).toHaveLength(8);
+  expect(container.querySelectorAll('.pj-personal-task')).toHaveLength(5);
+  await act(async () => container.querySelector('[aria-label="Page suivante des projets"]').click());
+  expect(container.querySelectorAll('.pj-project-row')).toHaveLength(1);
+  expect(container.querySelector('.pj-project-row').textContent).toContain('Projet 9');
+  await act(async () => container.querySelector('[aria-label="Page suivante des tâches personnelles"]').click());
+  expect(container.querySelector('.pj-personal-task').textContent).toContain('Ma tâche 6');
+  expect(container.querySelectorAll('.pj-project-row')).toHaveLength(1);
+  await click('Tous');
+  expect(container.querySelectorAll('.pj-project-row')).toHaveLength(8);
+  expect(container.querySelector('.pj-project-row').textContent).toContain('Projet 1');
 });
