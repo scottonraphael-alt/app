@@ -198,6 +198,37 @@ export function normalizeEntry(entry, options = {}) {
   };
 }
 
+// Tâche de projet à rendre (feed.tasks) : un jour, sans horaire, ouvre le projet au clic.
+export function normalizeTask(task, options = {}) {
+  const { viewerId } = context(options);
+  const assignee = isRecord(task.assignee) ? task.assignee : null;
+  const project = task.project_title || "";
+  return {
+    key: itemKey("task", task.id),
+    kind: "task",
+    type: "taches",
+    id: String(task.id),
+    title: task.title || "Tâche",
+    label: "Tâche à rendre",
+    start: task.due_date,
+    end: task.due_date,
+    displayEnd: task.due_date,
+    tailStart: null,
+    startTime: null,
+    endTime: null,
+    allDay: true,
+    openEnded: false,
+    location: "",
+    description: [project, assignee ? helperName(assignee) : ""].filter(Boolean).join(" · "),
+    people: assignee ? [assignee] : [],
+    cancelled: false,
+    phase: null,
+    mine: sameId(assignee?.id, viewerId),
+    canEdit: false,
+    raw: task,
+  };
+}
+
 // Élément de `upcoming.next_events` (forme réduite) → CalendarItem, ou null si ce n'est pas un objet.
 export function normalizeNextEvent(event) {
   if (!isRecord(event)) return null;
@@ -292,6 +323,7 @@ export function normalizeFeed(feed, options = {}) {
     ...asArray(feed.absences).filter(isRecord).map((absence) => normalizeAbsence(absence, ctx)),
     ...asArray(feed.meetings).filter(isRecord).map((meeting) => normalizeMeeting(meeting, ctx)),
     ...asArray(feed.entries).filter(isRecord).map((entry) => normalizeEntry(entry, ctx)),
+    ...asArray(feed.tasks).filter(isRecord).map((task) => normalizeTask(task, ctx)),
   ];
   const seen = new Set();
   const valid = items.filter((item) => {
@@ -710,6 +742,7 @@ export function isMine(item, viewerId) {
   if (item.kind === "meeting") {
     return Boolean(raw.is_participant) || meetingParticipantIds(raw).includes(String(viewerId));
   }
+  if (item.kind === "task") return sameId(raw.assignee?.id, viewerId);
   if (item.kind === "entry") {
     return sameId(raw.created_by?.id, viewerId) || asArray(raw.participants).some((person) => sameId(person?.id, viewerId));
   }

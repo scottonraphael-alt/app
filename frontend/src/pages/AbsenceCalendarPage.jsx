@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarDays, CircleAlert, Lock, Pencil, RefreshCw, Settings2, Trash2, UserMinus } from "lucide-react";
@@ -93,10 +93,13 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
   useAgendaNoNav();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const narrow = useMediaQuery("(max-width: 899px)");
   const phone = useMediaQuery("(max-width: 639px)");
 
-  const [filters, setFilters] = useState(() => readStoredFilters());
+  const [filters, setFilters] = useState(() =>
+    searchParams.get("categorie") === "taches" ? { types: ["taches"], onlyMine: false } : readStoredFilters(),
+  );
   useEffect(() => {
     writeStoredFilters(filters);
   }, [filters]);
@@ -189,11 +192,15 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
   const triggerRef = useRef(null);
   const openItem = useCallback(
     (item) => {
+      if (item.kind === "task") {
+        navigate(`/animateur/projects/${encodeURIComponent(item.raw.project_id)}?task=${encodeURIComponent(item.id)}`);
+        return;
+      }
       triggerRef.current = typeof document !== "undefined" ? document.activeElement : null;
       setDayPop(null);
       patchParams({ element: item.key });
     },
-    [patchParams],
+    [navigate, patchParams],
   );
   const openElement = useCallback(
     (kind, id) => {

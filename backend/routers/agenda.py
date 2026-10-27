@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from database import db
 from models.staff import (
@@ -293,7 +294,61 @@ async def delete_entry(entry_id: str, helper: AuthenticatedHelper = Depends(curr
 # Flux du calendrier et « À venir »
 # ---------------------------------------------------------------------------
 
-@router.get("/feed", response_model=FeedOut)
+PROJECT_TASK_OPEN_STATUSES = ("a_faire", "en_cours")
+
+
+class ProjectTaskFeedOut(BaseModel):
+    """Tâche de projet à rendre, affichée à sa date d'échéance (catégorie « taches » du calendrier)."""
+    id: str
+    project_id: str
+    project_title: str = ""
+    title: str
+    due_date: str
+    status: str
+    assignee: HelperIdentity | None = None
+
+
+class FeedWithTasksOut(FeedOut):
+    tasks: list[ProjectTaskFeedOut] = Field(default_factory=list)
+
+
+async def _project_tasks_feed(start: str, end: str) -> list[dict]:
+    """Tâches non rendues ni validées dont l'échéance tombe dans la période (aucun rappel Discord associé)."""
+    docs = await db.project_tasks.find(
+        {"due_date": {"$gte": start, "$lte": end}, "status": {"$in": list(PROJECT_TASK_OPEN_STATUSES)}},
+        {"_id": 0, "id": 1, "project_id": 1, "title": 1, "due_date": 1, "status": 1, "assignee": 1},
+    ).to_list(FEED_LIMIT)
+    docs = [doc for doc in docs if doc.get("id") and doc.get("project_id")]
+    project_ids = sorted({doc["project_id"] for doc in docs})
+    titles: dict[str, str] = {}
+    if project_ids:
+        async for project in db.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "title": 1}):
+            titles[project["id"]] = project.get("title") or ""
+    docs.sort(key=lambda doc: _sort_key(doc.get("due_date"), doc.get("title")))
+    out = []
+    for doc in docs:
+        assignee = doc.get("assignee") if isinstance(doc.get("assignee"), dict) else None
+        identity = None
+        if assignee and assignee.get("id"):
+            identity = {
+                "id": str(assignee["id"]),
+                "username": assignee.get("username") or "",
+                "display_name": assignee.get("display_name"),
+                "avatar_url": assignee.get("avatar_url"),
+            }
+        out.append({
+            "id": doc["id"],
+            "project_id": doc["project_id"],
+            "project_title": titles.get(doc["project_id"], ""),
+            "title": doc.get("title") or "Tâche",
+            "due_date": str(doc["due_date"])[:10],
+            "status": doc.get("status") or "a_faire",
+            "assignee": identity,
+        })
+    return out
+
+
+@router.get("/feed", response_model=FeedWithTasksOut)
 async def get_feed(
     start: str | None = None,
     end: str | None = None,
@@ -326,6 +381,7 @@ async def get_feed(
         "absences": [agenda_absences.to_out(doc, viewer) for doc in absences],
         "meetings": [agenda_meetings.to_summary(doc, viewer) for doc in meetings],
         "entries": await _entries_out(entries, viewer),
+        "tasks": await _project_tasks_feed(start, end),
     }
 
 

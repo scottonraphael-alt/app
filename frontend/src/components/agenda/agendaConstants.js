@@ -7,6 +7,7 @@ import {
   Clock,
   Flag,
   Headset,
+  ListChecks,
   LoaderCircle,
   PartyPopper,
   Tag,
@@ -33,7 +34,7 @@ export function isValidAgendaId(id) {
   return typeof id === "string" && AGENDA_ID_PATTERN.test(id) && id !== "undefined" && id !== "null";
 }
 
-export const TYPE_ORDER = ["absence", "reunion", "evenement", "echeance", "rappel", "permanence", "autre"];
+export const TYPE_ORDER = ["absence", "reunion", "evenement", "echeance", "taches", "rappel", "permanence", "autre"];
 
 // Types d'entrées libres (collection agenda_entries), dans l'ordre du sélecteur de EntryDialog.
 export const ENTRY_TYPE_KEYS = ["evenement", "echeance", "rappel", "permanence", "autre"];
@@ -97,6 +98,20 @@ export const ENTRY_TYPES = {
     colors: { bg: "#f8e9e8", line: "#efd6d4", ink: "#954c50" },
     responsableOnly: false,
     remindable: true,
+  },
+  taches: {
+    key: "taches",
+    kind: "task",
+    label: "Tâche à rendre",
+    pluralLabel: "Tâches à rendre",
+    help: "Tâche de projet animateur à rendre à cette date",
+    icon: ListChecks,
+    slug: "taches",
+    pillClass: "ag-pill--taches",
+    typeClass: "ag-type--taches",
+    colors: { bg: "#dff1f1", line: "#bcdcdc", ink: "#2f6b6d" },
+    responsableOnly: false,
+    remindable: false,
   },
   rappel: {
     key: "rappel",
@@ -381,7 +396,7 @@ export const TEXT_LIMITS = {
   participants: 50,
 };
 
-export const FILTERS_STORAGE_KEY = "iris.agenda.filters";
+export const FILTERS_STORAGE_KEY = "iris.agenda.filters.v2";
 
 export const DEFAULT_FILTERS = Object.freeze({
   types: [...TYPE_ORDER],

@@ -30,6 +30,7 @@ from models.staff import (
     null_required_message,
 )
 from services import agenda_people, agenda_time
+from services.notifications import create_notification
 from services.agenda_absences import (
     forbidden,
     identity,
@@ -1004,6 +1005,11 @@ async def patch(meeting_id: str, payload: MeetingPatch | dict, helper, viewer: A
         if current.get("is_locked") is True:
             raise forbidden(LOCKED)
         return conflict_response(current)
+    for action in updates.get("action_items") or []:
+        who = (action.get("assignee") or {}).get("id")
+        before = next((a for a in existing.get("action_items") or [] if isinstance(a, dict) and a.get("id") == action["id"]), None)
+        if who and who != helper.id and not action.get("done") and who != ((before or {}).get("assignee") or {}).get("id"):
+            await create_notification(who, "action_assigned", "Action de réunion attribuée", action.get("text", ""), f"/staff/meetings/{meeting_id}")
     return {**existing, **updates}
 
 

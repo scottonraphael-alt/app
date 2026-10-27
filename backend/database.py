@@ -113,6 +113,7 @@ async def initialize_indexes() -> None:
     await db.tickets.create_index("assigned_helper.id")
 
     await db.helper_profiles.create_index("helper_id", unique=True)
+    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
 
     await db.resources.create_index("id", unique=True)
     await db.resources.create_index([("is_deleted", 1), ("created_at", -1)])

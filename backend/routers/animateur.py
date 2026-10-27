@@ -16,6 +16,7 @@ from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCre
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.audit_service import log_auth_event
 from services.project_audit import ProjectAuditRoute
+from services.notifications import create_notification
 from services.project_templates import BUILTIN_TEMPLATES, get_template, instantiate_tasks, project_blueprint
 from services.auth_service import (
     current_responsable,
@@ -551,6 +552,8 @@ async def create_project_task(
     }
 
     await db.project_tasks.insert_one(task)
+    if assignee["id"] != helper.id:
+        await create_notification(assignee["id"], "task_assigned", "Nouvelle tâche de projet", title, f"/animateur/projects/{project_id}")
 
     await log_auth_event(
         "project.task.created",

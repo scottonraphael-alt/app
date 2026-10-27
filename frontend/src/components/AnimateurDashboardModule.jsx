@@ -332,7 +332,7 @@ export default function AnimateurDashboardModule({ helper }) {
             </div>
 
             <Link
-              to="/animateur/calendrier"
+              to="/staff/calendrier?categorie=taches"
               className="nd-anim-calendar-footer"
             >
               Ouvrir le calendrier complet

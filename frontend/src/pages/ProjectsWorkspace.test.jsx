@@ -2,7 +2,6 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import ProjectsListPage from './ProjectsListPage';
 import ProjectDetailPage from './ProjectDetailPage';
-import ProjectCalendarPage from './ProjectCalendarPage';
 import { api } from '../api/client';
 jest.mock('react-router-dom', () => ({
   Link: ({
@@ -183,17 +182,6 @@ it('charge le journal à la demande et réserve les paramètres au pilote', asyn
   await click('Journal');
   expect(api.get).toHaveBeenCalledWith('/animateur/projects/p/activity');
   expect(container.textContent).toContain('Publier dans le journal');
-});
-it('propose le mois, l’agenda et les échéances personnelles', async () => {
-  await act(async () => root.render(<ProjectCalendarPage helper={{
-    id: 'member'
-  }} />));
-  expect(container.querySelectorAll('.pj-day').length).toBeGreaterThanOrEqual(28);
-  await click('Agenda');
-  expect(container.querySelector('.pj-month-grid')).toBeNull();
-  await act(async () => container.querySelector('input[type="checkbox"]').click());
-  expect(container.textContent).not.toContain('Début du projet');
-  expect(container.textContent).toContain('Échéance de tâche');
 });
 
 it('pagine quinze tâches en liste et revient à la première page après un filtre', async () => {

@@ -20,7 +20,7 @@ export function ProjectPage({
     document.body.classList.add('projects-no-nav');
     return () => document.body.classList.remove('projects-no-nav');
   }, []);
-  return <section className="cz-page pj-page" data-project-id={projectId || undefined} data-audit-page={page}><header className="cz-header"><div className="cz-header-copy"><p className="cz-eyebrow">ESPACE ANIMATEUR · ATELIER DES PROJETS</p><h1>{title}</h1><p className="cz-intro">{intro}</p></div><div className="cz-header-actions">{back && <Link className="pj-btn" to="/animateur/projects"><ArrowLeft size={16} /> Projets</Link>}<Link className="pj-btn" to="/animateur/calendrier"><CalendarDays size={16} /> Calendrier</Link><Link className="cz-home" to="/">Accueil <ArrowRight size={17} /></Link>{actions}</div></header>{children}</section>;
+  return <section className="cz-page pj-page" data-project-id={projectId || undefined} data-audit-page={page}><header className="cz-header"><div className="cz-header-copy"><p className="cz-eyebrow">ESPACE ANIMATEUR · ATELIER DES PROJETS</p><h1>{title}</h1><p className="cz-intro">{intro}</p></div><div className="cz-header-actions">{back && <Link className="pj-btn" to="/animateur/projects"><ArrowLeft size={16} /> Projets</Link>}<Link className="pj-btn" to="/staff/calendrier?categorie=taches"><CalendarDays size={16} /> Calendrier</Link><Link className="cz-home" to="/">Accueil <ArrowRight size={17} /></Link>{actions}</div></header>{children}</section>;
 }
 export function Modal({
   title,

@@ -5,6 +5,7 @@ import {
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import logo from "../assets/logo.png";
+import Topbar from "./topbar/Topbar";
 
 function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isOperateur, isStaff, isHelper }) {
   if (isResponsable) return "Responsable";
@@ -127,7 +128,7 @@ export default function AppShell({
                 <NavLink className="nav-link" to="/animateur/projects" data-testid="animateur-projects-link" title="Projets">
                   <FolderKanban size={18} /> <span>Projets</span>
                 </NavLink>
-                <NavLink className="nav-link" to="/animateur/calendrier" data-testid="animateur-projects-link" title="Calendrier">
+                <NavLink className="nav-link" to="/staff/calendrier?categorie=taches" data-testid="animateur-projects-link" title="Calendrier">
                   <CalendarDays size={18} /> <span>Calendrier</span>
                 </NavLink>
               </div>
@@ -190,7 +191,10 @@ export default function AppShell({
           </div>
         </div>
       </aside>
-      <main className="app-main">{children}</main>
+      <main className="app-main">
+        <Topbar />
+        {children}
+      </main>
     </div>
   );
 }

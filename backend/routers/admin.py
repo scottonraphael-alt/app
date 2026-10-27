@@ -15,6 +15,7 @@ from models.ticket import (
 from services.auth_service import current_admin, current_helper
 from services.discord_service import DiscordService
 from services.ticket_assignment import ticket_helper_role_ids
+from services.notifications import create_notification
 from services.ticket_avatars import cache_avatar
 from services.ticket_audit import audit_action
 
@@ -108,6 +109,8 @@ async def assign_ticket_helper(
     )
     if not result.matched_count:
         raise HTTPException(status_code=409, detail="Le dossier a changé. Actualisez la page.")
+    if assigned_helper and assigned_helper.id != (ticket.get("assigned_helper") or {}).get("id"):
+        await create_notification(assigned_helper.id, "ticket_assigned", "Nouveau suivi attribué", ticket.get("channel_name") or "Un dossier vous a été attribué.", f"/tickets/{ticket_id}")
     return await ticket_or_404(ticket_id)
 
 

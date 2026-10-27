@@ -22,7 +22,6 @@ const MeetingSummaryEditorPage = lazy(() => import("./pages/MeetingSummaryEditor
 const QuarterlyTasksPage = lazy(() => import("./pages/QuarterlyTasksPage"));
 const ProjectsListPage = lazy(() => import("./pages/ProjectsListPage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
-const ProjectCalendarPage = lazy(() => import("./pages/ProjectCalendarPage"));
 const ServerStatisticsPage = lazy(() => import("./pages/ServerStatisticsPage"));
 const SanctionAccessPage = lazy(() => import("./pages/SanctionAccessPage"));
 const DiscordAnnouncementsPage = lazy(() => import("./pages/DiscordAnnouncementsPage"));
@@ -355,11 +354,7 @@ function AuthenticatedApp({
             path="/animateur/calendrier"
             element={
               canSeeAnimateur ? (
-                <ProjectCalendarPage
-                  helper={helper}
-                  isResponsable={isResponsable}
-                  isResponsableGlobal={isResponsable}
-                />
+                <Navigate to="/staff/calendrier?categorie=taches" replace />
               ) : (
                 <Navigate to={defaultRoute} replace />
               )
