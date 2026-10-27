@@ -129,7 +129,7 @@ class RequestModal(discord.ui.Modal):
             else:
                 results=await asyncio.wait_for(ai.structures(query,country),timeout=210)
                 phase="render"
-                view=local_card(query,country,results)
+                view=HelpResultsView(self.actor_id,self.guild_id,query,country,results)
                 phase="delivery"
                 await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
             delivered=True
@@ -150,20 +150,69 @@ class RequestModal(discord.ui.Modal):
             except Exception:logger.warning('wellbeing failure state not saved reference=%s',identifier)
 
 
-def local_card(city,country,results):
-    header=['## 📍 Des structures pour t’accompagner',f'### {clean(city,100)} · {clean(country,60)}']
-    footer='-# Coordonnées issues de sources consultées par l’IA ; vérifie les horaires et les conditions d’accueil avant de te déplacer. Cette liste n’est pas exhaustive.'
-    parts=[text(value) for value in header]
+KINDS={'urgence':'🚑 Urgence confirmée','consultation':'🌱 Consultation et suivi','ecoute':'💬 Écoute et soutien','orientation':'🧭 Information et orientation'}
+SCOPES={'local':'Dans la ville / à proximité','regional':'Ressource régionale / environs élargis','national':'Ressource nationale'}
+RESULT_FOOTER='-# Sources consultées par l’IA · Vérifie les conditions d’accueil avant un déplacement. « À consulter sur le site » signifie que cette coordonnée n’a pas été vérifiée. Liste non exhaustive.'
+
+
+def contact_detail(item):
+    detail=f'### {clean(item.name,160)}\n**{KINDS[item.kind]}** · {SCOPES[item.scope]}'
+    if item.summary:detail+='\n'+clean(item.summary,220)
+    detail+='\n📍 '+(clean(item.address,250) if item.address else 'Adresse : à consulter sur le site officiel')
+    detail+='\n☎️ '+(clean(item.phone,40) if item.phone else 'Téléphone : à consulter sur le site officiel')
+    return detail
+
+
+def contact_pages(city,country,results):
     units=lambda value:len(value.encode('utf-16-le'))//2
-    used=sum(units(value) for value in header+[HELPLINE,footer])
-    if not results:parts.append(text('Aucune structure avec des coordonnées complètes n’a pu être vérifiée pour cette recherche. Précise la région ou une grande ville proche, ou consulte le service de santé public local.'))
-    for item in results[:5]:
-        detail=f'### {clean(item.name,160)}\n📍 {clean(item.address,250)}\n☎️ {clean(item.phone,40)}'
-        if used+units(detail)>3900:break
-        used+=units(detail)
-        parts.extend([discord.ui.Separator(),discord.ui.Section(text(detail),accessory=discord.ui.Button(label='Source et coordonnées',url=item.url))])
-    parts.extend([discord.ui.Separator(),text(HELPLINE),text(footer)])
-    view=discord.ui.LayoutView(timeout=600);view.add_item(discord.ui.Container(*parts,accent_colour=0x78618C));return view
+    reserved=units(HELPLINE)+units(RESULT_FOOTER)+units(clean(city,100))+units(clean(country,60))+200
+    pages=[];page=[];used=reserved
+    for item in results:
+        size=units(contact_detail(item))
+        if page and (len(page)>=4 or used+size>3800):
+            pages.append(page);page=[];used=reserved
+        page.append(item);used+=size
+    if page:pages.append(page)
+    return pages or [[]]
+
+
+def result_container(city,country,results,*,page=0,total_pages=1,total=None):
+    header=['## 📍 Des ressources pour t’accompagner',f'### {clean(city,100)} · {clean(country,60)}']
+    header.append(f'{len(results) if total is None else total} ressource(s) identifiée(s) · Page {page+1}/{total_pages}')
+    parts=[text(value) for value in header]
+    if not results:parts.append(text('Aucune ressource locale n’a pu être identifiée dans les sources consultées. Cela ne signifie pas qu’il n’existe aucune aide : précise la région ou essaie une ville voisine.'))
+    for item in results:
+        parts.extend([discord.ui.Separator(),discord.ui.Section(text(contact_detail(item)),accessory=discord.ui.Button(label='Consulter le site officiel',url=item.url))])
+    parts.extend([discord.ui.Separator(),text(HELPLINE),text(RESULT_FOOTER)])
+    return discord.ui.Container(*parts,accent_colour=0x78618C)
+
+
+def local_card(city,country,results):
+    pages=contact_pages(city,country,results)
+    view=discord.ui.LayoutView(timeout=600)
+    view.add_item(result_container(city,country,pages[0],total_pages=len(pages),total=len(results)))
+    return view
+
+
+class HelpResultsView(PrivateView):
+    def __init__(self,actor_id,guild_id,city,country,results):
+        super().__init__(actor_id,guild_id)
+        self.city=city;self.country=country;self.results=results
+        self.pages=contact_pages(city,country,results);self.page=0
+        self.rebuild()
+    def rebuild(self):
+        self.clear_items()
+        self.add_item(result_container(self.city,self.country,self.pages[self.page],page=self.page,total_pages=len(self.pages),total=len(self.results)))
+        if len(self.pages)<=1:return
+        previous=discord.ui.Button(label='Précédente',style=discord.ButtonStyle.secondary,disabled=self.page==0)
+        following=discord.ui.Button(label='Suivante',style=discord.ButtonStyle.primary,disabled=self.page==len(self.pages)-1)
+        async def move(interaction,offset):
+            self.page=max(0,min(len(self.pages)-1,self.page+offset));self.rebuild()
+            await interaction.response.edit_message(view=self,allowed_mentions=NO_MENTIONS)
+        async def back(interaction):await move(interaction,-1)
+        async def forward(interaction):await move(interaction,1)
+        previous.callback=back;following.callback=forward
+        self.add_item(discord.ui.ActionRow(previous,following))
 
 
 async def infos_troubles(interaction:discord.Interaction):

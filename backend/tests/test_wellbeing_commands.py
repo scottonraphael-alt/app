@@ -78,7 +78,7 @@ def test_worldwide_city_and_country_sent_and_logged(monkeypatch):
         await modal.on_submit(it:=interaction());search.assert_awaited_once_with('Dakar','Sénégal')
         assert service.log_request.call_args.args[3]=='Ville : Dakar\nPays : Sénégal'
         content=str(it.edit_original_response.call_args.kwargs['view'].to_components())
-        assert 'Dakar' in content and '3114' in content and 'Aucune structure' in content
+        assert 'Dakar' in content and '3114' in content and 'Aucune ressource' in content
     h.run(check())
 
 def test_three_separate_private_disorder_messages(monkeypatch):
@@ -136,7 +136,7 @@ def test_long_contact_card_fits_discord_limits():
         item=ai.Structure(name='Nom '*40,address='Adresse '*31,phone='+123456789012',url='https://hospital.example.jp/')
         view=ui.local_card('Tokyo','Japon',[item]*5)
         assert view.content_length()<4000 and view.total_children_count<=40
-        assert str(view.to_components()).count('Source et coordonnées')==5
+        assert str(view.to_components()).count('Consulter le site officiel')==4
     h.run(check())
 
 @pytest.mark.parametrize('valid,treatments,status',[(False,'Soins généraux',422),(True,'Prendre 20 mg par jour',503),(True,'',503)])
@@ -207,3 +207,72 @@ def test_unicode_and_markdown_contact_cards_fit_v2_limit():
         view=ui.local_card('Tokyo','Japon',[item]*5)
         assert content_units(view.to_components())<4000
     h.run(check())
+
+
+def test_partial_japanese_resource_keeps_original_name_and_official_link():
+    url='https://hospital.example.jp/seishin'
+    evidence=[{'url':url,'title':'岐阜大学病院 精神科','quotes':['岐阜大学病院 精神科 外来診療']}]
+    results=ai.verify_contacts({'items':[{'name':'岐阜大学病院','url':url,'phone':'9999999999','address':'Unknown address','kind':'consultation','scope':'regional'}]},evidence)
+    assert len(results)==1 and results[0].phone is None and results[0].address is None
+    async def check():
+        view=ui.local_card('Gifu','Japon',results)
+        content=str(view.to_components())
+        assert '岐阜大学病院' in content and 'Ressource régionale' in content
+        assert 'à consulter sur le site officiel' in content
+        assert '9999999999' not in content and 'Unknown address' not in content
+    h.run(check())
+
+
+def test_more_than_five_resources_are_accessible_in_private_pages():
+    async def check():
+        items=[ai.Structure(name=f'Centre {i}',url=f'https://hospital.example.jp/{i}') for i in range(10)]
+        view=ui.HelpResultsView(12,int(config.DISCORD_GUILD_ID),'Gifu','Japon',items)
+        assert sum(len(page) for page in view.pages)==10
+        assert len(view.pages)>=3
+        assert not await view.interaction_check(interaction(actor=13))
+        it=interaction();it.response.edit_message=AsyncMock()
+        assert await view.interaction_check(it)
+        following=next(button for item in view.children if isinstance(item,discord.ui.ActionRow) for button in item.children if button.label=='Suivante')
+        await following.callback(it)
+        assert view.page==1 and it.response.edit_message.await_count==1
+        assert '3114' in str(view.to_components())
+        assert view.content_length()<4000 and view.total_children_count<=40
+    h.run(check())
+
+
+def test_sparse_first_pass_triggers_regional_search_and_preserves_first_result(monkeypatch):
+    class Client:
+        def __init__(self,**kw):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+    monkeypatch.setattr(ai,'AsyncAnthropic',Client)
+    url1='https://hospital.example.fr/local';url2='https://hospital.example.fr/regional'
+    source1={'url':url1,'title':'Centre Albert','quotes':['Centre Albert']}
+    source2={'url':url2,'title':'Centre régional','quotes':['Centre régional']}
+    search=AsyncMock(side_effect=[[source1],[source2]])
+    monkeypatch.setattr(ai,'research',search)
+    monkeypatch.setattr(ai,'extract',AsyncMock(side_effect=[{'items':[{'name':'Centre Albert','url':url1}]},{'items':[{'name':'Centre régional','url':url2,'scope':'regional'}]}]))
+    results=h.run(ai.structures('Albert','France'))
+    assert len(results)==2 and results[0].name=='Centre Albert'
+    assert [call.kwargs['max_searches'] for call in search.call_args_list]==[8,5]
+    assert 'langue locale' in search.call_args_list[0].args[1]
+
+
+def test_supplementary_search_failure_keeps_first_results(monkeypatch):
+    class Client:
+        def __init__(self,**kw):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+    monkeypatch.setattr(ai,'AsyncAnthropic',Client)
+    url='https://hospital.example.jp/local'
+    monkeypatch.setattr(ai,'research',AsyncMock(return_value=[{'url':url,'title':'Centre Gifu','quotes':['Centre Gifu']}]))
+    monkeypatch.setattr(ai,'extract',AsyncMock(return_value={'items':[{'name':'Centre Gifu','url':url}]}))
+    monkeypatch.setattr(ai,'supplementary_contacts',AsyncMock(side_effect=TimeoutError()))
+    results=h.run(ai.structures('Gifu','Japon'))
+    assert len(results)==1 and results[0].name=='Centre Gifu'
+
+
+def test_ungrounded_explanation_is_not_displayed():
+    url='https://hospital.example.jp/local'
+    results=ai.verify_contacts({'items':[{'name':'Centre Gifu','url':url,'summary':'Ouvert toute la nuit','summary_quote':'Not in source'}]},[{'url':url,'title':'Centre Gifu','quotes':['Centre Gifu']}])
+    assert len(results)==1 and results[0].summary is None
