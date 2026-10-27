@@ -117,6 +117,9 @@ async def initialize_indexes() -> None:
     await db.resources.create_index("id", unique=True)
     await db.resources.create_index([("is_deleted", 1), ("created_at", -1)])
 
+    await _create_index_or_log(db.sanction_access_codes, "guild_id")
+    await _create_index_or_log(db.sanction_access_sessions, "expires_at", expireAfterSeconds=0)
+    await _create_index_or_log(db.sanction_access_sessions, [("actor_id", 1), ("guild_id", 1)])
     await _create_index_or_log(db.sanction_commands, [("status", 1), ("deadline", 1)])
     await _create_index_or_log(db.sanction_commands, [("type", 1), ("expires_at", 1)])
     await _create_index_or_log(db.sanction_commands, [("member_id", 1), ("created_at", -1)])

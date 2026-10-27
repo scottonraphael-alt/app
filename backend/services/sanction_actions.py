@@ -172,19 +172,24 @@ async def maintain_roles(client):
 def log_payload(job,channel_id):
     import hashlib
     verb={'avertissement':'a averti','rappel_a_lordre':"a rappelé à l’ordre",'mute':'a mute','kick':'a expulsé','bannissement':'a banni'}[job['type']]
-    reason=job['reason'].replace('```','` ` `')
+    def clip(value,units):return str(value).encode('utf-16-le')[:units*2].decode('utf-16-le','ignore')
+    def block(value,units):return '```\n'+clip(str(value).replace('```','` ` `'),units)+'\n```'
     icons={'rappel_a_lordre':'📣','avertissement':'⚠️','mute':'🔇','kick':'🚪','bannissement':'🔨'}
-    text=f"<@{job['actor']['id']}> {verb} <@{job['member_id']}> (`{job['member_id']}`).\n### 📝 Raison de la sanction\n```{reason}```"
-    if job['duration']:text+=f"\n⏱️ **Durée** : {job['duration']}"
-    if job['explanation']:
-        explanation=discord.utils.escape_markdown(job['explanation'])[:1200]
-        text+=f"\n📂 **Explication pour le casier (extrait)**\n{explanation}"
-    text+=f"\n📎 **Justificatifs conservés sur Iris** : {len(job['files'])}"
-    if job['purge_seconds']:text+=f"\n**Messages supprimés** : {job['purge_seconds']//3600} heures."
-    text=text.encode('utf-16-le')[:7000].decode('utf-16-le','ignore')
-    text+=f"\n-# Iris /sanction · Référence : {job['_id']}"
     children=[{'type':10,'content':f"## {icons[job['type']]} {LABELS[job['type']]}\n-# 🛡️ Iris · Journal de modération"},
-              {'type':14,'divider':True,'spacing':1},{'type':10,'content':text}]
+              {'type':14,'divider':True,'spacing':1},
+              {'type':10,'content':f"<@{job['actor']['id']}> {verb} <@{job['member_id']}> (`{job['member_id']}`)."},
+              {'type':10,'content':'### 📝 Raison de la sanction\n'+block(job['reason'],1000)}]
+    if job['duration']:
+        children.extend([{'type':14,'divider':True,'spacing':1},
+                         {'type':10,'content':'### ⏱️ Durée\n'+block(job['duration'],80)}])
+    if job['explanation']:
+        children.extend([{'type':14,'divider':True,'spacing':1},
+                         {'type':10,'content':'### 📂 Explication pour le casier (extrait)\n'+block(job['explanation'],1000)}])
+    proofs='\n'.join('• '+clip(discord.utils.escape_markdown(item['filename']),65) for item in job['files']) or 'Aucun fichier.'
+    children.extend([{'type':14,'divider':True,'spacing':1},
+                     {'type':10,'content':f"### 📎 Justificatifs conservés sur Iris · {len(job['files'])}\n{proofs}"}])
+    if job['purge_seconds']:children.append({'type':10,'content':f"### 🗑️ Messages supprimés\n{job['purge_seconds']//3600} heures."})
+    children.append({'type':10,'content':f"-# Iris /sanction · Référence : {job['_id']}"})
     if job.get('casier_id') and config.FRONTEND_URL.startswith('https://'):
         children.append({'type':1,'components':[{'type':2,'style':5,'label':'Consulter le casier Iris',
             'url':f"{config.FRONTEND_URL}/moderation/casiers?casier={job['casier_id']}&sanction={job['sanction_id']}"}]})
@@ -253,10 +258,12 @@ def cleanup_files(job):
     for item in job.get('files',[]):files._remove_stored_file(item['staging_path'])
 
 
-async def prepare(guild, actor_id, member_id, values, attachments, interaction_id):
+async def prepare(guild, actor_id, member_id, values, attachments, interaction_id, access_session_id=None):
+    from services.sanction_access import require_session
+    await require_session(access_session_id,actor_id,guild.id)
     actor,member=await fresh_members(guild,actor_id,member_id,values['type'],values['type']=='bannissement' and values['duration_seconds'] is None)
     values=parameters(values['type'],values['reason'],values.get('explanation',''),values.get('duration') or '',values.get('purge_seconds',0))
-    job={'_id':str(interaction_id),'guild_id':str(guild.id),'member_id':str(member.id),'actor':identity(actor),'snapshot':snapshot(member),
+    job={'_id':str(interaction_id),'access_session_id':access_session_id,'guild_id':str(guild.id),'member_id':str(member.id),'actor':identity(actor),'snapshot':snapshot(member),
          **values,'log_channels':[str(cid) for cid,kind in config.DISCORD_MODERATION_CHANNEL_TYPES.items() if kind==values['type']],
          'sanction_id':casiers.new_id(),'status':'preparing','files':[],'created_at':now(),'deadline':now()+timedelta(minutes=SESSION_MINUTES)}
     if not job['log_channels']:raise HTTPException(503,'Aucun salon de log n’est configuré pour cette sanction dans DISCORD_MODERATION_CHANNELS.')
@@ -314,8 +321,10 @@ async def record(job):
 
 
 async def apply(guild, actor_id, job_id):
+    from services.sanction_access import require_session
     job=await db.sanction_commands.find_one({'_id':job_id,'actor.id':str(actor_id),'guild_id':str(guild.id)})
     if not job:raise HTTPException(404,'Ce formulaire est introuvable ou ne t’appartient pas.')
+    await require_session(job.get('access_session_id'),actor_id,guild.id)
     if job['status']=='applied':return job
     if job['status']!='draft':raise HTTPException(409,'Cette sanction est déjà traitée, en cours ou annulée. Elle ne sera pas appliquée deux fois.')
     if job['deadline'].replace(tzinfo=timezone.utc)<now():raise HTTPException(409,'Ce formulaire a expiré. Relance /sanction.')
@@ -342,11 +351,13 @@ async def apply(guild, actor_id, job_id):
             except discord.NotFound:pass
             else:raise HTTPException(409,'Ce membre est déjà banni. Aucun bannissement existant ne sera remplacé.')
         for channel_id in job['log_channels']:await log_channel(guild,channel_id)
+        await require_session(job.get('access_session_id'),actor_id,guild.id)
         await grant_role(guild,actor,job)
         # Recheck fresh roles after the elevation, including the permanent-ban admin gate.
         actor,member=await fresh_members(guild,actor_id,job['member_id'],job['type'],job['type']=='bannissement' and job['duration_seconds'] is None)
         if job['type']=='mute' and member.timed_out_until and member.timed_out_until>now():
             raise HTTPException(409,'Ce membre est déjà en timeout. Aucun mute existant ne sera remplacé.')
+        await require_session(job.get('access_session_id'),actor_id,guild.id)
         applied=now()
         expires=applied+timedelta(seconds=job['duration_seconds']) if job['duration_seconds'] else None
         job['expires_at']=expires.isoformat() if expires else None

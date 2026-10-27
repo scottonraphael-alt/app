@@ -363,6 +363,15 @@ export const AI_FLAGS_PAGE_SIZE = 30;
 
 // Réutilisé par ResponsableAuthLogsPage (libellés, groupe « Casiers » du filtre).
 export const CASIER_EVENT_LABELS = {
+  "casier.access.management.viewed": "Accès de modération consultés",
+  "casier.access.management.failed": "Gestion des accès refusée ou échouée",
+  "casier.access.updated": "Code personnel de modération défini ou remplacé",
+  "casier.access.revoked": "Accès personnel de modération révoqué",
+  "casier.access.granted": "Accès au panel de sanction autorisé",
+  "casier.access.failed": "Code personnel incorrect",
+  "casier.access.locked": "Tentatives d’accès temporairement bloquées",
+  "casier.command.history.viewed": "Historique des sanctions consulté dans Discord",
+
   "casier.command.opened": "Commande /sanction ouverte",
   "casier.command.member.selected": "Membre sélectionné pour une sanction",
   "casier.command.member.changed": "Sélection du membre changée",
@@ -409,6 +418,6 @@ export function casierEventTone(eventType) {
   if (!isCasierEvent(eventType)) return "";
   if (/\.(created|uploaded|resynced)$/.test(eventType)) return "status-done";
   if (/\.(updated|closed|reviewed)$/.test(eventType)) return "status-pending";
-  if (/\.(deleted|failed|denied)$/.test(eventType)) return "status-bad";
+  if (/\.(deleted|failed|denied|locked)$/.test(eventType)) return "status-bad";
   return "";
 }

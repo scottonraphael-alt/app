@@ -24,6 +24,7 @@ const ProjectsListPage = lazy(() => import("./pages/ProjectsListPage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
 const ProjectCalendarPage = lazy(() => import("./pages/ProjectCalendarPage"));
 const ServerStatisticsPage = lazy(() => import("./pages/ServerStatisticsPage"));
+const SanctionAccessPage = lazy(() => import("./pages/SanctionAccessPage"));
 const DiscordAnnouncementsPage = lazy(() => import("./pages/DiscordAnnouncementsPage"));
 const ResponsableAuthLogsPage = lazy(() => import("./pages/ResponsableAuthLogsPage"));
 const ResponsableChannelArchivesPage = lazy(() => import("./pages/ResponsableChannelArchivesPage"));
@@ -272,6 +273,7 @@ function AuthenticatedApp({
             }
           />
 
+          <Route path="/responsable/acces-sanctions" element={isResponsable ? <SanctionAccessPage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/responsable/annonces" element={isResponsable ? <DiscordAnnouncementsPage helper={helper} /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/responsable/statistiques" element={isResponsable ? <ServerStatisticsPage /> : <Navigate to={defaultRoute} replace />} />
 

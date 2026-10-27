@@ -48,10 +48,12 @@ class Evidence:
 
 def prepare(guild,kind='avertissement',id='810000000000000001',attachments=None,duration=None,purge=0):
     values=a.parameters(kind,'Comportement interdit','Contexte interne',duration if duration is not None else '30 min' if kind=='mute' else 'permanent' if kind=='bannissement' else '',purge)
-    return h.run(a.prepare(guild,ACTOR,TARGET,values,[Evidence()] if attachments is None else attachments,id))
+    return h.run(a.prepare(guild,ACTOR,TARGET,values,[Evidence()] if attachments is None else attachments,id,'test-session'))
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch,tmp_path):
     h.reset_db();h.reset_discord();LOGS.clear()
+    h.run(h.db.sanction_access_codes.insert_one({'_id':f'{h.GUILD_ID}:{ACTOR}','actor_id':ACTOR,'guild_id':h.GUILD_ID,'enabled':True,'version':'test-version'}))
+    h.run(h.db.sanction_access_sessions.insert_one({'_id':'test-session','actor_id':ACTOR,'guild_id':h.GUILD_ID,'code_version':'test-version','expires_at':datetime.now(timezone.utc)+timedelta(minutes=10)}))
     monkeypatch.setattr(config,'DISCORD_MODERATION_CHANNEL_TYPES',{720000000000000000+i:kind for i,kind in enumerate(a.ORDER)})
     async def post_log(channel,payload):LOGS.append((channel,payload));return {'id':'930000000000000001'}
     monkeypatch.setattr(a,'post_log',post_log)
@@ -179,8 +181,9 @@ def interaction(g,uid=ACTOR):
 def test_command_v2_ephemeral_and_member_selection_deletes_previous():
     g=Guild();it=interaction(g)
     async def check():
-        await ui.sanction(it);assert it.response.calls[0]==('defer',{'ephemeral':True,'thinking':True})
-        view=it.events[-1][1]['view'];assert isinstance(view,discord.ui.LayoutView)
+        await ui.sanction(it);assert it.response.calls[0][0]=='modal'
+        assert isinstance(it.response.calls[0][1],ui.AccessModal)
+        view=ui.MemberPicker(ACTOR,h.GUILD_ID,'test-session')
         picker=next(i for i in view.walk_children() if isinstance(i,discord.ui.UserSelect));picker._values=[g.members[TARGET]];await picker.callback(it)
         assert [k for k,_ in it.events[-2:]]==['delete','followup']
         sent=it.events[-1][1];assert sent['ephemeral'] and isinstance(sent['view'],ui.SummaryView)
@@ -339,7 +342,7 @@ def test_bot_without_manage_roles_cannot_prepare_a_sanction():
 def test_modal_submit_then_confirmation_callback_stays_private():
     g=Guild();it=interaction(g)
     async def checked():
-        modal=ui.SanctionModal(ACTOR,h.GUILD_ID,TARGET,'avertissement');modal.reason._value='Motif';modal.explanation._value='Contexte';modal.evidence._values=[Evidence()]
+        modal=ui.SanctionModal(ACTOR,h.GUILD_ID,TARGET,'avertissement',access_session_id='test-session');modal.reason._value='Motif';modal.explanation._value='Contexte';modal.evidence._values=[Evidence()]
         await modal.on_submit(it);assert it.response.calls[0]==('defer',{'ephemeral':True,'thinking':True})
         view=it.events[-1][1]['view'];assert isinstance(view,ui.ConfirmView) and not g.role_calls
         confirm=next(i for i in view.walk_children() if isinstance(i,discord.ui.Button) and i.label=='Appliquer la sanction')
@@ -408,8 +411,8 @@ def test_launch_requires_exact_staff_role_even_for_privileged_accounts(privilege
     it=interaction(g)
     async def check():
         await ui.sanction(it)
-        assert it.response.calls[0]==('defer',{'ephemeral':True,'thinking':True})
-        result=it.events[-1][1]['view'];text=str(result.to_components())
+        assert it.response.calls[0][0]=='send' and it.response.calls[0][1]['ephemeral']
+        result=it.response.calls[0][1]['view'];text=str(result.to_components())
         assert config.SANCTION_REQUIRED_STAFF_ROLE_ID in text and not isinstance(result,ui.MemberPicker)
         assert not g.calls and not g.role_calls
     h.run(check())

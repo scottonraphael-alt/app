@@ -4,6 +4,7 @@ import {
   ArrowRight,
   BarChart3,
   Megaphone,
+  KeyRound,
   Archive,
   CalendarDays,
   FileText,
@@ -250,6 +251,11 @@ const pills = [
             className="nd-responsable-actions"
             aria-label="Outils du responsable"
           >
+            <Link to="/responsable/acces-sanctions" className="nd-responsable-link">
+              <KeyRound size={18} aria-hidden="true" />
+              <span>Codes d’accès modération</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
             <Link to="/responsable/annonces" className="nd-responsable-link">
               <Megaphone size={18} aria-hidden="true" />
               <span>Composer une annonce Discord</span>

@@ -393,7 +393,7 @@ function describeEvent(log) {
     return { parts: [actor, " · ", label, ...forMember], extras };
   }
 
-  if (type.startsWith("casier.command.")) {
+  if (type.startsWith("casier.command.") || type.startsWith("casier.access.")) {
     return {parts:[actor," · ",CASIER_EVENT_LABELS[type] || "Action de la commande /sanction",...forMember],
       extras:[...buildExtras(d),...Object.entries({command_id:"Commande Discord",role_id:"Rôle temporaire",result:"Résultat"}).filter(([key])=>d[key]!=null).map(([key,label])=>[label,String(d[key])])]};
   }

@@ -4,8 +4,8 @@ La commande est enregistrée sur le serveur `DISCORD_GUILD_ID` par le bot Iris a
 
 ## Parcours
 
-1. L’exécuteur reçoit un message V2 **éphémère**, avec un sélecteur d’utilisateur.
-2. Après vérification des accès, ce premier message est supprimé et remplacé par un résumé privé du casier : compteurs des cinq types, fiches S actives, trois dernières sanctions et motifs.
+1. Le rôle Staff est contrôlé dès le lancement ; un modal demande le **code personnel de 6 caractères**. Après validation, l’exécuteur reçoit un message V2 **éphémère**, avec un sélecteur d’utilisateur.
+2. Après vérification des accès, ce premier message est supprimé et remplacé par un résumé privé du casier : compteurs des cinq types, fiches S actives, liste paginée des sanctions, dates de Paris, durées, motifs et indication des fiches S actives ou clôturées.
 3. Le choix d’un type ouvre directement son modal : motif (1 000 caractères), explication interne (4 000), un à cinq justificatifs uploadés, durée pour mute/ban et choix de suppression des messages pour un ban. **Tous les champs affichés sont obligatoires**, dans Discord et côté serveur. Choisir « permanent » pour un ban définitif et « Ne supprimer aucun message » pour conserver les messages.
 4. Une confirmation privée récapitule les effets avant application. Aucun changement Discord, rôle temporaire ou sanction du casier n’est appliqué lors de la simple préparation.
 5. Après confirmation : contrôle des rôles, rôle temporaire, action Discord, retrait du rôle, enregistrement du casier et publication d’un log V2 dans le salon configuré pour ce type.
@@ -13,6 +13,16 @@ La commande est enregistrée sur le serveur `DISCORD_GUILD_ID` par le bot Iris a
 Le rappel à l’ordre et l’avertissement ajoutent une entrée au casier. Le mute applique un timeout Discord (durée positive, 28 jours maximum). Le kick expulse le membre. Le bannissement est définitif ou temporaire, de 1 minute à 365 jours. Pour le ban, les suppressions proposées sont aucune, dernière heure, 24 heures ou 7 jours. Les suppressions de messages sont irréversibles ; la confirmation les indique.
 
 Les justificatifs acceptent les formats du casier : PNG, JPG/JPEG, GIF, WebP, PDF et TXT. Limite `CASIER_UPLOAD_MAX_BYTES` (10 Mo par défaut), validation du contenu et de l’extension existante du casier. Ils sont d’abord stockés temporairement sous `iris/sanction-commands/`, puis attachés à la sanction et conservés sous `iris/casiers/`. L’explication devient une information complémentaire de la sanction. Un abandon ou une annulation supprime les fichiers de préparation. Les délais et contrôles de confidentialité sont vérifiés côté serveur.
+
+## Codes personnels et page Responsable
+
+La page **Responsable → Codes d’accès modération** (`/responsable/acces-sanctions`) permet de définir, remplacer et révoquer les codes du staff. La liste garde les anciens membres ayant un accès pour permettre sa révocation. Les responsables peuvent générer un code dans le navigateur, l’afficher et le copier dans la fenêtre d’édition ; il disparaît à la fermeture et n’est pas conservé en stockage local. La communication du code au membre reste une action manuelle du responsable.
+
+Le code contient **exactement 6 lettres ASCII ou chiffres**, sans distinction de casse. Il est personnel au compte Discord et ne remplace pas le rôle Staff. Seuls des hachages scrypt salés et liés au serveur et au membre sont stockés ; le code existant ne peut pas être relu. Les réponses de gestion, les logs et les messages Discord ne réaffichent aucun code. Les modals Discord ne disposent pas d’un champ de mot de passe masqué : saisir uniquement le code Iris, jamais son mot de passe Discord.
+
+Cinq tentatives sont autorisées par fenêtre de quinze minutes, avec réservation atomique des tentatives entre processus. Une connexion réussie ouvre une session privée de dix minutes liée au compte, au serveur et à la version du code. Chaque étape sensible, y compris avant le rôle temporaire et juste avant l’action native, revérifie cette session. La rotation ou la révocation du code invalide donc les parcours déjà ouverts. Le travail de finalisation d’une sanction Discord déjà appliquée continue même si l’accès est ensuite révoqué.
+
+La gestion des codes est protégée côté API par le rôle Responsable, utilise une garde de version et ne journalise jamais les données soumises contenant un code. Les dates de gestion sont renvoyées en UTC explicite puis affichées en heure de Paris. Les sessions expirées sont supprimées par l’index TTL MongoDB.
 
 ## Rôles et sécurité
 
@@ -34,7 +44,7 @@ L’obligation de retirer le rôle est enregistrée **avant** son attribution. L
 
 ## Logs
 
-Les destinations sont celles de `DISCORD_MODERATION_CHANNELS` : salons textuels, salons d’annonces ou **IDs des posts d’un forum** (fils de discussion), avec les cinq clés existantes (`avertissement`, `rappel_a_lordre`, `mute`, `kick`, `bannissement`). Un type sans destination configurée ne peut pas être appliqué. Pour un forum, renseigner l’ID de chaque post, pas l’ID du forum parent. Le bot doit avoir `Envoyer des messages dans les fils de discussion`. Un post archivé non verrouillé se réactive à l’envoi ; un post archivé verrouillé est réactivé avant publication si le bot a `Gérer les fils`, sans retirer le verrouillage. La simple préparation ne modifie pas les posts. Les logs V2 comprennent l’exécuteur, le membre, le motif, la durée, un extrait de l’explication, le nombre de justificatifs et un lien vers le casier Iris. Aucune mention ne notifie. Les justificatifs complets restent consultables sur Iris ; ils ne sont pas rediffusés dans Discord.
+Les destinations sont celles de `DISCORD_MODERATION_CHANNELS` : salons textuels, salons d’annonces ou **IDs des posts d’un forum** (fils de discussion), avec les cinq clés existantes (`avertissement`, `rappel_a_lordre`, `mute`, `kick`, `bannissement`). Un type sans destination configurée ne peut pas être appliqué. Pour un forum, renseigner l’ID de chaque post, pas l’ID du forum parent. Le bot doit avoir `Envoyer des messages dans les fils de discussion`. Un post archivé non verrouillé se réactive à l’envoi ; un post archivé verrouillé est réactivé avant publication si le bot a `Gérer les fils`, sans retirer le verrouillage. La simple préparation ne modifie pas les posts. Les logs V2 séparent l’exécuteur, le motif, la durée, l’explication et les justificatifs en sections distinctes. Motif et explication utilisent chacun leur propre bloc de texte encadré. Les noms des justificatifs et un lien vers le casier Iris complètent le message. Aucune mention ne notifie. Les justificatifs complets restent consultables sur Iris ; ils ne sont pas rediffusés dans Discord.
 
 Une livraison de log interrompue est reprise avec un nonce stable. La sanction Discord n’est jamais réappliquée pour réparer un log. Les messages portent la référence de la commande pour que l’import automatique des salons ne crée pas une deuxième sanction dans le casier. La reprise d’un log après une longue interruption et une réponse perdue peut produire un log en double si la fenêtre d’idempotence Discord est dépassée ; la référence protège l’entrée du casier.
 

@@ -7,7 +7,8 @@ from discord import app_commands
 from fastapi import HTTPException
 
 import config
-from services import casier_service as casiers, sanction_actions as actions
+from services import casier_service as casiers, sanction_actions as actions, sanction_access as access
+from zoneinfo import ZoneInfo
 
 logger=logging.getLogger(__name__)
 NO_MENTIONS=discord.AllowedMentions.none()
@@ -19,6 +20,19 @@ def safe(value,limit=700):
 
 
 EMOJIS={'rappel_a_lordre':'📣','avertissement':'⚠️','mute':'🔇','kick':'🚪','bannissement':'🔨'}
+DESCRIPTIONS={
+    'rappel_a_lordre':'Consigner un rappel à l’ordre et son contexte dans le casier.',
+    'avertissement':'Enregistrer un avertissement sur le comportement du membre.',
+    'mute':'Empêcher temporairement le membre de discuter sur le serveur.',
+    'kick':'Expulser immédiatement le membre du serveur.',
+    'bannissement':'Bannir temporairement ou définitivement ; le définitif exige le rôle admin.',
+}
+
+
+def date_label(value,with_time=False):
+    moment=casiers._moment(value)
+    return moment.astimezone(ZoneInfo('Europe/Paris')).strftime('%d/%m/%Y à %H:%M' if with_time else '%d/%m/%Y') if moment else 'Date non renseignée'
+
 
 
 def panel(title,*sections,colour=0x78618C,footer=None):
@@ -57,14 +71,21 @@ async def report(interaction,error,job=None,respond=True,member_id=None):
 
 
 class PrivateView(discord.ui.LayoutView):
-    def __init__(self,actor_id,guild_id):
+    def __init__(self,actor_id,guild_id,access_session_id=None):
         super().__init__(timeout=TIMEOUT)
+        self.access_session_id=access_session_id
         self.actor_id=int(actor_id);self.guild_id=int(guild_id);self.message=None
     async def interaction_check(self,interaction):
         valid=interaction.user.id==self.actor_id and interaction.guild_id==self.guild_id
         if not valid:
             await private(interaction,'Accès refusé','Ce parcours appartient uniquement à la personne qui a lancé /sanction.')
             await actions.audit('casier.command.denied',actor=interaction.user,reason='Interaction d’un autre exécuteur ou serveur.')
+        if valid:
+            try:
+                await access.require_session(self.access_session_id,self.actor_id,self.guild_id)
+                if not actions.is_executor(interaction.user):raise HTTPException(403,'Le rôle Staff reste obligatoire pour accéder au panel.')
+            except HTTPException as error:
+                await private(interaction,'Accès refusé',safe(error.detail));return False
         return valid
     async def on_error(self,interaction,error,item):await report(interaction,error)
     async def on_timeout(self):
@@ -77,46 +98,77 @@ class PrivateView(discord.ui.LayoutView):
 
 
 class MemberPicker(PrivateView):
-    def __init__(self,actor_id,guild_id):
-        super().__init__(actor_id,guild_id)
-        self.add_item(panel('🛡️ Préparer une sanction','**1 · Choisir le membre**\nConsulte son casier avant de sélectionner une mesure adaptée.','**Le parcours**\n👤 Membre → 📂 Casier → 📝 Formulaire → ✅ Confirmation',footer='🔒 Parcours privé · Les membres du staff sont protégés.'))
+    def __init__(self,actor_id,guild_id,access_session_id=None):
+        super().__init__(actor_id,guild_id,access_session_id)
+        self.add_item(panel('🛡️ Module de sanction',f'**Bonjour <@{self.actor_id}>, qui souhaites-tu sanctionner ?**\nSélectionne un membre pour consulter son casier.','**Le parcours**\n👤 Membre → 📂 Casier → 📝 Formulaire → ✅ Confirmation',footer='🔒 Accès personnel de 10 minutes · Les membres du staff sont protégés.'))
         picker=discord.ui.UserSelect(placeholder='Choisir le membre concerné',min_values=1,max_values=1)
         async def selected(interaction):
             await interaction.response.defer()
             try:
+                await access.require_session(self.access_session_id,self.actor_id,self.guild_id)
                 actor,member=await actions.fresh_members(interaction.guild,self.actor_id,picker.values[0].id)
                 record=await casiers.get_casier_by_discord_id(str(member.id))
                 await actions.audit('casier.command.member.selected',actor=actor,member_id=member.id)
-                view=SummaryView(self.actor_id,self.guild_id,member,record)
+                view=SummaryView(self.actor_id,self.guild_id,member,record,self.access_session_id)
                 # Delete the previous ephemeral message, then send its private replacement.
                 await interaction.delete_original_response()
                 view.message=await interaction.followup.send(view=view,ephemeral=True,allowed_mentions=NO_MENTIONS,wait=True)
                 self.stop()
             except Exception as error:await report(interaction,error,member_id=str(picker.values[0].id))
         picker.callback=selected
-        self.add_item(discord.ui.ActionRow(picker))
+        self.children[0].add_item(discord.ui.ActionRow(picker))
         cancel=discord.ui.Button(label='Annuler',style=discord.ButtonStyle.secondary)
         async def cancelled(interaction):
             await interaction.response.edit_message(view=message_view('Parcours annulé','Aucune sanction n’a été appliquée.'),allowed_mentions=NO_MENTIONS)
             self.stop();await actions.audit('casier.command.cancelled',actor=interaction.user)
-        cancel.callback=cancelled;self.add_item(discord.ui.ActionRow(cancel))
+        cancel.callback=cancelled;self.children[0].add_item(discord.ui.ActionRow(cancel))
 
 
 class SummaryView(PrivateView):
-    def __init__(self,actor_id,guild_id,member,record):
-        super().__init__(actor_id,guild_id)
+    def __init__(self,actor_id,guild_id,member,record,access_session_id=None,page=1):
+        super().__init__(actor_id,guild_id,access_session_id)
         self.member_id=member.id
         record=record or {'sanctions':[],'fiches_s':[]}
         counts=casiers.build_sanctions_summary(record)
-        heading=f'👤 **{safe(member.display_name,100)}**\nIdentifiant : `{member.id}`'
-        counts_text='\n'.join(' · '.join(f'{EMOJIS[k]} {actions.LABELS[k]} : **{counts.get(k,0)}**' for k in actions.ORDER[i:i+2]) for i in range(0,len(actions.ORDER),2))
-        active=sum(1 for f in record.get('fiches_s',[]) if f.get('active') is not False and not f.get('deleted_at'))
-        counts_text+=f'\n📌 Fiches S actives : **{active}**'
-        recent=sorted(record.get('sanctions',[]),key=lambda entry:str(entry.get('created_at','')),reverse=True)[:3]
-        history='### 🕘 Dernières sanctions\n'+ ('\n\n'.join(f'{EMOJIS.get(entry.get("type"),"📋")} **{safe(actions.LABELS.get(entry.get("type"),entry.get("type")),40)}**\n> {safe(entry.get("reason"),260).replace(chr(10),chr(10)+"> ")}' for entry in recent) if recent else '🌿 Aucun antécédent enregistré.')
-        self.add_item(panel('📂 Casier du membre',heading,counts_text,history,colour=0x547568,
-            footer='🔒 Historique privé · Une ancienne sanction n’est pas forcément encore active.'))
-        selector=discord.ui.Select(placeholder='Choisir la sanction à préparer',options=[discord.SelectOption(label=actions.LABELS[k],value=k,emoji=EMOJIS[k]) for k in actions.ORDER])
+        heading=f'👤 <@{member.id}> · `{member.id}`'
+        counts_text='-# '+ ' · '.join(f'{actions.LABELS[k]} : {counts.get(k,0)}' for k in actions.ORDER)
+        fiches=[item for item in record.get('fiches_s',[]) if not item.get('deleted_at')]
+        active=sum(1 for item in fiches if item.get('active') is not False)
+        fiche_text=f'📌 **Fiche S active : oui** · {active} fiche(s)' if active else '🌿 **Le membre n’a pas de fiche S active.**'
+        if fiches and not active:fiche_text+=f'\n-# {len(fiches)} fiche(s) clôturée(s) dans l’historique.'
+        sanctions=sorted(record.get('sanctions',[]),key=lambda entry:str(entry.get('created_at','')),reverse=True)
+        pages=max(1,(len(sanctions)+4)//5);page=min(max(page,1),pages)
+        box=panel('📂 Casier du membre',heading,fiche_text,counts_text,colour=0x78618C)
+        if not sanctions:box.add_item(discord.ui.TextDisplay('### 🕘 Historique\n🌿 Aucune sanction enregistrée.'))
+        for entry in sanctions[(page-1)*5:page*5]:
+            label=safe(actions.LABELS.get(entry.get('type'),entry.get('type')),40)
+            title=f'{EMOJIS.get(entry.get("type"),"📋")} **{label}** — {date_label(entry.get("created_at"))}'
+            if entry.get('duration'):title+=f'\n⏱️ {safe(entry["duration"],60)}'
+            if entry.get('expires_at'):title+=f' · Fin : {date_label(entry["expires_at"],with_time=True)}'
+            reason=safe(entry.get('reason') or 'Motif non renseigné.',320).replace('\n','\n> ')
+            box.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
+            box.add_item(discord.ui.TextDisplay(f'{title}\n> {reason}'))
+        box.add_item(discord.ui.TextDisplay(f'-# Historique · Page {page}/{pages} · {len(sanctions)} sanction(s) · Dates : heure de Paris'))
+        self.add_item(box)
+        if pages>1:
+            previous=discord.ui.Button(label='Précédente',emoji='◀️',disabled=page<=1)
+            following=discord.ui.Button(label='Suivante',emoji='▶️',disabled=page>=pages)
+            async def navigate(interaction,requested):
+                await interaction.response.defer()
+                try:
+                    await access.require_session(self.access_session_id,self.actor_id,self.guild_id)
+                    _,target=await actions.fresh_members(interaction.guild,self.actor_id,self.member_id)
+                    current=await casiers.get_casier_by_discord_id(str(self.member_id))
+                    view=SummaryView(self.actor_id,self.guild_id,target,current,self.access_session_id,requested)
+                    view.message=await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
+                    self.stop()
+                    await actions.audit('casier.command.history.viewed',actor=interaction.user,member_id=self.member_id,page=requested)
+                except Exception as error:await report(interaction,error,member_id=self.member_id)
+            async def prev(interaction):await navigate(interaction,page-1)
+            async def nxt(interaction):await navigate(interaction,page+1)
+            previous.callback=prev;following.callback=nxt
+            box.add_item(discord.ui.ActionRow(previous,following))
+        selector=discord.ui.Select(placeholder='Choisir la sanction à préparer',options=[discord.SelectOption(label=actions.LABELS[k],value=k,emoji=EMOJIS[k],description=DESCRIPTIONS[k]) for k in actions.ORDER])
         async def selected(interaction):
             # No REST call before opening the modal: Discord requires an immediate response.
             if not actions.is_executor(interaction.user):
@@ -124,13 +176,13 @@ class SummaryView(PrivateView):
                 await actions.audit('casier.command.denied',actor=interaction.user,member_id=self.member_id,reason='Rôle de modération retiré avant ouverture du formulaire.')
                 return
             kind=selector.values[0]
-            await interaction.response.send_modal(SanctionModal(self.actor_id,self.guild_id,self.member_id,kind,previous_interaction=interaction))
+            await interaction.response.send_modal(SanctionModal(self.actor_id,self.guild_id,self.member_id,kind,previous_interaction=interaction,access_session_id=self.access_session_id))
             await actions.audit('casier.command.type.selected',actor=interaction.user,member_id=self.member_id,sanction_type=kind)
         selector.callback=selected
-        self.add_item(discord.ui.ActionRow(selector))
+        box.add_item(discord.ui.ActionRow(selector))
         back=discord.ui.Button(label='Changer de membre',style=discord.ButtonStyle.secondary)
         async def changed(interaction):
-            view=MemberPicker(self.actor_id,self.guild_id)
+            view=MemberPicker(self.actor_id,self.guild_id,self.access_session_id)
             await interaction.response.edit_message(view=view,allowed_mentions=NO_MENTIONS)
             view.message=await interaction.original_response();self.stop()
             await actions.audit('casier.command.member.changed',actor=interaction.user,member_id=self.member_id)
@@ -139,14 +191,15 @@ class SummaryView(PrivateView):
             await interaction.response.edit_message(view=message_view('Parcours annulé','Aucune sanction n’a été appliquée.'),allowed_mentions=NO_MENTIONS)
             self.stop();await actions.audit('casier.command.cancelled',actor=interaction.user,member_id=self.member_id)
         back.callback=changed;cancel.callback=cancelled
-        self.add_item(discord.ui.ActionRow(back,cancel))
+        box.add_item(discord.ui.ActionRow(back,cancel))
 
 
 class SanctionModal(discord.ui.Modal):
-    def __init__(self,actor_id,guild_id,member_id,kind,previous_interaction=None):
+    def __init__(self,actor_id,guild_id,member_id,kind,previous_interaction=None,access_session_id=None):
         super().__init__(title=f'{EMOJIS[kind]} {actions.LABELS[kind]}',timeout=TIMEOUT)
         self.actor_id=int(actor_id);self.guild_id=int(guild_id);self.member_id=int(member_id);self.kind=kind
         self.previous_interaction=previous_interaction
+        self.access_session_id=access_session_id
         self.reason=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,max_length=1000,placeholder='Décris précisément le comportement sanctionné.')
         self.add_item(discord.ui.Label(text='📝 Raison de la sanction',component=self.reason,description='Motif enregistré dans le casier et le journal Discord.'))
         self.explanation=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,min_length=1,max_length=4000,placeholder='Contexte, chronologie, échanges, éléments de décision…')
@@ -172,7 +225,7 @@ class SanctionModal(discord.ui.Modal):
             if self.purge is not None and not self.purge.values:
                 raise HTTPException(422,'Choisis explicitement les messages à supprimer, ou « Ne supprimer aucun message ».')
             values=actions.parameters(self.kind,str(self.reason),str(self.explanation),str(self.duration) if self.duration else '',int(self.purge.values[0]) if self.purge and self.purge.values else 0)
-            job=await actions.prepare(interaction.guild,self.actor_id,self.member_id,values,list(self.evidence.values),str(interaction.id))
+            job=await actions.prepare(interaction.guild,self.actor_id,self.member_id,values,list(self.evidence.values),str(interaction.id),self.access_session_id)
             view=ConfirmView(job)
             # Replace the deferred private response; the older summary is retired too.
             if self.previous_interaction:
@@ -187,7 +240,7 @@ class SanctionModal(discord.ui.Modal):
 
 class ConfirmView(PrivateView):
     def __init__(self,job):
-        super().__init__(job['actor']['id'],job['guild_id'])
+        super().__init__(job['actor']['id'],job['guild_id'],job.get('access_session_id'))
         self.job=job
         effect={'rappel_a_lordre':'Enregistrement du rappel dans le casier Iris.', 'avertissement':'Enregistrement de l’avertissement dans le casier Iris.',
                 'mute':'Application d’un timeout Discord et ajout au casier.', 'kick':'Expulsion immédiate du serveur et ajout au casier.', 'bannissement':'Bannissement Discord et ajout au casier.'}[job['type']]
@@ -232,17 +285,38 @@ class ConfirmView(PrivateView):
         self.add_item(discord.ui.ActionRow(apply,cancel))
 
 
+class AccessModal(discord.ui.Modal):
+    def __init__(self,actor_id,guild_id):
+        super().__init__(title='🔐 Accès Modération',timeout=TIMEOUT)
+        self.actor_id=int(actor_id);self.guild_id=int(guild_id)
+        self.code=discord.ui.TextInput(required=True,min_length=6,max_length=6,placeholder='6 lettres ou chiffres · code Iris uniquement')
+        self.add_item(discord.ui.Label(text='Ton code d’accès personnel',component=self.code,description='En cas d’oubli, contacte un Responsable. Ce n’est pas ton mot de passe Discord.'))
+    async def interaction_check(self,interaction):
+        if interaction.user.id!=self.actor_id or interaction.guild_id!=self.guild_id:
+            await private(interaction,'Accès refusé','Ce formulaire ne t’appartient pas.');return False
+        return True
+    async def on_submit(self,interaction):
+        await interaction.response.defer(ephemeral=True,thinking=True)
+        try:
+            actor,_=await actions.fresh_members(interaction.guild,self.actor_id)
+            token=await access.verify(actor,self.guild_id,str(self.code))
+            view=MemberPicker(self.actor_id,self.guild_id,token)
+            view.message=await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
+        except Exception as error:
+            await interaction.edit_original_response(view=message_view('Accès refusé',safe(getattr(error,'detail','Accès indisponible. Réessaie plus tard.'))),allowed_mentions=NO_MENTIONS)
+    async def on_error(self,interaction,error):
+        # Never log a modal payload or exception representation containing a submitted code.
+        await private(interaction,'Accès refusé','Impossible de vérifier ton accès. Contacte un Responsable.')
+
+
 async def sanction(interaction:discord.Interaction):
-    await interaction.response.defer(ephemeral=True,thinking=True)
-    try:
-        actor,_=await actions.fresh_members(interaction.guild,interaction.user.id)
-        await actions.audit('casier.command.opened',actor=actor,command_id=str(interaction.id))
-        view=MemberPicker(actor.id,interaction.guild_id)
-        view.message=await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
-    except Exception as error:
-        title='Accès refusé' if isinstance(error,HTTPException) and error.status_code==403 else 'Commande indisponible'
-        await interaction.edit_original_response(view=message_view(title,safe(getattr(error,'detail','Commande indisponible. Réessaie plus tard.'))),allowed_mentions=NO_MENTIONS)
-        await actions.audit('casier.command.denied',actor=interaction.user,reason=str(getattr(error,'detail','Commande indisponible.'))[:500])
+    if str(interaction.guild_id)!=str(config.DISCORD_GUILD_ID) or not actions.is_executor(interaction.user):
+        await private(interaction,'Accès refusé',f'Le rôle Staff `{config.SANCTION_REQUIRED_STAFF_ROLE_ID}` est obligatoire sur le serveur Iris.')
+        await actions.audit('casier.command.denied',actor=interaction.user,reason='Rôle Staff ou serveur requis.')
+        return
+    # A modal must be the first interaction response; do not defer before opening it.
+    await interaction.response.send_modal(AccessModal(interaction.user.id,interaction.guild_id))
+    await actions.audit('casier.command.opened',actor=interaction.user,command_id=str(interaction.id))
 
 
 async def install(client):
