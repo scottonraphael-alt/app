@@ -71,3 +71,9 @@
 .ss-data-button { background:transparent; border:0; padding:0; text-align:left; color:#4f7559; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font:inherit; }
 @media(max-width:760px) { .ss-chart-controls > label { flex-basis:40%; } .ss-coverage { align-items:flex-start; flex-direction:column; gap:4px; } .ss-chart-card > header { padding:14px; } .ss-chart { padding:6px 0 0; } }
 @media(prefers-reduced-motion:reduce) { .ss-page * { scroll-behavior:auto !important; } }
+.ss-view-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.ss-view-tabs [aria-pressed=true] { background:#527c66; border-color:#527c66; color:white; }
+.ss-member-highlight { display:grid; gap:9px; padding:22px; color:#6c806f; font-size:12px; line-height:1.6; }
+.ss-member-highlight strong { font-size:30px; color:#466c51; letter-spacing:-.03em; }
+.ss-member-highlight small { color:#8a978b; }
+.ss-members .ss-kpis strong { font-size:clamp(21px,2.5vw,32px); }

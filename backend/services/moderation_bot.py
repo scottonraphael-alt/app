@@ -65,7 +65,7 @@ from services.casier_service import add_sanction
 
 # ai_moderation.py est dans le même dossier (services/). Importé APRÈS config, qui
 # charge le .env (load_dotenv) dont ai_moderation lit les variables.
-from services import ai_moderation, server_statistics
+from services import ai_moderation, server_statistics, statistics_members
 
 logger = logging.getLogger("moderation_bot")
 
@@ -286,6 +286,16 @@ async def on_raw_message_delete(payload):
 @moderation_client.event
 async def on_raw_bulk_message_delete(payload):
     await server_statistics.safely(server_statistics.record_delete, payload)
+
+
+@moderation_client.event
+async def on_member_join(member):
+    await server_statistics.safely(statistics_members.record_join, member)
+
+
+@moderation_client.event
+async def on_raw_member_remove(payload):
+    await server_statistics.safely(statistics_members.record_remove, payload)
 
 
 @moderation_client.event

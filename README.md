@@ -147,7 +147,7 @@ L’archivage retire l’interlocuteur affecté. Un dossier archivé ne peut pas
 sa réactivation le laisse sans interlocuteur. Les anciennes affectations des dossiers déjà archivés
 sont supprimées au démarrage du backend, sans modifier leur date de suivi.
 
-### Statistiques du serveur — blocs 1 et 2
+### Statistiques du serveur — blocs 1 à 3
 
 Collecte sans texte des messages, registre technique de 30 jours et premiers compteurs
 réservés aux responsables : bouton **Statistiques du serveur** dans le NewDashboard.
@@ -157,3 +157,7 @@ Le détail du stockage, des limites, du déploiement et des blocs suivants figur
 
 Le bloc 2 ajoute les graphiques Apache ECharts : zoom, heatmap, filtres communs, tableaux
 accessibles et comparaison des périodes avec indication de la couverture de connexion.
+
+Le bloc 3 ajoute l’onglet Membres et fidélisation : annuaire humain, arrivées/départs,
+croissance, cohortes J+7/J+30, premier message, accueil et régularité. Les cohortes se
+construisent à partir du déploiement ; une période trop récente reste indiquée en attente.

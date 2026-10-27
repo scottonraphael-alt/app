@@ -65,3 +65,26 @@ it("permet de filtrer un membre depuis le tableau accessible du graphique", asyn
   await act(async () => card.querySelector('button').click());
   expect(api.get.mock.calls.at(-1)[1].params.member_id).toBe("1");
 });
+
+it("charge les métriques des membres seulement après ouverture de leur onglet", async () => {
+  api.get.mockResolvedValue({data:{...data,member_metrics:{
+    status:"ready",population:10,active_present:3,active_ratio:30,joins:2,departures:1,growth:1,growth_rate:10,
+    tracking_started_at:"2026-10-27T00:00:00Z",population_started_at:"2026-10-27T00:00:00Z",
+    as_of:"2026-10-27T12:00:00Z",stale:false,daily:[],cohorts:[{day:"2026-10-01",members:2,checkpoints:{
+      "7":{presence_percent:100,activity_percent:0,presence_eligible:1,present:1,activity_eligible:2,active:0},
+      "30":{presence_percent:null,activity_percent:null,presence_eligible:0,present:0,activity_eligible:0,active:0},
+    }}],activation:[],
+    welcome:{eligible:0,welcomed:0,pending:2,unknown:0,distinct_welcomers:0,percent:null},
+    renewal:null,regularity:[],regularity_distribution:[],reactivations:[],reactivated_members:0,
+    activity_coverage:1,pending_observations:0,
+  }}});
+  expect(api.get.mock.calls[0][1].params.include_members).toBe(false);
+  await act(async () => [...container.querySelectorAll('button')].find(button=>button.textContent==="Membres et fidélisation").click());
+  expect(api.get.mock.calls.at(-1)[1].params.include_members).toBe(true);
+  expect(container.textContent).toContain("Suivi des membres initialisé");
+  expect(container.textContent).toContain("Rétention des nouveaux membres");
+  expect(container.textContent).toContain("100 % (1 / 1)");
+  expect(container.textContent).toContain("0 % (0 / 2)");
+  expect(container.textContent).toContain("En attente ou non disponible");
+  expect(container.textContent).not.toContain("Salons les plus actifs");
+});

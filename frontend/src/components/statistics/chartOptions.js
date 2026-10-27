@@ -43,3 +43,26 @@ export function lengthOption(rows) {
     tooltip:{...common.tooltip,formatter:p=>`${p.name}\n${number(p.value)} messages · ${number(p.data.row.share)} %`},
     series:[{type:"bar",barMaxWidth:55,itemStyle:{borderRadius:[6,6,0,0]},data:rows.map((row,index)=>({value:row.messages,row,itemStyle:{color:colors[index]}}))}]};
 }
+
+export function memberEvolutionOption(rows) {
+  return {...common,legend:{top:0,textStyle:{fontSize:10,color:"#748478"}},grid:{left:45,right:55,top:42,bottom:40},
+    tooltip:{...common.tooltip,trigger:"axis"},xAxis:{...axis,type:"category",data:rows.map(row=>row.day),axisLabel:{hideOverlap:true,fontSize:10}},
+    yAxis:[{...axis,type:"value",minInterval:1,name:"Mouvements"},{...axis,type:"value",minInterval:1,name:"Effectif",splitLine:{show:false}}],
+    series:[{name:"Arrivées",type:"bar",barMaxWidth:18,data:rows.map(row=>row.joins)},{name:"Nouveaux observés",type:"bar",barMaxWidth:18,itemStyle:{color:"#839ca7"},data:rows.map(row=>row.new_members || 0)},{name:"Départs",type:"bar",barMaxWidth:18,itemStyle:{color:"#b59b7d"},data:rows.map(row=>row.departures)},
+      {name:"Effectif connu",type:"line",yAxisIndex:1,connectNulls:false,symbolSize:4,lineStyle:{width:2},data:rows.map(row=>row.population)}]};
+}
+export function cohortOption(rows) {
+  const fields=[['p7','Présence J+7'],['a7','Activité J+7'],['p30','Présence J+30'],['a30','Activité J+30']];
+  const cells=rows.flatMap((row,y)=>fields.map(([key,label],x)=>{const cell=row.checkpoints?.[key.endsWith('30') ? '30' : '7'];return {value:[x,y,row[key] ?? -1],row,label,eligible:cell?.[key.startsWith('p') ? 'presence_eligible' : 'activity_eligible'],count:cell?.[key.startsWith('p') ? 'present' : 'active']};}));
+  return {...common,grid:{left:95,right:20,top:15,bottom:65},
+    tooltip:{...common.tooltip,formatter:p=>`${p.data.row.label} · ${p.data.label}\n${p.value[2]<0 ? "En attente ou données insuffisantes" : `${number(p.value[2])} %`}\n${p.data.row.members} nouveau(x) membre(s)${p.data.eligible == null ? "" : `\n${p.data.count} sur ${p.data.eligible} éligibles`}`},
+    xAxis:{type:"category",data:fields.map(field=>field[1]),axisLine:{show:false},axisTick:{show:false},axisLabel:{fontSize:10}},
+    yAxis:{type:"category",data:rows.map(row=>row.label),inverse:true,axisLine:{show:false},axisTick:{show:false},axisLabel:{fontSize:10}},
+    dataZoom:rows.length>20 ? [{type:"slider",yAxisIndex:0,right:0,width:10,start:0,end:20/rows.length*100,showDetail:false}] : [],
+    visualMap:{type:"piecewise",orient:"horizontal",left:"center",bottom:5,textStyle:{fontSize:10},pieces:[{value:-1,label:"En attente",color:"#e9ece8"},{min:0,max:24.9,label:"0–24 %",color:"#edf3e8"},{min:25,max:49.9,label:"25–49 %",color:"#c5dab9"},{min:50,max:74.9,label:"50–74 %",color:"#8cad81"},{min:75,max:100,label:"75–100 %",color:"#4c7956"}]},
+    series:[{type:"heatmap",data:cells,label:{show:true,fontSize:11,formatter:p=>p.value[2]<0 ? "—" : `${number(p.value[2])} %`},itemStyle:{borderColor:"white",borderWidth:3}}]};
+}
+export function memberRegularityOption(rows) {
+  return {...common,grid:{...common.grid,top:20},xAxis:{...axis,type:"category",data:rows.map(row=>row.label.replace(" jours actifs"," j").replace(" jour actif"," j")),axisLabel:{fontSize:10,interval:0}},yAxis:{...axis,type:"value",minInterval:1},
+    tooltip:{...common.tooltip,formatter:p=>`${p.name}\n${number(p.value)} membres`},series:[{type:"bar",barMaxWidth:55,itemStyle:{borderRadius:[6,6,0,0]},data:rows.map(row=>row.members)}]};
+}

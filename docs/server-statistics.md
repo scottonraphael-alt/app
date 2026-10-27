@@ -85,12 +85,52 @@ La page recharge les agrégats toutes les minutes ; signal de connexion toutes l
 - Pas de bibliothèque distante/CDN, aucun contenu des messages transmis à ECharts.
 
 
-## Bloc 3 : membres et rétention (à réaliser)
+## Bloc 3 : membres et rétention (livré)
 
-Arrivées/départs/effectif/croissance, ratio actifs/effectif, premier message, accueil des nouveaux,
-cohortes J+7/J+30 (présence et participation séparées), régularité, retours après 30 jours et
-renouvellement des participants. Les métriques dépendantes des événements membres auront
-leur propre date de disponibilité ; elles ne seront pas inventées à partir de l'historique absent.
+- Onglet **Membres et fidélisation**. Calcul demandé avec `include_members=true` afin de
+  ne pas alourdir les lectures de l'onglet Activité. Accès responsables inchangé.
+- Annuaire humain initial via Gateway `guild.chunk`, sans historique de messages. Lecture
+  en tâche de fond avec délai maximal de 180 s et nouvelle tentative après une minute.
+  Un nouvel annuaire est vérifié après reconnexion ; l'IA et la projection restent indépendantes.
+- `on_member_join` et `on_raw_member_remove` (départ même sans membre en cache).
+  Les événements sont sérialisés par processus ; séjours identifiés par membre/date d'arrivée,
+  arrivées/départs dédupliqués. Les membres du premier annuaire ne deviennent pas de faux
+  nouveaux membres. Un ancien participant déjà identifié dans les agrégats ne rejoint pas
+  une cohorte de nouveaux membres à sa réarrivée. Un retour connu ne crée pas une nouvelle cohorte.
+- Collections `statistics_memberships` (séjours/accueil/participation) et
+  `statistics_membership_events` (arrivées/départs), sans contenu. Métadonnées de présence
+  dans `statistics_members`. Dates de disponibilité propres à cette collecte.
+- Effectif en fin de période ou au dernier instant connu ; le ratio d'actifs ne compte au
+  numérateur que les participants encore présents à cet instant. Bots exclus partout.
+  Les effectifs/arrivées/départs sont globaux ; les filtres d'activité s'appliquent à la
+  participation, régularité et rétention d'activité. Le périmètre est rappelé dans la page.
+- Croissance nette = effectif final − effectif initial vérifiés ; taux rapporté à l'effectif
+  initial. Pas de taux si l'effectif initial ou la couverture sont inconnus. Comparaison avec
+  la fenêtre précédente de même nombre de jours, jusqu'à la même heure de Paris si nécessaire.
+- Une absence découverte après coupure n'invente pas un départ à une date précise :
+  intervalle incertain depuis la dernière présence vérifiée, ancien effectif inconnu dans
+  cet intervalle, effectif actuel corrigé. Les départs observés restent distincts des ajustements.
+- Cohortes quotidiennes des premières arrivées observées depuis l'activation. À J+7/J+30 :
+  présence à la fin de cette journée calendaire parisienne, activité = au moins un message
+  dans cette journée avec les filtres courants. La journée doit être terminée. Dénominateurs
+  propres aux mesures ; couverture insuffisante ou recul insuffisant => valeur inconnue.
+- Première participation : envoi observé sous 24 h / 7 × 24 h / 30 × 24 h après arrivée.
+  Accueil : mention/réponse explicite humaine reçue dans les sept premiers jours, nombre
+  d'accueillants distincts. Ces faits d'envoi sont conservés même si le message disparaît
+  ensuite ; ils ne recopient aucun texte. Traitement idempotent en fond à partir du registre.
+- Régularité : jours actifs et part des jours de la période, classement et distribution.
+  Renouvellement : participants communs, nouveaux sur cette période (pas forcément nouveaux
+  sur le serveur), et absents par rapport à la précédente. Premiers participants = première
+  activité connue dans les agrégats, sans supposer l'activité antérieure à la collecte.
+- Retours : au moins 30 jours de silence sur **tous** les salons, pas seulement dans le
+  filtre courant. Marge conservatrice d'une heure liée à la précision des agrégats ; pas
+  de retour inféré si le mois de silence n'est pas suffisamment couvert.
+- Les données anciennes ne sont jamais fabriquées. Les cohortes J+7/J+30 apparaissent
+  progressivement après déploiement. Les métriques dépendant des observations en attente
+  restent signalées, sans masquer les cohortes anciennes pour des messages récents sans lien.
+  Pendant une nouvelle vérification de l’annuaire, l’effectif reste celui du dernier snapshot
+  vérifié et est signalé comme ancien. La disponibilité de l'annuaire et de son dernier signal est affichée.
+
 
 ## Bloc 4 : interactions et équilibre (à réaliser)
 
@@ -108,3 +148,6 @@ vert de l'utilisateur. Les données du bloc 1 continuent à s'accumuler entre le
 
 Vérification ciblée des configurations graphiques réelles : depuis `frontend`,
 `npm run test:statistics-charts` (SVG en mémoire, sans navigateur ni screenshot).
+
+À reprendre après les blocs fonctionnels : problèmes d’interface signalés par l’utilisateur,
+notamment la navbar encore présente sur la page. Pas de correction de navbar dans le bloc 3.

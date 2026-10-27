@@ -57,6 +57,8 @@ async def ensure_indexes():
     await db.statistics_channels.create_index([('guild_id', 1), ('category_id', 1)])
     await db.statistics_members.create_index([('guild_id', 1), ('user_id', 1)])
     await db.statistics_sessions.create_index([('guild_id', 1), ('started_at', -1)])
+    from services import statistics_members
+    await statistics_members.ensure_indexes()
 
 
 async def remember_channel(channel):
@@ -116,7 +118,7 @@ async def record_message(message):
         'hour': stamp.replace(minute=0, second=0, microsecond=0),
         'expires_at': stamp + timedelta(days=RETENTION_DAYS),
         'metrics': values, 'mention_ids': mentions, 'reply_to': reply_to,
-        'known_targets': targets, 'deleted': False, 'revision': 1, 'dirty': True,
+        'known_targets': targets, 'observation_targets': targets, 'membership_observations_done': False, 'deleted': False, 'revision': 1, 'dirty': True,
         'source_edited_at': utc(message.edited_at) if message.edited_at else None,
     }
     try:
@@ -248,6 +250,7 @@ async def prune_receipts():
 
 
 async def worker(client):
+    from services import statistics_members
     cleanup_at = now() - timedelta(hours=2)
     heartbeat_at = cleanup_at
     while True:
@@ -257,9 +260,11 @@ async def worker(client):
                 heartbeat_due = now() - heartbeat_at >= timedelta(seconds=30)
                 if client.is_ready():
                     await connected()
+                    statistics_members.ensure_snapshot(client, _session)
                     if _session and heartbeat_due:
                         await db.statistics_sessions.update_one({'_id': _session}, {'$set': {'last_seen_at': now()}})
                 processed = await project_pending()
+                processed += await statistics_members.process_observations()
                 if now() - cleanup_at >= timedelta(hours=1):
                     # Les reçus ne sont pas de l'historique permanent. L'heure entière doit
                     # être hors rétention avant suppression, même après un arrêt prolongé.
@@ -290,6 +295,8 @@ async def stop():
         _task.cancel()
         await asyncio.gather(_task, return_exceptions=True)
         _task = None
+    from services import statistics_members
+    await statistics_members.stop()
     await disconnected()
 
 
