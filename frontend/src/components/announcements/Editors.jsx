@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Upload } from 'lucide-react';
 import { Field } from '../projects/ProjectUI';
 import { BLOCK_LABELS, linkButton, media } from './document';
 export function MarkdownField({
@@ -33,22 +33,35 @@ function Check({
 }) {
   return <label className="an-check"><input type="checkbox" checked={value} onChange={e => onChange(e.target.checked)} />{label}</label>;
 }
+function DirectUpload({onUpload, uploading, accept, label}) {
+  if (!onUpload) return null;
+  return <label className="an-upload an-direct-upload"><Upload size={18}/><span>{uploading ? 'Enregistrement sur Iris…' : label}<small>Stocké sur Iris · 10 Mo maximum</small></span><input type="file" accept={accept} aria-label={label} disabled={uploading} onChange={async e => {
+    const file=e.currentTarget.files?.[0];
+    e.currentTarget.value='';
+    if (file) await onUpload(file);
+  }}/></label>;
+}
 export function MediaEditor({
   value,
   onChange,
   assets,
-  thumbnail = false
+  thumbnail = false,
+  onUpload,
+  uploading = false
 }) {
   const options = Object.values(assets).filter(a => a.content_type.startsWith('image/') || !thumbnail && a.content_type.startsWith('video/'));
-  return <div className="an-fields"><Field label="Média de la bibliothèque"><select value={value.asset_id || ''} onChange={e => onChange({
+  return <div className="an-fields"><DirectUpload onUpload={onUpload ? async file => {
+    const asset=await onUpload(file,{mediaOnly:true,thumbnail});
+    if (asset) onChange({...value,asset_id:asset.id,url:''});
+  } : null} uploading={uploading} accept={thumbnail ? 'image/*' : 'image/*,video/*'} label={thumbnail ? 'Téléverser une image' : 'Téléverser une image ou vidéo'}/><Field label="Ou choisir un média déjà sur Iris"><select value={value.asset_id || ''} onChange={e => onChange({
         ...value,
         asset_id: e.target.value || null,
         url: ''
-      })}><option value="">Utiliser une URL externe</option>{options.map(asset => <option key={asset.id} value={asset.id}>{asset.original_filename}</option>)}</select></Field>{!value.asset_id && <Field label="URL HTTPS du média"><input type="url" value={value.url} maxLength={2048} onChange={e => onChange({
+      })}><option value="">Choisir dans la bibliothèque…</option>{options.map(asset => <option key={asset.id} value={asset.id}>{asset.original_filename}</option>)}</select></Field>{!value.asset_id && <details className="an-external-media" open={value.url ? true : undefined}><summary>Utiliser plutôt un lien externe</summary><Field label="URL HTTPS du média"><input type="url" value={value.url} maxLength={2048} onChange={e => onChange({
         ...value,
         url: e.target.value,
         asset_id: null
-      })} placeholder="https://…" /></Field>}{!value.asset_id && /^https:\/\/(?:cdn|media)\.discordapp\.(?:com|net)\/attachments\//i.test(value.url) && <p className="an-help">Ce lien de pièce jointe Discord est temporaire. Pour une annonce durable ou programmée, ajoutez l’image dans Fichiers puis sélectionnez-la dans la bibliothèque.</p>}<Field label="Description alternative"><input value={value.description} maxLength={1024} onChange={e => onChange({
+      })} placeholder="https://…" /></Field></details>}{!value.asset_id && /^https:\/\/(?:cdn|media)\.discordapp\.(?:com|net)\/attachments\//i.test(value.url) && <p className="an-help">Ce lien de pièce jointe Discord est temporaire. Pour une annonce durable ou programmée, ajoutez l’image dans Fichiers puis sélectionnez-la dans la bibliothèque.</p>}<Field label="Description alternative"><input value={value.description} maxLength={1024} onChange={e => onChange({
         ...value,
         description: e.target.value
       })} placeholder="Décrivez l’image pour les lecteurs d’écran" /></Field><Check label="Masquer comme spoiler" value={value.spoiler} onChange={spoiler => onChange({
@@ -78,7 +91,9 @@ export default function BlockEditor({
   block,
   onChange,
   catalogue,
-  assets
+  assets,
+  onUpload,
+  uploading = false
 }) {
   const change = (key, value) => onChange({
     ...block,
@@ -86,7 +101,10 @@ export default function BlockEditor({
   });
   return <section className="an-inspector"><header><p className="cz-eyebrow">BLOC SÉLECTIONNÉ</p><h3>{BLOCK_LABELS[block.kind]}</h3></header><div className="an-inspector-body">{block.kind === 'text' ? <MarkdownField label="Texte du bloc" value={block.text} onChange={text => change('text', text)} catalogue={catalogue} /> : block.kind === 'section' ? <>
     {block.texts.map((text, index) => <div className="an-section-text" key={index}><MarkdownField label={`Texte de section ${index + 1}`} value={text} onChange={text => change('texts', block.texts.map((t, i) => i === index ? text : t))} catalogue={catalogue} />{block.texts.length > 1 && <button className="an-button an-danger" onClick={() => change('texts', block.texts.filter((_, i) => i !== index))}>Retirer ce texte</button>}</div>)}<button className="an-button" disabled={block.texts.length >= 3} onClick={() => change('texts', [...block.texts, 'Texte complémentaire.'])}><Plus size={15} /> Ajouter un texte à la section</button>
-    <Field label="Accessoire de la section"><select value={block.accessory} onChange={e => change('accessory', e.target.value)}><option value="thumbnail">Vignette</option><option value="button">Bouton de lien</option></select></Field>{block.accessory === 'thumbnail' ? <MediaEditor value={block.thumbnail} onChange={v => change('thumbnail', v)} assets={assets} thumbnail /> : <ButtonEditor value={block.button} onChange={v => change('button', v)} />}</> : block.kind === 'gallery' ? <>
-      <p className="an-help">Une galerie contient jusqu’à dix images ou vidéos. Ajoutez vos fichiers dans l’onglet Fichiers.</p>{block.items.map((item, index) => <div key={index} className="an-sub-editor"><header><strong>Média {index + 1}</strong><button className="an-icon an-danger" aria-label={`Retirer le média ${index + 1}`} onClick={() => change('items', block.items.filter((_, i) => i !== index))}><Trash2 size={15} /></button></header><MediaEditor value={item} onChange={v => change('items', block.items.map((m, i) => i === index ? v : m))} assets={assets} /></div>)}<button className="an-button" disabled={block.items.length >= 10} onClick={() => change('items', [...block.items, media()])}><Plus size={15} /> Ajouter un média</button></> : block.kind === 'buttons' ? <>
-      <p className="an-help">Jusqu’à cinq boutons de lien par ligne. Les boutons d’action nécessitant un traitement par le bot ne sont pas proposés.</p>{block.buttons.map((btn, index) => <div className="an-sub-editor" key={index}><header><strong>Bouton {index + 1}</strong><button className="an-icon an-danger" aria-label={`Retirer le bouton ${index + 1}`} onClick={() => change('buttons', block.buttons.filter((_, i) => i !== index))}><Trash2 size={15} /></button></header><ButtonEditor value={btn} onChange={v => change('buttons', block.buttons.map((b, i) => i === index ? v : b))} /></div>)}<button className="an-button" disabled={block.buttons.length >= 5} onClick={() => change('buttons', [...block.buttons, linkButton()])}><Plus size={15} /> Ajouter un bouton</button></> : block.kind === 'separator' ? <div className="an-fields"><Check label="Afficher le trait de séparation" value={block.divider} onChange={v => change('divider', v)} /><Field label="Espacement"><select value={block.spacing} onChange={e => change('spacing', Number(e.target.value))}><option value={1}>Compact</option><option value={2}>Aéré</option></select></Field></div> : <div className="an-fields"><p className="an-help">Le fichier doit être téléversé dans la bibliothèque. Il sera joint au message Discord.</p><Field label="Fichier à joindre"><select value={block.file_asset_id || ''} onChange={e => change('file_asset_id', e.target.value || null)}><option value="">Choisir un fichier…</option>{Object.values(assets).map(asset => <option key={asset.id} value={asset.id}>{asset.original_filename}</option>)}</select></Field><Check label="Fichier marqué comme spoiler" value={block.spoiler} onChange={v => change('spoiler', v)} /></div>}</div></section>;
+    <Field label="Accessoire de la section"><select value={block.accessory} onChange={e => change('accessory', e.target.value)}><option value="thumbnail">Vignette</option><option value="button">Bouton de lien</option></select></Field>{block.accessory === 'thumbnail' ? <MediaEditor value={block.thumbnail} onChange={v => change('thumbnail', v)} assets={assets} thumbnail onUpload={onUpload} uploading={uploading} /> : <ButtonEditor value={block.button} onChange={v => change('button', v)} />}</> : block.kind === 'gallery' ? <>
+      <p className="an-help">Une galerie contient jusqu’à dix images ou vidéos. Téléversez-les directement ci-dessous ou choisissez-les dans la bibliothèque.</p>{block.items.map((item, index) => <div key={index} className="an-sub-editor"><header><strong>Média {index + 1}</strong><button className="an-icon an-danger" aria-label={`Retirer le média ${index + 1}`} onClick={() => change('items', block.items.filter((_, i) => i !== index))}><Trash2 size={15} /></button></header><MediaEditor value={item} onChange={v => change('items', block.items.map((m, i) => i === index ? v : m))} assets={assets} onUpload={onUpload} uploading={uploading} /></div>)}<button className="an-button" disabled={block.items.length >= 10} onClick={() => change('items', [...block.items, media()])}><Plus size={15} /> Ajouter un média</button></> : block.kind === 'buttons' ? <>
+      <p className="an-help">Jusqu’à cinq boutons de lien par ligne. Les boutons d’action nécessitant un traitement par le bot ne sont pas proposés.</p>{block.buttons.map((btn, index) => <div className="an-sub-editor" key={index}><header><strong>Bouton {index + 1}</strong><button className="an-icon an-danger" aria-label={`Retirer le bouton ${index + 1}`} onClick={() => change('buttons', block.buttons.filter((_, i) => i !== index))}><Trash2 size={15} /></button></header><ButtonEditor value={btn} onChange={v => change('buttons', block.buttons.map((b, i) => i === index ? v : b))} /></div>)}<button className="an-button" disabled={block.buttons.length >= 5} onClick={() => change('buttons', [...block.buttons, linkButton()])}><Plus size={15} /> Ajouter un bouton</button></> : block.kind === 'separator' ? <div className="an-fields"><Check label="Afficher le trait de séparation" value={block.divider} onChange={v => change('divider', v)} /><Field label="Espacement"><select value={block.spacing} onChange={e => change('spacing', Number(e.target.value))}><option value={1}>Compact</option><option value={2}>Aéré</option></select></Field></div> : <div className="an-fields"><p className="an-help">Le fichier sera enregistré sur Iris puis joint au message Discord.</p><DirectUpload onUpload={onUpload ? async file => {
+        const asset=await onUpload(file);
+        if (asset) change('file_asset_id',asset.id);
+      } : null} uploading={uploading} label="Téléverser un fichier joint"/><Field label="Ou choisir un fichier déjà sur Iris"><select value={block.file_asset_id || ''} onChange={e => change('file_asset_id', e.target.value || null)}><option value="">Choisir un fichier…</option>{Object.values(assets).map(asset => <option key={asset.id} value={asset.id}>{asset.original_filename}</option>)}</select></Field><Check label="Fichier marqué comme spoiler" value={block.spoiler} onChange={v => change('spoiler', v)} /></div>}</div></section>;
 }

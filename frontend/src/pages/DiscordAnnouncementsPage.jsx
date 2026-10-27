@@ -332,8 +332,12 @@ export default function DiscordAnnouncementsPage({
       blocks
     });
   };
-  const upload = async file => {
-    if (!file) return;
+  const upload = async (file, {mediaOnly = false, thumbnail = false} = {}) => {
+    if (!file) return null;
+    if (!file.size || file.size > 10 * 1024 * 1024) {
+      toast.error(!file.size ? 'Le fichier est vide.' : 'Un fichier ne peut pas dépasser 10 Mo.');
+      return null;
+    }
     setUploading(true);
     try {
       const body = new FormData();
@@ -341,9 +345,15 @@ export default function DiscordAnnouncementsPage({
       const r = await api.post(`${BASE}/assets`, body);
       mergeAssets([r.data]);
       loadAssets(1);
+      if (mediaOnly && !(r.data.content_type.startsWith('image/') || !thumbnail && r.data.content_type.startsWith('video/'))) {
+        toast.error('Ce format ne peut pas être affiché comme média. Le fichier est disponible dans la bibliothèque pour un bloc Fichier joint.');
+        return null;
+      }
       toast.success('Fichier ajouté à la bibliothèque.');
+      return r.data;
     } catch (error) {
       toast.error(getErrorMessage(error));
+      return null;
     } finally {
       setUploading(false);
     }
@@ -545,7 +555,7 @@ export default function DiscordAnnouncementsPage({
                   setSelectedBlock(next.id);
                 }}><Copy size={14} /></button><button className="an-icon an-danger" aria-label={`Retirer le bloc ${i + 1}`} onClick={() => editGroup({
                   blocks: group.blocks.filter(v => v.id !== b.id)
-                })}><Trash2 size={14} /></button></div></li>)}</ol>{block ? <BlockEditor key={block.id} block={block} onChange={editBlock} assets={assets} catalogue={catalogue} /> : <div className="an-empty">Ajoutez un bloc pour commencer ce panneau.</div>}</>}
+                })}><Trash2 size={14} /></button></div></li>)}</ol>{block ? <BlockEditor key={block.id} block={block} onChange={editBlock} assets={assets} catalogue={catalogue} onUpload={upload} uploading={uploading} /> : <div className="an-empty">Ajoutez un bloc pour commencer ce panneau.</div>}</>}
         {tab === 'distribution' && <section className="an-panel"><header><h2>La bonne annonce, au bon endroit.</h2><p>Le nom du brouillon reste interne. Seuls vos blocs seront publiés sur Discord.</p></header><div className="an-fields"><Field label="Salon de destination"><select value={meta.channel_id} onChange={e => editMeta('channel_id', e.target.value)}><option value="">Choisir un salon…</option>{meta.channel_id && !catalogue.channels.some(c => c.id === meta.channel_id) && <option value={meta.channel_id}>Salon {meta.channel_id}</option>}{catalogue.channels.map(channel => <option key={channel.id} value={channel.id}>{channel.category ? `${channel.category} / ` : ''}#{channel.name}</option>)}</select></Field>{catalogueError && <Field label="ID du salon"><input inputMode="numeric" value={meta.channel_id} onChange={e => editMeta('channel_id', e.target.value.trim())} /></Field>}<Check label="Enregistrer comme modèle réutilisable" value={meta.is_template} onChange={value => editMeta('is_template', value)} />{meta.is_template && <button className="an-button" onClick={() => start('simple', cloneDocument(doc), meta.name, meta.channel_id)}>Utiliser ce modèle comme nouveau brouillon</button>}<Check label="Envoi discret, sans notifications push" value={doc.silent} onChange={silent => editDoc({
               ...doc,
               silent

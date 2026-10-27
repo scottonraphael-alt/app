@@ -86,3 +86,54 @@ it('présente les erreurs de validation API sans rendre leurs objets comme du te
   await click('Enregistrer');
   expect(toast.error).toHaveBeenCalledWith('Les données ne sont pas valides. Vérifiez les champs et les limites du composeur.');
 });
+
+async function chooseFile(label,file){
+  const input=container.querySelector(`input[aria-label="${label}"]`);
+  await act(async()=>{Object.defineProperty(input,'files',{value:[file],configurable:true});input.dispatchEvent(new Event('change',{bubbles:true}));});
+}
+function mockUpload(content_type='image/png',filename='visuel.png'){
+  const original=api.post.getMockImplementation();
+  api.post.mockImplementation(async(url,body)=>url.endsWith('/assets')?{data:{id:'uploaded',original_filename:filename,discord_filename:'uploaded.png',content_type,size:123}}:original(url,body));
+}
+it('téléverse une image dans la galerie puis sauvegarde sa référence Iris',async()=>{
+  mockUpload();await click('Galerie de médias');
+  await value(container.querySelector('input[type="url"]'),'https://example.com/ancien.png');
+  const file=new File(['image'],'visuel.png',{type:'image/png'});
+  await chooseFile('Téléverser une image ou vidéo',file);
+  expect(api.post.mock.calls.find(([url])=>url.endsWith('/assets'))[1].get('file')).toBe(file);
+  expect(container.querySelector('.an-preview-gallery img').getAttribute('src')).toBe('/api/responsable/annonces/assets/uploaded/download');
+  expect(container.querySelector('input[type="url"]')).toBeNull();
+  await click('Enregistrer');
+  expect(api.post.mock.calls.find(([url])=>url.endsWith('/drafts'))[1].document.groups[0].blocks[1].items[0]).toMatchObject({asset_id:'uploaded',url:''});
+});
+it('téléverse directement une vignette de section',async()=>{
+  mockUpload();await click('Texte + accessoire');
+  await chooseFile('Téléverser une image',new File(['image'],'visuel.png',{type:'image/png'}));
+  expect(container.querySelector('.an-preview-section img').getAttribute('src')).toContain('/uploaded/download');
+  await click('Enregistrer');
+  expect(api.post.mock.calls.find(([url])=>url.endsWith('/drafts'))[1].document.groups[0].blocks[1].thumbnail.asset_id).toBe('uploaded');
+});
+it('joint un document directement depuis le bloc Fichier joint',async()=>{
+  mockUpload('application/pdf','programme.pdf');await click('Fichier joint');
+  await chooseFile('Téléverser un fichier joint',new File(['pdf'],'programme.pdf',{type:'application/pdf'}));
+  expect(container.querySelector('.an-preview-file').textContent).toContain('programme.pdf');
+  await click('Enregistrer');
+  expect(api.post.mock.calls.find(([url])=>url.endsWith('/drafts'))[1].document.groups[0].blocks[1].file_asset_id).toBe('uploaded');
+});
+it('préserve le média précédent si le téléversement échoue',async()=>{
+  await click('Galerie de médias');await value(container.querySelector('input[type="url"]'),'https://example.com/original.png');
+  const original=api.post.getMockImplementation();api.post.mockImplementation(async(url,body)=>{if(url.endsWith('/assets'))throw new Error('Upload failed');return original(url,body);});
+  await chooseFile('Téléverser une image ou vidéo',new File(['image'],'visuel.png',{type:'image/png'}));
+  expect(container.querySelector('.an-preview-gallery img').getAttribute('src')).toBe('https://example.com/original.png');
+  expect(toast.error).toHaveBeenCalledWith('Conflit de version');
+});
+it('refuse un fichier vide ou non affichable sans remplacer le média',async()=>{
+  await click('Galerie de médias');
+  await chooseFile('Téléverser une image ou vidéo',new File([],'vide.png',{type:'image/png'}));
+  expect(api.post.mock.calls.filter(([url])=>url.endsWith('/assets'))).toHaveLength(0);
+  expect(toast.error).toHaveBeenCalledWith('Le fichier est vide.');
+  mockUpload('application/octet-stream','dessin.svg');
+  await chooseFile('Téléverser une image ou vidéo',new File(['svg'],'dessin.svg',{type:'image/svg+xml'}));
+  expect(container.querySelector('.an-preview-gallery img')).toBeNull();
+  expect(toast.error.mock.calls.at(-1)[0]).toContain('bloc Fichier joint');
+});

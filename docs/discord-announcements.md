@@ -8,6 +8,7 @@ Accès : **NewDashboard → Responsable → Composer une annonce Discord** (`/re
 - Texte Markdown et barre d’outils ; sections avec un à trois textes et une vignette ou un bouton de lien ; galeries d’images/vidéos avec descriptions alternatives ; séparateurs ; lignes de boutons de lien ; fichiers joints.
 - Réorganisation, duplication et suppression des blocs ; édition d’un bloc à la fois avec un sommaire défilant.
 - Aperçu indicatif sombre/clair et largeur mobile. Discord reste la référence pour le rendu final, en particulier les syntaxes Markdown imbriquées et les médias externes.
+- Téléversement direct depuis les blocs galerie, vignette et fichier joint : stockage sur Iris, ajout à la bibliothèque et sélection automatique. Les liens externes restent disponibles dans un volet secondaire. Un échec ne remplace pas le média précédent.
 - Brouillons et modèles partagés, recherche, pagination, trames de départ, duplication, récupération locale des modifications non enregistrées et protection des versions concurrentes.
 - Export/import du document Iris ; export du payload Discord pour inspection. L’import passe par le schéma serveur et ne permet pas d’envoyer un payload arbitraire.
 
