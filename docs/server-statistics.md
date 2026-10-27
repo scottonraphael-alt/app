@@ -184,8 +184,24 @@ vert de l'utilisateur. Les données du bloc 1 continuent à s'accumuler entre le
 Vérification ciblée des configurations graphiques réelles : depuis `frontend`,
 `npm run test:statistics-charts` (SVG en mémoire, sans navigateur ni screenshot).
 
-À reprendre après les blocs fonctionnels : problèmes d’interface signalés par l’utilisateur,
-notamment la navbar encore présente sur la page. Pas de correction de navbar dans le bloc 3.
+## Interface : lecture progressive (livrée)
+
+- Navigation globale masquée seulement pendant le montage de la page ; restauration à la
+  sortie, sur le même principe que le casier. En-tête, police, palette, boutons et onglets
+  réutilisent les classes et jetons du casier.
+- Trois grandes vues, chacune découpée en questions : activité, parcours des membres,
+  interactions. Une seule analyse est montée à la fois ; les graphiques des autres sujets
+  ne sont pas instanciés. Changement de sujet sans nouvelle requête API.
+- Classements ouverts en tableau, choix explicite Graphique / Tableau pour chaque carte.
+  Colonnes complémentaires repliables pour la diversité ; toutes les métriques restent accessibles.
+- Définition visible pour chaque indicateur et carte, aide « Comprendre » ou « Comment lire
+  ces données » avec interprétation, unités et limites. Quatre repères au premier niveau ;
+  indicateurs supplémentaires, filtres avancés et détails de collecte à la demande.
+- Navigation des analyses au clavier (flèches, début/fin), tableaux avec légendes, états de
+  sélection explicites et défilement horizontal des onglets sur les petits écrans.
+- Vérification ciblée de l’interface : 10 tests (dont masquage/restauration de la navigation,
+  une seule analyse montée, lecture au clavier et conservation des filtres) ; build frontend.
+  Aucun screenshot et aucune modification des calculs backend.
 
 ### Vérification globale après le bloc 4
 

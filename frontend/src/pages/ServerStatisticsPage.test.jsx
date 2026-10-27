@@ -4,6 +4,7 @@ import ServerStatisticsPage from "./ServerStatisticsPage";
 import { api } from "../api/client";
 
 jest.mock("react-router-dom", () => ({ Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a> }), { virtual: true });
+jest.mock("@/Casier.css", () => ({}), { virtual: true });
 jest.mock("@/ServerStatistics.css", () => ({}), { virtual: true });
 jest.mock("../api/client", () => ({ api: { get: jest.fn() }, getErrorMessage: () => "Erreur de collecte" }));
 jest.mock("../components/statistics/StatisticsChart", () => () => <div data-testid="echarts-placeholder" />);
@@ -35,12 +36,14 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 it("affiche les premiers compteurs et le retour vers le NewDashboard", () => {
   expect(container.textContent).toContain("Bot connecté");
   expect(container.textContent).toContain("Membres actifs");
-  expect(container.textContent).toContain("Alex");
+  expect(container.textContent).toContain("Évolution des messages");
+  expect(container.querySelectorAll('[data-testid="echarts-placeholder"]')).toHaveLength(1);
+  expect(container.textContent).not.toContain("Messages par membre");
   expect(container.querySelector('a').getAttribute('href')).toBe('/');
   expect(api.get.mock.calls[0][1].params.exclude_categories).toBe("");
 });
 it("masque une catégorie par filtre API sans arrêter sa collecte et mémorise le choix", async () => {
-  await act(async () => container.querySelector('input[type="checkbox"]').click());
+  await act(async () => { container.querySelector(".ss-filter-drawer").open=true; container.querySelector(".ss-categories").open=true; container.querySelector('input[type="checkbox"]').click(); });
   expect(api.get.mock.calls.at(-1)[1].params.exclude_categories).toBe("1499495158469758976");
   expect(JSON.parse(localStorage.getItem("iris.statistics.hiddenCategories"))).toEqual(["1499495158469758976"]);
   expect(container.textContent).toContain("La collecte conserve les données de toutes les catégories");
@@ -61,8 +64,9 @@ it("transmet le regroupement et la désactivation de comparaison à tous les gra
   expect(api.get.mock.calls.at(-1)[1].params.compare).toBe(false);
 });
 it("permet de filtrer un membre depuis le tableau accessible du graphique", async () => {
+  await act(async () => [...container.querySelectorAll('[role="tab"]')].find(el=>el.textContent==="Participants").click());
   const card=[...container.querySelectorAll('.ss-chart-card')].find(el=>el.querySelector('h2').textContent==="Messages par membre");
-  await act(async () => card.querySelector('button').click());
+  await act(async () => card.querySelector('tbody .ss-data-button').click());
   expect(api.get.mock.calls.at(-1)[1].params.member_id).toBe("1");
 });
 
@@ -82,6 +86,9 @@ it("charge les métriques des membres seulement après ouverture de leur onglet"
   await act(async () => [...container.querySelectorAll('button')].find(button=>button.textContent==="Membres et fidélisation").click());
   expect(api.get.mock.calls.at(-1)[1].params.include_members).toBe(true);
   expect(container.textContent).toContain("Suivi des membres initialisé");
+  await act(async () => [...container.querySelectorAll('[role="tab"]')].find(el=>el.textContent==="Rétention").click());
+  const retention=container.querySelector(".ss-chart-card");
+  await act(async () => [...retention.querySelectorAll(".ss-representation button")].find(el=>el.textContent.includes("Tableau")).click());
   expect(container.textContent).toContain("Rétention des nouveaux membres");
   expect(container.textContent).toContain("100 % (1 / 1)");
   expect(container.textContent).toContain("0 % (0 / 2)");
@@ -104,9 +111,46 @@ it("ouvre les interactions avec un chargement dédié et masque les autres vues"
   expect(params.include_interactions).toBe(true);
   expect(params.include_members).toBe(false);
   expect(container.textContent).toContain("Diversité des interlocuteurs");
+  expect(container.textContent).not.toContain("Historique insuffisant");
+  await act(async () => [...container.querySelectorAll('[role="tab"]')].find(el=>el.textContent==="Tendances").click());
   expect(container.textContent).toContain("Historique insuffisant");
+  await act(async () => [...container.querySelectorAll('[role="tab"]')].find(el=>el.textContent==="Diversité").click());
   expect(container.textContent).not.toContain("Salons les plus actifs");
   const card=[...container.querySelectorAll('.ss-chart-card')].find(el=>el.querySelector('h2').textContent==="Diversité des interlocuteurs");
-  await act(async () => card.querySelector('button').click());
+  await act(async () => card.querySelector('tbody .ss-data-button').click());
   expect(api.get.mock.calls.at(-1)[1].params.member_id).toBe("1");
+});
+
+it("ne monte qu’une analyse et permet le passage graphique / tableau sans nouvelle requête", async () => {
+  const requests=api.get.mock.calls.length;
+  await act(async () => [...container.querySelectorAll('[role="tab"]')].find(el=>el.textContent==="Rythmes").click());
+  expect(container.textContent).toContain("Heures de pointe");
+  expect(container.querySelectorAll('[data-testid="echarts-placeholder"]')).toHaveLength(1);
+  const card=container.querySelector('.ss-chart-card');
+  await act(async () => [...card.querySelectorAll('.ss-representation button')].find(el=>el.textContent.includes('Tableau')).click());
+  expect(container.querySelector('[data-testid="echarts-placeholder"]')).toBeNull();
+  expect(card.querySelector('table')).not.toBeNull();
+  expect(api.get.mock.calls.length).toBe(requests);
+  expect(container.textContent).toContain("Comment lire ces données");
+});
+it("permet de choisir une analyse au clavier", async () => {
+  const current=container.querySelector('[role="tab"][aria-selected="true"]');
+  await act(async () => current.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})));
+  expect(container.querySelector('[role="tab"][aria-selected="true"]').textContent).toBe('Rythmes');
+  expect(document.activeElement.textContent).toBe('Rythmes');
+});
+it("masque réellement la navigation globale et la rétablit après avoir quitté la page", async () => {
+  const fs=require('fs'); const path=require('path');
+  const style=document.createElement('style');
+  style.textContent=fs.readFileSync(path.join(__dirname,'../ServerStatistics.css'),'utf8');
+  document.head.appendChild(style);
+  const shell=document.createElement('div'); shell.className='app-shell';
+  const sidebar=document.createElement('aside'); sidebar.className='sidebar'; shell.appendChild(sidebar);
+  document.body.appendChild(shell);
+  try {
+    expect(window.getComputedStyle(sidebar).display).toBe('none');
+    await act(async () => root.render(<div>Autre page</div>));
+    expect(document.body.classList.contains('statistics-no-nav')).toBe(false);
+    expect(window.getComputedStyle(sidebar).display).not.toBe('none');
+  } finally { shell.remove(); style.remove(); }
 });
