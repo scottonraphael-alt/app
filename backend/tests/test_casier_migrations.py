@@ -556,6 +556,7 @@ def test_every_event_has_a_label_and_a_default_status_code():
         "casier.sanction.attachment.uploaded": 201, "casier.sanction.attachment.deleted": 200,
         "casier.sanction.attachments.resynced": 202, "casier.fiche_s.created": 201,
         "casier.fiche_s.updated": 200, "casier.fiche_s.closed": 200, "casier.ai_flag.reviewed": 200,
+        "casier.history.reverted": 200,
     }
     assert casier_audit.EVENT_STATUS_CODES == expected
     assert set(casier_audit.EVENT_LABELS) == set(expected)

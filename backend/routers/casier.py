@@ -43,6 +43,7 @@ from services import (
     casier_ai_flags,
     casier_attachments,
     casier_audit,
+    casier_history,
     casier_log_parser,
     casier_migrations,
     casier_search,
@@ -725,6 +726,7 @@ async def create_casier(
         {"$set": {"is_prevention": is_prevention, "member_refreshed_at": now, "updated_at": now}},
     )
     casier["is_prevention"] = is_prevention
+    await casier_history.record_creation(casier, staff)
 
     await casier_audit.log_casier_event(
         casier_audit.CASIER_CREATED,
@@ -789,6 +791,7 @@ async def add_sanction_endpoint(
     author = casier_service.staff_to_author(staff)
     status_before = casier_service.compute_status(casier)
     sanction_id = casier_service.new_id()
+    history_before = casier_history.capture(casier, "sanction", sanction_id)
 
     updated = await casier_service.add_sanction(
         casier["discord_id"],
@@ -802,6 +805,7 @@ async def add_sanction_endpoint(
         ai_flag_id=flag_id,
         moderator=None,
     )
+    await casier_history.record_change(history_before, updated, action=casier_history.ACTION_CREATED, staff=staff)
 
     link = None
     if flag_id:
@@ -858,9 +862,11 @@ async def add_note_endpoint(
     casier = await load_casier_for_items(casier_id)
     viewer = await viewer_for(staff)
 
+    history_before = casier_history.capture(casier, "sanction", sanction_id)
     updated, details = await casier_service.add_note(
         casier, sanction_id, payload.content, casier_service.staff_to_author(staff)
     )
+    await casier_history.record_change(history_before, updated, action=casier_history.ACTION_NOTE_ADDED, staff=staff)
 
     await casier_audit.log_casier_event(
         casier_audit.NOTE_CREATED, request, staff, status.HTTP_201_CREATED, casier=updated, **details
@@ -887,9 +893,11 @@ async def update_note_endpoint(
     viewer = await viewer_for(staff)
 
     # 404 (sanction, information) et 403 (ni auteur ni Responsable) levés par le service.
+    history_before = casier_history.capture(casier, "sanction", sanction_id)
     updated, details = await casier_service.update_note(
         casier, sanction_id, note_id, payload.content, casier_service.staff_to_author(staff), viewer=viewer
     )
+    await casier_history.record_change(history_before, updated, action=casier_history.ACTION_NOTE_UPDATED, staff=staff)
 
     await casier_audit.log_casier_event(
         casier_audit.NOTE_UPDATED, request, staff, status.HTTP_200_OK, casier=updated, **details
@@ -914,9 +922,11 @@ async def delete_note_endpoint(
     casier = await load_casier_for_items(casier_id)
     viewer = await viewer_for(staff)
 
+    history_before = casier_history.capture(casier, "sanction", sanction_id)
     updated, details = await casier_service.delete_note(
         casier, sanction_id, note_id, casier_service.staff_to_author(staff), viewer=viewer
     )
+    await casier_history.record_change(history_before, updated, action=casier_history.ACTION_NOTE_DELETED, staff=staff)
 
     await casier_audit.log_casier_event(
         casier_audit.NOTE_DELETED, request, staff, status.HTTP_200_OK, casier=updated, **details
@@ -1078,6 +1088,7 @@ async def add_fiche_s_endpoint(
         raise HTTPException(status_code=500, detail="Casier invalide : discord_id manquant.")
     viewer = await viewer_for(staff)
     fiche_id = casier_service.new_id()
+    history_before = casier_history.capture(casier, "fiche", fiche_id)
 
     # Contenu assaini et texte extrait par le service ; 422 « La fiche S est vide. » avant écriture.
     updated = await casier_service.add_fiche_s(
@@ -1088,6 +1099,7 @@ async def add_fiche_s_endpoint(
         created_by=casier_service.staff_to_author(staff),
         fiche_id=fiche_id,
     )
+    await casier_history.record_change(history_before, updated, action=casier_history.ACTION_CREATED, staff=staff)
 
     fiche = next((item for item in _items(updated, "fiches_s") if item.get("id") == fiche_id), {})
     await casier_audit.log_casier_event(
@@ -1113,10 +1125,12 @@ async def close_fiche_s_endpoint(
     object_id = object_id_or_400(casier_id)
     hex_id_or_400(fiche_id)
     viewer = await viewer_for(staff)
+    history_before = casier_history.capture(await db.casiers.find_one({"_id": object_id}), "fiche", fiche_id)
     updated = await casier_service.close_fiche_s(object_id, fiche_id, casier_service.staff_to_author(staff))
 
     if updated is None:
         raise HTTPException(status_code=404, detail="Casier ou fiche S introuvable, ou déjà clôturée.")
+    await casier_history.record_change(history_before, updated, action=casier_history.ACTION_CLOSED, staff=staff)
 
     fiche = next((item for item in _items(updated, "fiches_s") if item.get("id") == fiche_id), {})
     await casier_audit.log_casier_event(
@@ -1147,12 +1161,14 @@ async def update_fiche_s_endpoint(
     casier = await load_casier_for_items(casier_id)
     viewer = await viewer_for(staff)
 
+    history_before = casier_history.capture(casier, "fiche", fiche_id)
     # 404, 403 (auteur ou Responsable ; clôturée : Responsable) et 422 (fiche vide) levés par le service.
     updated, changed, details = await casier_service.update_fiche_s(
         casier, fiche_id, payload.title, payload.content, casier_service.staff_to_author(staff), viewer=viewer
     )
 
     if changed:
+        await casier_history.record_change(history_before, updated, action=casier_history.ACTION_UPDATED, staff=staff)
         await casier_audit.log_casier_event(
             casier_audit.FICHE_S_UPDATED, request, staff, status.HTTP_200_OK, casier=updated, **details
         )

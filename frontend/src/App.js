@@ -30,6 +30,11 @@ const ResponsableChannelArchivesPage = lazy(() => import("./pages/ResponsableCha
 const ChannelArchiveWorkspacePage = lazy(() => import("./pages/ChannelArchiveWorkspacePage"));
 const ModerationCasierPage = lazy(() => import("./pages/ModerationCasierPage"));
 const TicketArchivesPage = lazy(() => import("./pages/TicketArchivesPage"));
+const HandoffsPage = lazy(() => import("./pages/HandoffsPage"));
+const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
+const StaffLoadPage = lazy(() => import("./pages/StaffLoadPage"));
+const MonthlyReportPage = lazy(() => import("./pages/MonthlyReportPage"));
+const Member360Page = lazy(() => import("./pages/Member360Page"));
 
 function Loading() {
   return <div className="app-loading">Chargement…</div>;
@@ -359,6 +364,24 @@ function AuthenticatedApp({
                 <Navigate to={defaultRoute} replace />
               )
             }
+          />
+
+          <Route
+            path="/staff/passation"
+            element={canSeeStaff ? <HandoffsPage helper={helper} /> : <Navigate to={defaultRoute} replace />}
+          />
+          <Route path="/notifications" element={<NotificationsPage helper={helper} />} />
+          <Route
+            path="/responsable/charge"
+            element={canSeeAdmin ? <StaffLoadPage /> : <Navigate to={defaultRoute} replace />}
+          />
+          <Route
+            path="/responsable/rapports"
+            element={canSeeAdmin ? <MonthlyReportPage /> : <Navigate to={defaultRoute} replace />}
+          />
+          <Route
+            path="/moderation/membres/:memberId"
+            element={canSeeOperateur ? <Member360Page /> : <Navigate to={defaultRoute} replace />}
           />
 
           <Route path="*" element={<Navigate to={defaultRoute} replace />} />

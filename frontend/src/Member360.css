@@ -1,0 +1,72 @@
+/* Vue membre 360° : s'appuie sur les jetons --cz-* de Casier.css (clair et sombre). */
+
+.m3-page { display: block; }
+.m3-layout { display: grid; gap: 18px; max-width: 980px; }
+
+.m3-state { display: flex; align-items: center; gap: 10px; color: var(--cz-muted); font-size: 14px; }
+
+.m3-identity { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.m3-identity-copy { flex: 1 1 200px; min-width: 0; }
+.m3-identity h2 { margin: 0; font: 600 22px/1.25 "Manrope", sans-serif; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.m3-handle, .m3-id { margin: 4px 0 0; color: var(--cz-muted); font-size: 13px; }
+.m3-identity-side { display: flex; align-items: center; gap: 8px; }
+
+.m3-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 0; }
+.m3-stat { padding: 14px 16px; border-radius: 14px; background: var(--cz-subtle); }
+.m3-stat dd { margin: 0; font: 600 26px/1.1 "Manrope", sans-serif; color: var(--cz-ink); }
+.m3-stat dt { margin-top: 4px; color: var(--cz-muted); font-size: 12.5px; }
+.m3-stat { display: flex; flex-direction: column-reverse; justify-content: flex-end; }
+.m3-last { margin: 14px 0 0; color: var(--cz-muted); font-size: 13px; }
+
+.m3-timeline-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-bottom: 18px; }
+.m3-timeline-head h2 { margin: 0; font: 600 18px/1.3 "Manrope", sans-serif; }
+.m3-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.m3-filter {
+  min-height: 36px; padding: 6px 14px; border: 1px solid var(--cz-line); border-radius: 999px;
+  background: var(--cz-surface); color: var(--cz-muted); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.m3-filter:hover { background: var(--cz-sage-soft); }
+.m3-filter[aria-pressed="true"] { background: var(--cz-sage-soft); border-color: var(--cz-sage-line); color: var(--cz-sage); }
+
+.m3-list { position: relative; display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.m3-list::before { content: ""; position: absolute; top: 8px; bottom: 8px; left: 15px; width: 2px; background: var(--cz-line); }
+
+.m3-item { position: relative; display: flex; gap: 14px; min-width: 0; }
+.m3-dot {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid var(--cz-surface); background: var(--m3-soft); color: var(--m3-ink);
+}
+.m3-item-body { flex: 1 1 auto; min-width: 0; padding: 12px 14px; border: 1px solid var(--cz-line); border-left: 3px solid var(--m3-ink); border-radius: 14px; background: var(--cz-surface); }
+
+.m3-item--info { --m3-ink: var(--cz-muted); --m3-soft: var(--cz-subtle); }
+.m3-item--low { --m3-ink: var(--cz-blue); --m3-soft: var(--cz-blue-soft); }
+.m3-item--medium { --m3-ink: var(--cz-gold-ink); --m3-soft: var(--cz-gold-soft); }
+.m3-item--high { --m3-ink: var(--cz-clay); --m3-soft: var(--cz-clay-soft); }
+.m3-item--critical { --m3-ink: var(--cz-danger); --m3-soft: var(--cz-danger-soft); }
+
+.m3-item-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 6px; font-size: 12px; }
+.m3-type { font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cz-muted); }
+.m3-sev { padding: 1px 8px; border-radius: 999px; background: var(--m3-soft); color: var(--m3-ink); font-weight: 600; }
+.m3-time { margin-left: auto; color: var(--cz-muted); }
+.m3-item-title { margin: 0; font-size: 14.5px; font-weight: 600; overflow-wrap: anywhere; }
+.m3-item-detail { margin: 4px 0 0; color: var(--cz-muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.m3-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--cz-sage); font-size: 13px; font-weight: 600; }
+.m3-link:hover { text-decoration: underline; }
+
+.m3-sev--info { --m3-ink: var(--cz-muted); --m3-soft: var(--cz-subtle); }
+.m3-sev--low { --m3-ink: var(--cz-blue); --m3-soft: var(--cz-blue-soft); }
+.m3-sev--medium { --m3-ink: var(--cz-gold-ink); --m3-soft: var(--cz-gold-soft); }
+.m3-sev--high { --m3-ink: var(--cz-clay); --m3-soft: var(--cz-clay-soft); }
+.m3-sev--critical { --m3-ink: var(--cz-danger); --m3-soft: var(--cz-danger-soft); }
+
+.m3-more { display: flex; justify-content: center; margin-top: 18px; }
+.m3-alert { margin: 14px 0 0; padding: 10px 12px; border: 1px solid var(--cz-danger-line); border-radius: 12px; background: var(--cz-danger-soft); color: var(--cz-danger); font-size: 13px; }
+.m3-audit { max-width: 980px; margin: 18px 0 0; color: var(--cz-muted); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .m3-page.cz-page { padding-left: 16px; padding-right: 16px; }
+  .m3-time { margin-left: 0; flex-basis: 100%; }
+  .m3-list::before { left: 15px; }
+  .m3-item { gap: 10px; }
+}

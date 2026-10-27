@@ -18,6 +18,7 @@ from services.ticket_assignment import ticket_helper_role_ids
 from services.notifications import create_notification
 from services.ticket_avatars import cache_avatar
 from services.ticket_audit import audit_action
+from services.ticket_routing import record_assignment
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -111,6 +112,7 @@ async def assign_ticket_helper(
         raise HTTPException(status_code=409, detail="Le dossier a changé. Actualisez la page.")
     if assigned_helper and assigned_helper.id != (ticket.get("assigned_helper") or {}).get("id"):
         await create_notification(assigned_helper.id, "ticket_assigned", "Nouveau suivi attribué", ticket.get("channel_name") or "Un dossier vous a été attribué.", f"/tickets/{ticket_id}")
+        await record_assignment(assigned_helper.id)
     return await ticket_or_404(ticket_id)
 
 

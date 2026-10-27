@@ -10,6 +10,9 @@ import {
   X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import useTicketListSignals from "../components/tickets/ai/useTicketListSignals";
+import TicketListSignals from "../components/tickets/ai/TicketListSignals";
+import { CRISIS_RANK } from "../components/tickets/ai/crisis";
 
 import "@/TicketList.css";
 
@@ -97,6 +100,7 @@ export default function DashboardPage({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [assignmentFilter, setAssignmentFilter] = useState("all");
+  const [crisisFirst, setCrisisFirst] = useState(false);
 
   useEffect(() => {
     document.body.classList.add("ticket-list-no-nav");
@@ -118,7 +122,7 @@ export default function DashboardPage({
     [tickets]
   );
 
-  const visibleTickets = useMemo(() => {
+  const filteredTickets = useMemo(() => {
     const term = normalize(search.trim());
 
     return activeTickets.filter((ticket) => {
@@ -173,6 +177,14 @@ export default function DashboardPage({
     assignmentFilter,
     helper?.id,
   ]);
+
+  const { crisis: crisisById, presence: presenceById } = useTicketListSignals(filteredTickets.map((ticket) => ticket.id));
+  const crisisCount = Object.keys(crisisById).length;
+  const visibleTickets = useMemo(() => {
+    if (!crisisFirst) return filteredTickets;
+    const rank = (ticket) => CRISIS_RANK[crisisById[ticket.id]?.level] || 0;
+    return [...filteredTickets].sort((a, b) => rank(b) - rank(a));
+  }, [filteredTickets, crisisFirst, crisisById]);
 
   const attentionCount = activeTickets.filter((ticket) => ticket.needs_attention).length;
 
@@ -310,6 +322,17 @@ export default function DashboardPage({
               Sans interlocuteur
             </button>
 
+            {crisisCount > 0 && (
+              <button
+                type="button"
+                className={crisisFirst ? "is-selected" : ""}
+                aria-pressed={crisisFirst}
+                onClick={() => setCrisisFirst((value) => !value)}
+              >
+                Crise d’abord ({crisisCount})
+              </button>
+            )}
+
             {hasFilters && (
               <button
                 type="button"
@@ -394,6 +417,7 @@ export default function DashboardPage({
 
                   <span className="tl-ticket-copy">
                     <strong>{displayName(ticket.member)}</strong>
+                    <TicketListSignals crisis={crisisById[ticket.id]} viewers={presenceById[ticket.id]} />
                   {assignmentFilter === "attention" && <span className="tl-attention-reasons">{(ticket.attention_reasons || []).map(reason => ATTENTION_LABELS[reason]).join(" · ")}</span>}
 
                     <small>

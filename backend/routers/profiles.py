@@ -58,6 +58,11 @@ FAVORITE_PAGES = {
     "annonces": ("Annonces", "/responsable/annonces", {"responsable"}),
     "statistiques": ("Statistiques", "/responsable/statistiques", {"responsable"}),
     "acces_sanctions": ("Accès sanctions", "/responsable/acces-sanctions", {"responsable"}),
+    "passation": ("Passation", "/staff/passation", {"staff"}),
+    "notifications": ("Notifications", "/notifications", None),
+    "charge": ("Charge d'équipe", "/responsable/charge", {"responsable", "admin"}),
+    "rapports": ("Rapports", "/responsable/rapports", {"responsable", "admin"}),
+    "membres": ("Vue membre", "/moderation/membres", {"operateur", "responsable"}),
     "profil": ("Mon profil", "/profile", None),
 }
 

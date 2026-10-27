@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CornerDownLeft, LogOut, Moon, Search } from "lucide-react";
+import {
+  Bell, Calendar, CalendarRange, ClipboardList, CornerDownLeft, FileText, FolderKanban, Gauge, Home, Inbox,
+  LogOut, Moon, Search, Shield, Star, User, Users,
+} from "lucide-react";
 
 import { api } from "../../api/client";
 import useTheme from "../../hooks/useTheme";
@@ -25,6 +28,18 @@ export function fuzzyScore(query, label) {
   return i === q.length ? 100 - t.length : -1;
 }
 
+const PAGE_ICONS = {
+  accueil: Home, suivis: Inbox, archives: Inbox, ressources: FileText, coordination: Users,
+  calendrier: Calendar, reunions: CalendarRange, taches: ClipboardList, casier: Shield, projets: FolderKanban,
+  calendrier_projets: Calendar, passation: ClipboardList, notifications: Bell, charge: Gauge,
+  rapports: FileText, membres: User, profil: User,
+};
+
+const TYPE_LABELS = {
+  ticket: "Tickets", casier: "Casiers", projet: "Projets", tache: "Tâches",
+  reunion: "Réunions", evenement: "Événements", ressource: "Ressources",
+};
+
 const FOCUSABLE = "input, button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 export default function CommandPalette({ onLogout }) {
@@ -43,6 +58,23 @@ export default function CommandPalette({ onLogout }) {
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+
+  const [results, setResults] = useState([]);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!open || term.length < 2) { setResults([]); return undefined; }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await api.get("/search", { params: { q: term, limit: 20 }, signal: controller.signal });
+        setResults(Array.isArray(response.data?.results) ? response.data.results : []);
+      } catch {
+        if (!controller.signal.aborted) setResults([]);
+      }
+    }, 200);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [query, open]);
 
   useEffect(() => {
     const onKey = (event) => {
@@ -74,7 +106,7 @@ export default function CommandPalette({ onLogout }) {
   const themeLabel = { light: "clair", dark: "sombre", system: "système" }[preference];
   const items = useMemo(() => {
     const pages = (data?.available || []).map((page) => ({
-      id: `page-${page.key}`, label: page.label, hint: page.path, group: "Pages",
+      id: `page-${page.key}`, label: page.label, hint: page.path, group: "Pages", icon: PAGE_ICONS[page.key] || Star,
       run: () => navigate(page.path),
     }));
     const actions = [{
@@ -82,12 +114,22 @@ export default function CommandPalette({ onLogout }) {
       run: cycleTheme,
     }];
     if (onLogout) actions.push({ id: "logout", label: "Se déconnecter", hint: "", group: "Actions", run: onLogout });
-    return [...pages, ...actions]
+    const filter = (list) => list
       .map((item) => ({ item, score: fuzzyScore(query, item.label) }))
       .filter((entry) => entry.score >= 0)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.item);
-  }, [data, query, navigate, cycleTheme, onLogout, themeLabel]);
+    const found = results.filter((r) => r && r.url).map((r) => ({
+      id: `res-${r.type}-${r.id}`, label: r.title, hint: r.subtitle || "", group: TYPE_LABELS[r.type] || "Résultats",
+      run: () => navigate(r.url),
+    }));
+    const groups = [];
+    found.forEach((item) => {
+      if (!groups.includes(item.group)) groups.push(item.group);
+    });
+    const ordered = groups.flatMap((group) => found.filter((item) => item.group === group));
+    return [...filter(pages), ...ordered, ...filter(actions)];
+  }, [data, query, results, navigate, cycleTheme, onLogout, themeLabel]);
 
   useEffect(() => { setActive(0); }, [query]);
 
@@ -130,17 +172,21 @@ export default function CommandPalette({ onLogout }) {
         <ul id="cmd-list" role="listbox" className="cmd-list">
           {items.length === 0 && <li className="cmd-empty">Aucun résultat.</li>}
           {items.map((item, index) => (
-            <li
-              key={item.id} id={`cmd-opt-${item.id}`} role="option" aria-selected={index === active}
+            <Fragment key={item.id}>
+            {(index === 0 || items[index - 1].group !== item.group) && (
+              <li role="presentation" className="cmd-heading">{item.group}</li>
+            )}
+            <li id={`cmd-opt-${item.id}`} role="option" aria-selected={index === active}
               className={`cmd-item ${index === active ? "is-active" : ""}`}
               onMouseEnter={() => setActive(index)} onClick={() => choose(item)}
             >
               <span className="cmd-icon" aria-hidden="true">
-                {item.id === "theme" ? <Moon size={15} /> : item.id === "logout" ? <LogOut size={15} /> : <CornerDownLeft size={15} />}
+                {item.id === "theme" ? <Moon size={15} /> : item.id === "logout" ? <LogOut size={15} /> : item.icon ? <item.icon size={15} /> : <CornerDownLeft size={15} />}
               </span>
               <span className="cmd-label">{item.label}</span>
-              <span className="cmd-group">{item.group}</span>
+              {item.hint && item.id.startsWith("res-") && <span className="cmd-group">{item.hint}</span>}
             </li>
+            </Fragment>
           ))}
         </ul>
         <div className="cmd-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> naviguer</span><span><kbd>Entrée</kbd> ouvrir</span></div>

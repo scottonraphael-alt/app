@@ -96,6 +96,12 @@ async def create_notification(
         if dedupe_key:
             doc["dedupe_key"] = dedupe_key
         await db.notifications.insert_one(dict(doc))
+        try:  # Web Push optionnel, non bloquant ; ignoré si désactivé ou silencieux
+            from services.web_push import schedule_push_for_notification
+
+            schedule_push_for_notification(doc)
+        except Exception:  # noqa: BLE001
+            logger.warning("Hook Web Push ignoré.", exc_info=True)
         return doc
     except Exception:  # noqa: BLE001 - jamais bloquant
         logger.warning("Création de notification impossible.", exc_info=True)

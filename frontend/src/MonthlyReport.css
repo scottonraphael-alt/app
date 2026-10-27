@@ -1,0 +1,59 @@
+/* Rapport mensuel : jetons --cz-* de Casier.css (clair et sombre). */
+.mr-page { padding-inline: 16px; }
+.mr-print-meta { display: none; margin: 8px 0 0; color: var(--cz-muted); font-size: 12px; }
+.mr-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 18px; margin-bottom: 22px; }
+.mr-month { display: flex; flex-direction: column; gap: 6px; color: var(--cz-muted); font-size: 12px; min-width: 220px; }
+.mr-month select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--cz-field-line); border-radius: var(--cz-radius-field); background: var(--cz-field-bg); color: var(--cz-ink); font-size: 14px; }
+.mr-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.mr-notice { margin: 0 0 16px; padding: 12px 16px; border: 1px solid var(--cz-line); border-radius: 14px; background: var(--cz-subtle); color: var(--cz-muted); font-size: 13px; }
+.mr-notice--error { border-color: var(--cz-danger-line); background: var(--cz-danger-soft); color: var(--cz-danger); }
+.mr-body.is-stale { opacity: .6; }
+.mr-block { margin-bottom: 24px; }
+.mr-block h2, .mr-panel h2 { margin: 0 0 12px; font: 600 17px/1.3 "Manrope", sans-serif; }
+
+.mr-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.mr-kpi { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid var(--cz-line); border-radius: 16px; background: var(--cz-surface); }
+.mr-kpi span { color: var(--cz-muted); font-size: 12px; }
+.mr-kpi strong { font: 600 26px/1.2 "Manrope", sans-serif; }
+.mr-trend { color: var(--cz-muted); font-size: 11px; line-height: 1.4; }
+.mr-trend.is-good { color: var(--cz-sage); }
+.mr-trend.is-warn { color: var(--cz-gold-ink); }
+
+.mr-highlights { margin: 0; padding: 16px 20px 16px 36px; border: 1px solid var(--cz-line); border-radius: 16px; background: var(--cz-surface); font-size: 14px; line-height: 1.7; }
+.mr-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.mr-panel { min-width: 0; padding: 18px; border: 1px solid var(--cz-line); border-radius: var(--cz-radius-card); background: var(--cz-surface); }
+.mr-wide { grid-column: 1 / -1; }
+.mr-sub { margin: -6px 0 6px; color: var(--cz-muted); font-size: 12px; }
+.mr-panel .ss-chart { width: 100%; min-width: 0; }
+.mr-dl { display: grid; gap: 10px; margin: 0; }
+.mr-dl div { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--cz-line); font-size: 14px; }
+.mr-dl div:last-child { border-bottom: 0; padding-bottom: 0; }
+.mr-dl dt { color: var(--cz-muted); }
+.mr-dl dd { margin: 0; font-weight: 600; }
+
+@media (max-width: 600px) {
+  .mr-actions { width: 100%; }
+  .mr-actions .cz-button { flex: 1 1 100%; }
+  .mr-month { width: 100%; }
+}
+
+/* Impression / PDF : feuille claire, sans barre du haut ni commandes. */
+@page { size: A4; margin: 14mm; }
+@media print {
+  .tb-bar, .mr-noprint, .mr-page .cz-header-actions, .cz-eyebrow { display: none !important; }
+  html, body, :root[data-theme="dark"] body, :root[data-theme="dark"] { background: #fff !important; color: #1c2622 !important; }
+  body.casier-no-nav .app-shell, body.casier-no-nav .app-shell > .app-main { display: block !important; padding: 0 !important; margin: 0 !important; }
+  .mr-page, :root[data-theme="dark"] .mr-page {
+    --cz-ink: #1c2622; --cz-muted: #4f5b55; --cz-sage: #3b564b; --cz-line: #cfd8d2; --cz-surface: #fff; --cz-subtle: #f5f6f2;
+    --cz-gold-ink: #82622b; color-scheme: light; background: #fff; padding: 0; color: #1c2622;
+  }
+  .mr-page .cz-header { margin-bottom: 14px; }
+  .mr-page .cz-header h1 { font-size: 26px; }
+  .mr-print-meta { display: block; }
+  .mr-kpis { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .mr-kpi, .mr-panel, .mr-highlights, .mr-block { break-inside: avoid; box-shadow: none; }
+  .mr-charts { grid-template-columns: 1fr 1fr; }
+  .mr-wide { grid-column: 1 / -1; }
+  .mr-page svg text { fill: #365141 !important; }
+  .mr-body.is-stale { opacity: 1; }
+}

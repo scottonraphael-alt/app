@@ -7,6 +7,10 @@ import { toast } from "sonner";
 import { api, getErrorMessage } from "../api/client";
 import { ticketEvent } from "../utils/ticketEvents";
 import { resolveAvatarUrl } from "../utils/avatar";
+import CrisisBanner from "../components/tickets/ai/CrisisBanner";
+import TicketSignals from "../components/tickets/ai/TicketSignals";
+import ReplyComposer from "../components/tickets/ai/ReplyComposer";
+import usePresence from "../components/tickets/ai/usePresence";
 import "@/TicketWorkspace.css";
 
 
@@ -66,6 +70,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   const [addingNote, setAddingNote] = useState(false);
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [mobileView, setMobileView] = useState("messages");
+  const { viewers, notifyTyping } = usePresence(ticketId);
 
   useEffect(() => {
     let active = true;
@@ -354,6 +359,17 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         <span className="tw-private"><span className="tw-save-state" role="status">{dirty ? "Modifications non enregistrées" : <><Check size={13} /> À jour</>}</span><ShieldCheck size={13} /> Dossier privé</span>
       </div>
 
+      <CrisisBanner ticketId={ticketId} helperNames={Object.fromEntries((helpers || []).map((item) => [item.id, item.display_name || item.username]))} />
+      <TicketSignals
+        ticketId={ticketId}
+        viewers={viewers}
+        canRoute={Boolean(isAdmin)}
+        assigned={Boolean(ticket.assigned_helper)}
+        archived={ticket.status !== "active"}
+        crisisLevel={ticket.crisis?.level}
+        onAssigned={(assigned) => setTicket((current) => ({ ...current, assigned_helper: { id: assigned?.helper_id, display_name: assigned?.name, username: assigned?.name } }))}
+      />
+
       <div className="tw-mobile-nav" aria-label="Vue du dossier"><button type="button" aria-pressed={mobileView === "messages"} onClick={() => { setMobileView("messages"); ticketEvent("workspace.mobile_view_changed", ticketId, "messages"); }}>Conversation <span>{ticket.message_count}</span></button><button type="button" aria-pressed={mobileView === "dossier"} onClick={() => { setMobileView("dossier"); ticketEvent("workspace.mobile_view_changed", ticketId, "dossier"); }}>Dossier et suivi</button></div>
 
       <div className="tw-layout">
@@ -389,6 +405,14 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
             })}
           </div>
           {!searchOpen && <nav className="tw-pagination" aria-label="Pagination des messages"><span className="tw-range">{pageRange} sur {ticket.message_count}</span><div><button type="button" disabled={page === 1 || messagesLoading} onClick={() => changePage(page - 1)} aria-label="Page précédente" title="Page précédente"><ChevronLeft size={16} /></button><label className="tw-page-select"><span className="tw-sr-only">Page de messages</span><select aria-label="Page de messages" value={page} disabled={messagesLoading} onChange={(event) => changePage(Number(event.target.value))}>{Array.from({ length: pageCount }, (_, i) => <option value={i + 1} key={i + 1}>Page {i + 1} sur {pageCount}</option>)}</select></label><button type="button" disabled={page >= pageCount || messagesLoading} onClick={() => changePage(page + 1)} aria-label="Page suivante" title="Page suivante"><ChevronRight size={16} /></button></div><button className="tw-latest" type="button" disabled={page === pageCount || messagesLoading} onClick={() => changePage(pageCount)}>Plus récents <ChevronRight size={14} /></button></nav>}
+          <ReplyComposer
+            ticketId={ticketId}
+            memberName={ticket.member.display_name || ticket.member.username}
+            helperName={helper?.display_name || helper?.username}
+            helperId={helper?.id}
+            canShare={Boolean(isAdmin)}
+            onTyping={notifyTyping}
+          />
         </section>
 
         <aside className="tw-dossier" data-testid="vocal-panel" aria-label="Dossier et suivi">

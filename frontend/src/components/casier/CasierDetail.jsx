@@ -3,7 +3,8 @@ import "./casier-detail.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, Eye, FilePenLine, MicOff, Plus, ScrollText, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Check, Copy, Eye, FilePenLine, MicOff, Orbit, Plus, ScrollText, ShieldAlert } from "lucide-react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import AddSanctionDialog from "./AddSanctionDialog";
@@ -11,6 +12,7 @@ import AiFlagList from "./AiFlagList";
 import CasierMetrics from "./CasierMetrics";
 import FicheSEditorDialog from "./FicheSEditorDialog";
 import FicheSList from "./FicheSList";
+import HistoryPanel from "./history/HistoryPanel";
 import MemberAvatar from "./MemberAvatar";
 import SanctionTimeline from "./SanctionTimeline";
 import StatusPill from "./StatusPill";
@@ -303,6 +305,12 @@ export default function CasierDetail({
               <FilePenLine size={17} aria-hidden="true" />
               Rédiger une fiche S
             </button>
+            {SNOWFLAKE.test(memberId) && (
+              <Link to={`/moderation/membres/${memberId}`} className="cz-button">
+                <Orbit size={17} aria-hidden="true" />
+                Vue 360°
+              </Link>
+            )}
           </div>
         </div>
 
@@ -382,6 +390,9 @@ export default function CasierDetail({
               srSuffix={flagsOpen > 0 ? `, dont ${flagsOpen} à traiter` : ""}
             />
           </Tabs.Trigger>
+          <Tabs.Trigger value="modifications" className="cz-tab">
+            Modifications
+          </Tabs.Trigger>
         </Tabs.List>
 
         <Tabs.Content value="historique" className="cz-detail-panel">
@@ -396,6 +407,10 @@ export default function CasierDetail({
 
         <Tabs.Content value="fiches" className="cz-detail-panel">
           <FicheSList casier={casier} onCreate={openFicheCreate} onEdit={openFicheEdit} />
+        </Tabs.Content>
+
+        <Tabs.Content value="modifications" className="cz-detail-panel">
+          {tab === "modifications" && <HistoryPanel casierId={casier.id} />}
         </Tabs.Content>
 
         <Tabs.Content value="signalements" className="cz-detail-panel">

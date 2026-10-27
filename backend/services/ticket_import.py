@@ -13,6 +13,7 @@ from models.ticket import TicketDetail
 from services.discord_service import DiscordService
 from services.ticket_assignment import resolve_import_helper
 from services.ticket_avatars import cache_ticket_avatars
+from services.ticket_crisis import schedule_crisis_analysis
 
 logger = logging.getLogger(__name__)
 # Le message d'ouverture OasisBot distingue explicitement la personne aidée des helpers.
@@ -59,6 +60,7 @@ async def import_ticket_channel(channel_id: str, discord: DiscordService) -> boo
         return False
     if result.upserted_id is not None:
         logger.info("Ticket Discord importé automatiquement : salon %s.", channel_id)
+        schedule_crisis_analysis(document["id"])
         return True
     return False
 

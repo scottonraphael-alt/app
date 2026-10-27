@@ -6,8 +6,13 @@ from starlette.middleware.cors import CORSMiddleware
 import logging
 from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
-from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates
+from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report
 from services import agenda_indexes, agenda_reminders
+from services import presence as presence_service, casier_history as casier_history_service
+from services.ticket_crisis import run_ticket_crisis_loop
+from services.ticket_routing import run_sla_loop
+from services.staff_load import run_load_watch_loop
+from services.monthly_report import run_monthly_report_loop
 from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
@@ -79,6 +84,8 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(profiles.router, prefix="/api")
 app.include_router(resources.router, prefix="/api")
 app.include_router(members.router, prefix="/api")
+app.include_router(ticket_ai.router, prefix="/api")
+app.include_router(ticket_routing.router, prefix="/api")
 app.include_router(tickets.router, prefix="/api")
 app.include_router(staff.router, prefix="/api")
 app.include_router(agenda.router, prefix="/api")
@@ -98,6 +105,12 @@ app.include_router(search.router, prefix="/api")
 app.include_router(agenda_ics.router, prefix="/api")
 app.include_router(handoffs.router, prefix="/api")
 app.include_router(reply_templates.router, prefix="/api")
+app.include_router(presence.router, prefix="/api")
+app.include_router(staff_load.router, prefix="/api")
+app.include_router(web_push.router, prefix="/api")
+app.include_router(casier_history.router, prefix="/api")
+app.include_router(member_360.router, prefix="/api")
+app.include_router(monthly_report.router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -119,9 +132,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_feature_stop_event = None
+_feature_tasks: list = []
+
+
 @app.on_event("startup")
 async def startup() -> None:
-    global _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task, _announcements_task, _sanction_maintenance_task
+    global _feature_stop_event, _bot_task, _ticket_refresh_task, _ticket_import_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task, _announcements_task, _sanction_maintenance_task
     await initialize_indexes()
     # Mise en cohérence des dossiers archivés avant cette règle.
     await db.tickets.update_many(
@@ -148,6 +165,18 @@ async def startup() -> None:
     _sanction_maintenance_task = asyncio.create_task(run_sanction_maintenance(moderation_client))
     _ticket_import_task = asyncio.create_task(run_ticket_import())
     _ticket_refresh_task = asyncio.create_task(run_ticket_refresh())
+    try:
+        await presence_service.ensure_indexes()
+        await casier_history_service.ensure_indexes()
+    except Exception:
+        logger.exception("Index présence / historique casier impossibles au démarrage")
+    _feature_stop_event = asyncio.Event()
+    _feature_tasks[:] = [
+        asyncio.create_task(run_ticket_crisis_loop(_feature_stop_event)),
+        asyncio.create_task(run_sla_loop(_feature_stop_event)),
+        asyncio.create_task(run_load_watch_loop(_feature_stop_event)),
+        asyncio.create_task(run_monthly_report_loop(_feature_stop_event)),
+    ]
     _bot_task = asyncio.create_task(start_moderation_bot())
     _bot_task.add_done_callback(
         lambda t: logger.error("Bot de modération arrêté : %s", t.exception())
@@ -158,7 +187,9 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    ticket_tasks = [task for task in (_ticket_import_task, _ticket_refresh_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task, _announcements_task, _sanction_maintenance_task) if task]
+    if _feature_stop_event:
+        _feature_stop_event.set()
+    ticket_tasks = [task for task in (*_feature_tasks, _ticket_import_task, _ticket_refresh_task, _ticket_reminders_task, _ticket_avatars_task, _project_reminders_task, _announcements_task, _sanction_maintenance_task) if task]
     for task in ticket_tasks:
         task.cancel()
     await asyncio.gather(*ticket_tasks, return_exceptions=True)

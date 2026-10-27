@@ -29,6 +29,7 @@ from services.ticket_assignment import resolve_import_helper
 from services.ticket_avatars import cache_avatar, cache_ticket_avatars
 from services.file_response_service import stream_local_file
 from services.ticket_audit import audit_action, log_ticket_action
+from services.ticket_crisis import schedule_crisis_analysis
 from services.ticket_reminders import last_human_update, parse_date
 
 
@@ -148,6 +149,7 @@ async def create_ticket(
         await db.tickets.insert_one(document)
     except DuplicateKeyError as error:
         raise HTTPException(status_code=409, detail="Un ticket existe déjà pour ce salon Discord.") from error
+    schedule_crisis_analysis(document["id"])
     return document
 
 
@@ -385,4 +387,5 @@ async def sync_ticket(
             }
         },
     )
+    schedule_crisis_analysis(ticket_id)
     return await ticket_or_404(ticket_id, _)

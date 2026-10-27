@@ -23,7 +23,7 @@
 }
 .tb-chip-tools button:hover:not(:disabled), .tb-icon-btn:hover { background: #e8efea; color: #1c2622; }
 .tb-chip-tools button:disabled { opacity: .3; cursor: default; }
-.tb-icon-btn { position: relative; width: 30px; height: 30px; }
+.tb-icon-btn { position: relative; width: 30px; height: 30px; text-decoration: none; }
 .tb-icon-btn:focus-visible, .tb-chip:focus-visible, .tb-note:focus-visible, .tb-menu button:focus-visible {
   outline: 2px solid #88a492; outline-offset: 1px;
 }
@@ -98,3 +98,16 @@
 :root[data-theme="dark"] .tb-note time { color: var(--iris-text-soft); }
 :root[data-theme="dark"] .tb-identity { border-left-color: var(--iris-border); }
 :root[data-theme="dark"] .tb-avatar { background: var(--iris-surface-3); color: var(--iris-accent); }
+
+/* Cloche : Tout voir + types prioritaires */
+.tb-panel-foot { display: flex; justify-content: center; padding: 10px 14px; border-top: 1px solid #e2e8e2; }
+.tb-panel-foot .tb-link { text-decoration: none; font-weight: 600; }
+.tb-note.is-crisis { background: #fbeff0; box-shadow: inset 3px 0 0 #a04754; }
+.tb-note.is-crisis .tb-note-title { color: #8a2f3c; }
+.tb-note.is-urgent { box-shadow: inset 3px 0 0 #9a773c; }
+.tb-note.is-urgent .tb-note-title { color: #7a5a22; }
+:root[data-theme="dark"] .tb-panel-foot { border-top-color: var(--iris-border); }
+:root[data-theme="dark"] .tb-note.is-crisis { background: rgba(224, 112, 128, .14); box-shadow: inset 3px 0 0 var(--iris-danger); }
+:root[data-theme="dark"] .tb-note.is-crisis .tb-note-title { color: var(--iris-danger); }
+:root[data-theme="dark"] .tb-note.is-urgent { box-shadow: inset 3px 0 0 var(--iris-warn); }
+:root[data-theme="dark"] .tb-note.is-urgent .tb-note-title { color: var(--iris-warn); }

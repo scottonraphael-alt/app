@@ -220,7 +220,7 @@ export const CASIER_PAGE_PATH = "/moderation/casiers";
 export const CASIER_VIEWS = { casiers: "casiers", signalements: "signalements" };
 export const DEFAULT_VIEW = "casiers";
 
-export const DETAIL_TABS = ["historique", "fiches", "signalements"];
+export const DETAIL_TABS = ["historique", "fiches", "signalements", "modifications"];
 export const DEFAULT_DETAIL_TAB = "historique";
 
 /* ---------------------------------- */

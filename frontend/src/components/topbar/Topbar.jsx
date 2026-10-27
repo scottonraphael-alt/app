@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bell, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, ClipboardList, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
 
 import { api } from "../../api/client";
 import useTheme from "../../hooks/useTheme";
@@ -121,6 +121,11 @@ function NotificationBell() {
 
   const items = data?.items || [];
   const unread = data?.unread_count || 0;
+  const noteClass = (item) => {
+    if (item.type === "ticket_crisis") return " is-crisis";
+    if (item.type === "handoff_urgent") return " is-urgent";
+    return "";
+  };
   const openItem = (item) => {
     if (!item.read_at) readOne.mutate(item.id);
     setOpen(false);
@@ -151,7 +156,7 @@ function NotificationBell() {
             <ul>
               {items.map((item) => (
                 <li key={item.id}>
-                  <button type="button" className={`tb-note ${item.read_at ? "" : "is-unread"}`} onClick={() => openItem(item)}>
+                  <button type="button" className={`tb-note ${item.read_at ? "" : "is-unread"}${noteClass(item)}`} onClick={() => openItem(item)}>
                     <span className="tb-note-title">{item.title}</span>
                     {item.body && <span className="tb-note-body">{item.body}</span>}
                     <time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
@@ -160,9 +165,42 @@ function NotificationBell() {
               ))}
             </ul>
           )}
+          <div className="tb-panel-foot">
+            <Link className="tb-link" to="/notifications" onClick={() => setOpen(false)}>Tout voir <ArrowRight size={13} aria-hidden="true" /></Link>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function HandoffsButton() {
+  // La page « Passation » n'est proposée qu'au staff : on s'appuie sur la liste des pages autorisées.
+  const { data: favorites } = useQuery({
+    queryKey: FAVORITES_KEY,
+    queryFn: async () => (await api.get("/profile/me/favorites")).data,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const isStaff = Boolean(favorites?.available?.some((page) => page.key === "passation"));
+  const { data } = useQuery({
+    queryKey: ["handoffs", "unread"],
+    queryFn: async () => (await api.get("/handoffs", { params: { status: "open" } })).data,
+    enabled: isStaff,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
+    retry: false,
+  });
+  if (!isStaff) return null;
+  const unread = data?.unread_count || 0;
+  return (
+    <Link
+      className="tb-icon-btn" to="/staff/passation" data-testid="handoffs-button"
+      aria-label={unread ? `Passation, ${unread} non lues` : "Passation"} title="Passation"
+    >
+      <ClipboardList size={17} />
+      {unread > 0 && <span className="tb-badge">{unread > 99 ? "99+" : unread}</span>}
+    </Link>
   );
 }
 
@@ -197,6 +235,7 @@ export default function Topbar({ helper, roleLabel, onLogout }) {
           <Search size={16} />
         </button>
         <ThemeToggle />
+        <HandoffsButton />
         <NotificationBell />
         {(helper || onLogout) && (
           <div className="tb-identity" data-testid="helper-identity">

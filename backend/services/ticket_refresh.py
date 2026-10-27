@@ -8,6 +8,7 @@ from database import db
 from services.ai_summary_service import stream_summary
 from services.discord_service import DiscordService
 from services.ticket_avatars import cache_ticket_avatars
+from services.ticket_crisis import schedule_crisis_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ async def refresh_due_tickets() -> None:
                 "transcript": transcript, "message_count": len(messages),
                 "last_synced_at": timestamp, "updated_at": timestamp, "sync_status": "success", "sync_error": None,
             }})
+            schedule_crisis_analysis(ticket["id"])
             # Relecture pour intégrer les notes éventuellement modifiées pendant la synchronisation.
             current = await db.tickets.find_one({"id": ticket["id"], "status": "active"})
             if not current:

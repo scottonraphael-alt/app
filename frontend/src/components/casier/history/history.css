@@ -1,0 +1,64 @@
+/* Historique des modifications du casier (jetons --cz-*, clair et sombre via Casier.css). */
+
+.ch-panel { display: grid; gap: 14px; }
+.ch-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+
+.ch-item {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid var(--cz-line);
+  border-radius: 16px;
+  background: var(--cz-surface);
+}
+.ch-item.is-reverted { background: var(--cz-subtle); }
+.ch-item.is-reverted .ch-changes { opacity: 0.75; }
+
+.ch-item-head { display: grid; gap: 4px; }
+.ch-item-title {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 0; font-size: 14px; color: var(--cz-ink);
+}
+.ch-meta { margin: 0; color: var(--cz-muted); font-size: 12.5px; }
+
+.ch-chip {
+  padding: 2px 9px; border: 1px solid var(--cz-line); border-radius: 999px;
+  background: var(--cz-subtle); color: var(--cz-muted); font-size: 11.5px; font-weight: 600;
+}
+.ch-chip--info { background: var(--cz-blue-soft); border-color: var(--cz-blue-line); color: var(--cz-blue); }
+.ch-chip--warn { background: var(--cz-gold-soft); border-color: var(--cz-gold-line); color: var(--cz-gold-ink); }
+.ch-chip--muted { background: transparent; }
+
+.ch-changes { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ch-change {
+  display: grid; grid-template-columns: minmax(110px, 0.35fr) minmax(0, 1fr); gap: 4px 14px;
+  padding: 10px 12px; border-radius: 12px; background: var(--cz-subtle); font-size: 13px;
+}
+.ch-field { color: var(--cz-muted); font-weight: 600; overflow-wrap: anywhere; }
+.ch-diff { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.ch-diff svg { flex-shrink: 0; color: var(--cz-muted); }
+.ch-before, .ch-after { padding: 1px 7px; border-radius: 8px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ch-before { background: var(--cz-danger-soft); color: var(--cz-danger); text-decoration: line-through; }
+.ch-after { background: var(--cz-sage-soft); color: var(--cz-sage); text-decoration: none; }
+
+.ch-nochange { margin: 0; color: var(--cz-muted); font-size: 13px; }
+.ch-actions { display: flex; justify-content: flex-end; }
+.ch-more { display: flex; justify-content: center; }
+.ch-state { display: flex; align-items: center; gap: 10px; color: var(--cz-muted); font-size: 14px; }
+
+.ch-alert {
+  margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--cz-danger-line);
+  border-radius: 12px; background: var(--cz-danger-soft); color: var(--cz-danger);
+  font-size: 13px; line-height: 1.5;
+}
+
+.ch-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (max-width: 640px) {
+  .ch-item { padding: 16px; }
+  .ch-change { grid-template-columns: minmax(0, 1fr); }
+}

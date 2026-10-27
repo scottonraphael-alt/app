@@ -30,6 +30,7 @@ FICHE_S_CREATED = "casier.fiche_s.created"
 FICHE_S_UPDATED = "casier.fiche_s.updated"
 FICHE_S_CLOSED = "casier.fiche_s.closed"
 AI_FLAG_REVIEWED = "casier.ai_flag.reviewed"
+HISTORY_REVERTED = "casier.history.reverted"
 
 EVENT_LABELS = {
     CASIER_CREATED: "Casier créé",
@@ -44,6 +45,7 @@ EVENT_LABELS = {
     FICHE_S_UPDATED: "Fiche S modifiée",
     FICHE_S_CLOSED: "Fiche S clôturée",
     AI_FLAG_REVIEWED: "Signalement IA traité",
+    HISTORY_REVERTED: "Modification annulée",
 }
 
 # Code HTTP utilisé quand l'appelant n'en donne pas.
@@ -60,6 +62,7 @@ EVENT_STATUS_CODES = {
     FICHE_S_UPDATED: 200,
     FICHE_S_CLOSED: 200,
     AI_FLAG_REVIEWED: 200,
+    HISTORY_REVERTED: 200,
 }
 
 # « title » est déjà affiché « Projet » par la page des logs : interdit pour les casiers.
