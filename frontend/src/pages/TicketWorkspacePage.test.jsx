@@ -121,3 +121,31 @@ it("recherche dans toutes les pages et ouvre le message trouvé", async () => {
   expect(container.querySelector('[aria-label="Page de messages"]').value).toBe('2');
   expect(container.querySelector('#tw-message-message-2').className).toContain('is-search-hit');
 });
+
+it("signale une interruption du flux IA sans annoncer une réussite", async () => {
+  const { toast } = require("sonner");
+  const originalFetch = global.fetch;
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => ({ read: async () => ({ done: true }) }) } });
+  const originalDecoder = global.TextDecoder;
+  global.TextDecoder = class { decode(value) { return value; } };
+  try {
+    await click('[data-testid="generate-ai-summary-button"]');
+    expect(toast.success).not.toHaveBeenCalledWith("Résumé Claude enregistré.");
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("connexion a été interrompue"));
+  } finally { global.fetch = originalFetch; global.TextDecoder = originalDecoder; }
+});
+
+it("enregistre la confirmation du résumé même si le message arrive en plusieurs morceaux", async () => {
+  const { toast } = require("sonner");
+  const originalFetch = global.fetch, originalDecoder = global.TextDecoder;
+  const payload = JSON.stringify({ context: "Résumé vérifié", expressed_needs: "Besoins", actions: "Actions", next_follow_up: "Suivi" });
+  const chunks = ["event: com", `plete\ndata: ${payload}\n\n`];
+  global.TextDecoder = class { decode(value) { return value; } };
+  global.fetch = jest.fn().mockResolvedValue({ ok: true, body: { getReader: () => ({ read: async () => chunks.length ? ({ done: false, value: chunks.shift() }) : ({ done: true }) }) } });
+  try {
+    await click('[data-testid="generate-ai-summary-button"]');
+    expect(toast.success).toHaveBeenCalledWith("Résumé Claude enregistré.");
+    expect(container.textContent).toContain("Résumé vérifié");
+    expect(toast.error).not.toHaveBeenCalled();
+  } finally { global.fetch = originalFetch; global.TextDecoder = originalDecoder; }
+});

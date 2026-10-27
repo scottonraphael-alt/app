@@ -1,5 +1,6 @@
 import security_harness as h
 import pytest
+from unittest.mock import AsyncMock
 from routers import tickets
 from services import ticket_refresh
 from models.ticket import AiSummary
@@ -115,6 +116,7 @@ def test_anthropic_stream(monkeypatch):
             captured.update(kwargs)
             return Stream()
     monkeypatch.setattr(service, 'ANTHROPIC_API_KEY', 'test-key')
+    monkeypatch.setattr(service, 'maximum_output_tokens', AsyncMock(return_value=128000))
     monkeypatch.setattr(service, 'AsyncAnthropic', Client)
     async def collect():
         return [event async for event in service.stream_summary({'id':'ticket'}, 'helper')]

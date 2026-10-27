@@ -278,6 +278,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let completed = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -291,13 +292,18 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           const payload = JSON.parse(data);
           if (eventType === "progress") setSummaryProgress(payload.message);
           if (eventType === "complete") {
-            setTicket((current) => ({ ...current, ai_summary: payload }));
+            completed = true;
+            setTicket((current) => ({ ...current, ai_summary: payload, summary_status: "ready", summary_error: null }));
             setSummaryProgress("");
             toast.success("Résumé Claude enregistré.");
           }
-          if (eventType === "error") throw new Error(payload.message);
+          if (eventType === "error") {
+            setTicket((current) => ({ ...current, summary_status: "error", summary_error: payload.message }));
+            throw new Error(payload.message);
+          }
         });
       }
+      if (!completed) throw new Error("La connexion a été interrompue avant la confirmation du résumé. Actualise le dossier pour vérifier son enregistrement.");
     } catch (requestError) {
       toast.error(requestError.message || "La génération Claude a échoué.");
     } finally {

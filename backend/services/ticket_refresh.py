@@ -3,6 +3,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
+from fastapi import HTTPException
 from database import db
 from services.ai_summary_service import stream_summary
 from services.discord_service import DiscordService
@@ -52,11 +53,11 @@ async def refresh_due_tickets() -> None:
                     await db.tickets.update_one({"id": ticket["id"], "status": "active"}, {"$set": {
                         "ai_summary": summary.model_dump(), "auto_refreshed_at": timestamp, "summary_status": "ready", "summary_error": None,
                     }, "$unset": {"refresh_lease_until": ""}})
-        except Exception:
+        except Exception as error:
             if phase == "messages":
                 updates = {"sync_status": "error", "sync_error": "L’actualisation quotidienne des messages a échoué. Vérifiez l’accès au salon Discord."}
             else:
-                updates = {"summary_status": "error", "summary_error": "La synthèse quotidienne a échoué. Les messages synchronisés restent disponibles."}
+                updates = {"summary_status": "error", "summary_error": str(error.detail) if isinstance(error,HTTPException) else "La synthèse quotidienne a échoué. Les messages synchronisés restent disponibles."}
             await db.tickets.update_one({"id": ticket["id"]}, {"$set": updates})
             # Le bail sert aussi de délai avant nouvelle tentative ; aucun contenu privé dans le log.
             logger.exception("Actualisation quotidienne impossible pour le ticket %s", ticket["id"])

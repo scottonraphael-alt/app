@@ -12,6 +12,7 @@ from services import wellbeing_commands as ui, wellbeing_ai as ai, wellbeing_ser
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch):
     h.reset_db();monkeypatch.setattr(config,'ANTHROPIC_API_KEY','offline-test')
+    monkeypatch.setattr(ai,'maximum_output_tokens',AsyncMock(return_value=128000))
 
 def interaction(actor=12,guild_id=None):
     gid=int(config.DISCORD_GUILD_ID) if guild_id is None else guild_id

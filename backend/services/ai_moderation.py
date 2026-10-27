@@ -48,7 +48,7 @@ Variables d'environnement (à mettre dans le .env du VPS) :
   AI_MODERATION_TRUSTED_ROLE_IDS     rôles ignorés (staff), séparés par des virgules
   AI_MODERATION_DAILY_TOKEN_LIMIT    défaut : 2000000 (tokens "équivalents" : le cache est pondéré)
   AI_MODERATION_MODEL                défaut : claude-haiku-5-5
-  AI_MODERATION_MAX_OUTPUT_TOKENS    défaut : 3000 (plafond de la réponse du modèle)
+  AI_MODERATION_MAX_OUTPUT_TOKENS    défaut et maximum : 3000 (plafond de la réponse du modèle)
   AI_MODERATION_DISABLE_THINKING     true / false (défaut : false) : envoie thinking={"type":"disabled"}.
   AI_MODERATION_PROMPT_CACHE         true (défaut) / false : active le prompt caching.
   AI_MODERATION_CACHE_TTL            5m (défaut) ou 1h. Utilise 1h si le serveur est peu actif
@@ -163,7 +163,7 @@ MIN_ALNUM_CHARS = 3            # en dessous, le message n'est pas analysé
 QUEUE_MAXSIZE = 500
 WORKER_COUNT = 2
 DEGRADED_RATIO = 0.8           # à 80 % du budget : plus de contexte
-MAX_OUTPUT_TOKENS = _env_int("AI_MODERATION_MAX_OUTPUT_TOKENS", 3000)  # plafond, pas une consommation
+MAX_OUTPUT_TOKENS = min(_env_int("AI_MODERATION_MAX_OUTPUT_TOKENS", 3000), 3000)  # plafond, pas une consommation
 
 DELETE_MIN_CONFIDENCE = 0.8    # suppression auto : gravité >= 2 et confiance >= 0.8
 TIMEOUT_MIN_CONFIDENCE = 0.9   # timeout auto : gravité 3 et confiance >= 0.9

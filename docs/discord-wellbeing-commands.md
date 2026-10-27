@@ -28,3 +28,13 @@ Déployer les fichiers backend, y compris le dossier `assets`, puis redémarrer 
 Tests hors ligne dans `backend/tests/test_wellbeing_commands.py` : confidentialité, restrictions des interactions, formulaires, fichier GIF, envoi des trois réponses, journalisation avant IA, limites persistantes, recherche mondiale et rejet des coordonnées absentes des citations. Le test d’enregistrement `/sanction` vérifie également l’ajout des deux commandes sans remplacement global.
 
 Les tests n’appellent ni Discord ni Anthropic et ne vérifient donc pas les permissions réelles du post ni l’activation de la recherche web sur le compte de production.
+
+## Fiabilité et limites de sortie
+
+Les recherches et les résumés de tickets utilisent désormais le maximum de sortie annoncé par le modèle via l’API Models Anthropic (`max_tokens`), mis en cache une heure. Aucun petit plafond de tokens propre à Iris n’est ajouté à ces usages. La limite technique du modèle et les délais de réponse restent applicables. L’automodération conserve un plafond distinct de 3 000 tokens, même si sa variable d’environnement demande davantage.
+
+Pour les familles compatibles, les réponses JSON évitent la réflexion préalable et les recherches utilisent un effort bas, afin de conserver des réponses rapides et ciblées. Les réponses mal formées peuvent être retentées une fois ; les refus et les dépassements de capacité ne déclenchent pas de boucle de nouvelles tentatives. Les recherches interrompues par `pause_turn` continuent avec les blocs complets renvoyés par Anthropic.
+
+Les résumés envoient un signal de progression toutes les dix secondes même si aucun texte n’est encore arrivé, et conservent la synthèse précédente en cas d’échec. Le site attend une confirmation d’enregistrement explicite. Les diagnostics techniques enregistrent le modèle, la raison d’arrêt, les tokens de sortie et la référence de requête, sans enregistrer les prompts ni les réponses privées.
+
+Références : [capacités et limites des modèles](https://platform.claude.com/docs/en/models/overview), [réflexion et budget de sortie](https://platform.claude.com/docs/en/build-with-claude/thinking).
