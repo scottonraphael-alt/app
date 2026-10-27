@@ -90,3 +90,9 @@ it('décrit les actions et les versions dans les logs français', () => {
   expect(r.text).toContain('enregistré');
   expect(r.extras).toContainEqual(['Version', '3']);
 });
+
+it('omet les descriptions facultatives vides et conserve les descriptions renseignées',()=>{
+ const d=newDocument();d.groups[0].blocks=[{...newBlock('gallery'),items:[{url:'https://example.com/a.png',description:'',spoiler:false},{url:'https://example.com/b.png',description:'Une image',spoiler:false}]}];
+ const items=compileDocument(d).payload.components[0].components[0].items;
+ expect(items[0]).not.toHaveProperty('description');expect(items[1].description).toBe('Une image');
+});

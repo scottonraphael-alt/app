@@ -55,7 +55,9 @@ def compile_document(document, assets):
         else:
             url=value.get('url','')
             if not safe_url(url,media=True):error(label,'une URL HTTPS publique est nécessaire.')
-        return {'media':{'url':url},'description':value.get('description',''),'spoiler':value.get('spoiler',False)}
+        result={'media':{'url':url},'spoiler':value.get('spoiler',False)}
+        if value.get('description'):result['description']=value['description']
+        return result
     def button(value,label):
         nonlocal component_count
         component_count+=1

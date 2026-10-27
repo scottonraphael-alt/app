@@ -195,3 +195,48 @@ def test_actual_rest_transport_uses_multipart_and_explicit_files(monkeypatch,tmp
     assert captured[0][1].endswith(f'/channels/{CHANNEL}/messages/900000000000000001')
     h.run(REAL_DISCORD_REQUEST('POST',CHANNEL,{'flags':32768},[]))
     assert captured[-1][2]['json']=={'flags':32768}
+
+def test_reported_mixed_announcement_omits_empty_media_description():
+    blocks=[{'id':'a','kind':'text','text':'# Une nouvelle annonce'},
+            {'id':'b','kind':'separator'},
+            {'id':'c','kind':'section','texts':['Un point à mettre en avant.','Détail'],
+             'accessory':'button','button':{'label':'En savoir plus','url':'https://google.com','disabled':True}},
+            {'id':'d','kind':'gallery','items':[{'url':'https://cdn.discordapp.com/attachments/123/456/image.png?ex=123&hm=signature','description':''}]}]
+    doc=canonical(blocks);doc['silent']=True;doc['groups'][0]['color']='#e63b7a'
+    result=compile_document(doc,{})
+    assert result['errors']==[] and result['payload']['flags']==36864
+    children=result['payload']['components'][0]['components']
+    assert children[2]['accessory']['disabled'] is True
+    assert 'description' not in children[3]['items'][0]
+    doc['groups'][0]['blocks'][3]['items'][0]['description']='Une image accessible'
+    assert compile_document(doc,{})['payload']['components'][0]['components'][3]['items'][0]['description']=='Une image accessible'
+
+
+def test_discord_400_field_diagnostics_reach_history_and_audit(monkeypatch):
+    class FakeClient:
+        def __init__(self,**kwargs):pass
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def request(self,*args,**kwargs):
+            errors={'_errors':[{'code':'MEDIA_INVALID','message':'Could not download https://cdn.discordapp.com/image.png?hm=private-signature'}]}
+            for field in reversed(['components','0','components','3','items','0','media','url']):errors={field:errors}
+            return httpx.Response(400,json={'code':50035,'message':'Invalid Form Body','errors':errors})
+    c=client();d=draft(c)
+    monkeypatch.setattr(httpx,'AsyncClient',FakeClient)
+    monkeypatch.setattr(publishing,'discord_request',REAL_DISCORD_REQUEST)
+    r=publish(c,d)
+    assert r.status_code==200,r.text
+    job=r.json();reason=job['reason']
+    assert job['status']=='failed' and 'HTTP 400, code 50035' in reason
+    assert 'components[0].components[3].items[0].media.url' in reason
+    assert 'bibliothèque Iris' in reason and 'private-signature' not in reason
+    log=h.run(h.db.auth_logs.find_one({'event_type':'announcement.publication.failed'}))
+    assert log['details']['reason']==reason
+    assert c.get(f'{BASE}/publications/{job["id"]}').json()['reason']==reason
+
+
+@pytest.mark.parametrize('body',[None,[],{'message':'Missing Permissions','code':50013}])
+def test_discord_rejection_without_nested_validation_is_readable(body):
+    error=publishing.discord_rejection(httpx.Response(403,json=body))
+    assert error.status_code==502 and 'HTTP 403' in error.detail
+    assert len(error.detail)<2201

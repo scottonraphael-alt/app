@@ -119,7 +119,7 @@ export function compileDocument(doc, assetMap = {}) {
       media: {
         url
       },
-      description: m.description,
+      ...(m.description ? {description: m.description} : {}),
       spoiler: m.spoiler
     };
   };

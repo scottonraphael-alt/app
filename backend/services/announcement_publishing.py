@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -65,6 +66,31 @@ async def validate_destination(channel_id,document):
     return channel
 
 
+def discord_rejection(response):
+    """Keep bounded field errors, never the request body, bot token or signed URL."""
+    try:body=response.json()
+    except ValueError:body={}
+    if not isinstance(body,dict):body={}
+    def clean(value):
+        text=str(value).replace(config.DISCORD_BOT_TOKEN,'[token masqué]') if config.DISCORD_BOT_TOKEN else str(value)
+        return re.sub(r'https?://[^\s<>]+','[lien masqué]',text).replace('\n',' ')[:240]
+    issues=[]
+    def visit(node,path='',depth=0):
+        if not isinstance(node,dict) or depth>16 or len(issues)>=6:return
+        for error in node.get('_errors',[]) if isinstance(node.get('_errors'),list) else []:
+            if isinstance(error,dict) and len(issues)<6:
+                issues.append(f'{path or "message"} : {clean(error.get("message",error.get("code","Valeur refusée")))}')
+        for key,value in node.items():
+            if key!='_errors':visit(value,f'{path}[{key}]' if str(key).isdigit() else f'{path}.{key}'.lstrip('.'),depth+1)
+    visit(body.get('errors'))
+    code=body.get('code')
+    prefix=f'Discord a refusé la publication (HTTP {response.status_code}'+(f', code {code}' if isinstance(code,int) else '')+').'
+    detail=' ; '.join(issues) or clean(body.get('message','Aucun détail fourni par Discord.'))
+    if any('.media' in issue or '.file' in issue for issue in issues):
+        detail+=' Pour un média externe, vérifiez le lien ou téléversez le fichier dans la bibliothèque Iris.'
+    return HTTPException(502,f'{prefix} {detail}'[:2200])
+
+
 async def discord_request(method,channel_id,payload,assets,message_id=None):
     url=f'{DISCORD_API_BASE}/channels/{channel_id}/messages'+(f'/{message_id}' if message_id else '')
     files=[]
@@ -82,7 +108,7 @@ async def discord_request(method,channel_id,payload,assets,message_id=None):
                 except (ValueError,TypeError):delay=1
                 await asyncio.sleep(delay);continue
             if response.status_code>=500:raise httpx.ReadError('Discord n’a pas confirmé la publication.')
-            if response.is_error:raise HTTPException(502,f'Discord a refusé la publication (HTTP {response.status_code}). Vérifiez le salon, les droits du bot et le contenu.')
+            if response.is_error:raise discord_rejection(response)
             try:
                 result=response.json()
                 if not isinstance(result,dict) or not result.get('id'):raise ValueError()
@@ -126,7 +152,7 @@ async def execute(job):
         except Exception:logger.exception('Annonce publiée, mais écriture de son audit indisponible')
     except Exception as error:
         uncertain=isinstance(error,httpx.RequestError)
-        reason='Envoi non confirmé : vérifiez Discord avant de créer un nouvel envoi.' if uncertain else str(getattr(error,'detail','La publication a échoué.'))[:600]
+        reason='Envoi non confirmé : vérifiez Discord avant de créer un nouvel envoi.' if uncertain else str(getattr(error,'detail','La publication a échoué.'))[:2200]
         await db.announcement_publications.update_one({'_id':job['_id'],'status':'sending'},{'$set':{'status':'unknown' if uncertain else 'failed','reason':reason,'finished_at':now_iso()}})
         await system_audit('announcement.publication.failed',job,reason)
     return await db.announcement_publications.find_one({'_id':job['_id']})

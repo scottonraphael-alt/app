@@ -48,7 +48,7 @@ export function MediaEditor({
         ...value,
         url: e.target.value,
         asset_id: null
-      })} placeholder="https://…" /></Field>}<Field label="Description alternative"><input value={value.description} maxLength={1024} onChange={e => onChange({
+      })} placeholder="https://…" /></Field>}{!value.asset_id && /^https:\/\/(?:cdn|media)\.discordapp\.(?:com|net)\/attachments\//i.test(value.url) && <p className="an-help">Ce lien de pièce jointe Discord est temporaire. Pour une annonce durable ou programmée, ajoutez l’image dans Fichiers puis sélectionnez-la dans la bibliothèque.</p>}<Field label="Description alternative"><input value={value.description} maxLength={1024} onChange={e => onChange({
         ...value,
         description: e.target.value
       })} placeholder="Décrivez l’image pour les lecteurs d’écran" /></Field><Check label="Masquer comme spoiler" value={value.spoiler} onChange={spoiler => onChange({
