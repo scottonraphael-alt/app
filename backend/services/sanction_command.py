@@ -100,7 +100,7 @@ class PrivateView(discord.ui.LayoutView):
 class MemberPicker(PrivateView):
     def __init__(self,actor_id,guild_id,access_session_id=None):
         super().__init__(actor_id,guild_id,access_session_id)
-        self.add_item(panel('🛡️ Module de sanction',f'**Bonjour <@{self.actor_id}>, qui souhaites-tu sanctionner ?**\nSélectionne un membre pour consulter son casier.','**Le parcours**\n👤 Membre → 📂 Casier → 📝 Formulaire → ✅ Confirmation',footer='🔒 Accès personnel de 10 minutes · Les membres du staff sont protégés.'))
+        self.add_item(panel('🛡️ Sanctionner un membre',f'Bonjour <@{self.actor_id}>.\n**Quel membre souhaites-tu sélectionner ?**\nSon casier s’affichera avant toute décision.'))
         picker=discord.ui.UserSelect(placeholder='Choisir le membre concerné',min_values=1,max_values=1)
         async def selected(interaction):
             await interaction.response.defer()
@@ -201,7 +201,7 @@ class SanctionModal(discord.ui.Modal):
         self.previous_interaction=previous_interaction
         self.access_session_id=access_session_id
         self.reason=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,max_length=1000,placeholder='Décris précisément le comportement sanctionné.')
-        self.add_item(discord.ui.Label(text='📝 Raison de la sanction',component=self.reason,description='Motif enregistré dans le casier et le journal Discord.'))
+        self.add_item(discord.ui.Label(text='📝 Raison de la sanction',component=self.reason,description='Motif transmis au membre par MP (sauf rappel), conservé dans Iris et les logs.'))
         self.explanation=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,min_length=1,max_length=4000,placeholder='Contexte, chronologie, échanges, éléments de décision…')
         self.add_item(discord.ui.Label(text='📂 Explication pour le casier',component=self.explanation,description='Obligatoire · contexte et éléments de décision conservés dans Iris.'))
         self.duration=None;self.purge=None
@@ -238,21 +238,42 @@ class SanctionModal(discord.ui.Modal):
     async def on_error(self,interaction,error):await report(interaction,error)
 
 
+def notification_text(job):
+    if job['type']=='rappel_a_lordre':return '📭 Rappel à l’ordre : aucun MP envoyé.'
+    state=job.get('member_notice',{})
+    if state.get('correction_status')=='failed':return '⚠️ La correction du MP initial n’a pas pu être confirmée.'
+    return {'sent':'✉️ Le MP de sanction a été envoyé au membre.',
+            'blocked':'⚠️ Discord a refusé le MP au membre.',
+            'failed':'⚠️ L’envoi du MP au membre a échoué.',
+            'unknown':'⚠️ L’envoi du MP au membre n’a pas été confirmé.',
+            'sending':'✉️ L’envoi du MP au membre est en cours.',
+            'cancelled':'✉️ Le MP a été corrigé pour préciser que l’action n’a pas été appliquée.'}.get(state.get('status'),'✉️ Notification du membre en attente.')
+
+
 class ConfirmView(PrivateView):
     def __init__(self,job):
         super().__init__(job['actor']['id'],job['guild_id'],job.get('access_session_id'))
         self.job=job
         effect={'rappel_a_lordre':'Enregistrement du rappel dans le casier Iris.', 'avertissement':'Enregistrement de l’avertissement dans le casier Iris.',
                 'mute':'Application d’un timeout Discord et ajout au casier.', 'kick':'Expulsion immédiate du serveur et ajout au casier.', 'bannissement':'Bannissement Discord et ajout au casier.'}[job['type']]
-        text=f'👤 **Membre** : {safe(job["snapshot"]["display_name"],100)} (`{job["member_id"]}`)\n{EMOJIS[job["type"]]} **{actions.LABELS[job["type"]]}**\n{effect}\n'
-        if job['duration']:text+=f'⏱️ **Durée** : {safe(job["duration"],80)}\n'
-        text+=f'\n📝 **Motif**\n{safe(job["reason"],1000)}\n'
-        if job['explanation']:text+=f'\n📂 **Explication interne**\n{safe(job["explanation"],800)}\n'
-        text+='\n📎 **Justificatifs** : '+(', '.join(safe(f['filename'],70) for f in job['files']) or 'aucun')
-        if job['purge_seconds']:text+=f'\n**Suppression définitive des messages** : {job["purge_seconds"]//3600} heures.'
-        text+='\n**Accès temporaire** : le rôle de sanction est ajouté pour l’action puis retiré automatiquement.\n-# Ce parcours reste privé. Un log V2 sera publié dans le salon de modération configuré.'
-        self.add_item(panel('🛡️ Vérifier avant d’appliquer',text,colour=0xB38B46))
-        apply=discord.ui.Button(label='Appliquer la sanction',style=discord.ButtonStyle.danger)
+        def fenced(value,limit):
+            text=str(value).replace('```','` ` `').encode('utf-16-le')[:limit*2].decode('utf-16-le','ignore')
+            return '```\n'+text+'\n```'
+        box=panel(f"{EMOJIS[job['type']]} {actions.LABELS[job['type']]} · Confirmation",
+            f"👤 <@{job['member_id']}> · `{job['member_id']}`\n{effect}",colour=0xB38B46)
+        def section(text):
+            box.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
+            box.add_item(discord.ui.TextDisplay(text))
+        if job['duration']:section('### ⏱️ Durée\n'+safe(job['duration'],80))
+        section('### 📝 Motif\n'+fenced(job['reason'],1000))
+        if job['explanation']:section('### 📂 Note interne (extrait)\n'+fenced(job['explanation'],700))
+        names='\n'.join('• '+safe(item['filename'],70) for item in job['files']) or 'Aucun fichier.'
+        section(f"### 📎 Justificatifs · {len(job['files'])}\n{names}")
+        if job['purge_seconds']:section(f"### ⚠️ Suppression définitive\nLes messages des {job['purge_seconds']//3600} dernières heures seront supprimés.")
+        section('### 📭 Notification au membre\nAucun MP pour un rappel à l’ordre.' if job['type']=='rappel_a_lordre' else
+                '### ✉️ Notification au membre\nUn MP lui sera envoyé avec le motif et la durée.')
+        self.add_item(box)
+        apply=discord.ui.Button(label='Appliquer la sanction',emoji='✅',style=discord.ButtonStyle.danger)
         async def confirmed(interaction):
             await interaction.response.defer()
             try:
@@ -262,6 +283,7 @@ class ConfirmView(PrivateView):
                 current=await actions.db.sanction_commands.find_one({'_id':job['_id']})
                 if current.get('role_lease',{}).get('status')=='cleanup_pending':text+='\nLe retrait du rôle temporaire n’a pas encore été confirmé : Iris le reprend automatiquement et bloque toute nouvelle sanction de ta part en attendant.'
                 if not current.get('log_complete'):text+='\nLe log Discord est en attente et sera repris automatiquement.'
+                text+='\n'+notification_text(current)
                 await interaction.edit_original_response(view=message_view('Sanction appliquée' if complete else 'Finalisation en cours',text),allowed_mentions=NO_MENTIONS)
                 self.stop()
             except Exception as error:
@@ -271,6 +293,7 @@ class ConfirmView(PrivateView):
                 elif current and current['status'] in ('discord_applied','recording'):
                     text='L’action Discord a réussi. La mise à jour du casier sera reprise automatiquement. Ne répète pas la sanction.'
                 else:text=safe(getattr(error,'detail','L’action a échoué ou n’a pas été confirmée. Vérifie Discord et les logs Iris avant de recommencer.'),1500)
+                if current and current.get('member_notice'):text+='\n'+notification_text(current)
                 await interaction.edit_original_response(view=message_view('Résultat de la sanction',text),allowed_mentions=NO_MENTIONS)
                 await report(interaction,error,job,respond=False);self.stop()
         cancel=discord.ui.Button(label='Annuler',style=discord.ButtonStyle.secondary)
@@ -282,7 +305,7 @@ class ConfirmView(PrivateView):
                 self.stop()
             except Exception as error:await report(interaction,error,job)
         apply.callback=confirmed;cancel.callback=cancelled
-        self.add_item(discord.ui.ActionRow(apply,cancel))
+        box.add_item(discord.ui.ActionRow(apply,cancel))
 
 
 class AccessModal(discord.ui.Modal):

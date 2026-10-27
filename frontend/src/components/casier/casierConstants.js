@@ -390,6 +390,9 @@ export const CASIER_EVENT_LABELS = {
   "casier.command.role.granted": "Rôle temporaire de sanction attribué",
   "casier.command.role.revoked": "Rôle temporaire de sanction retiré",
   "casier.command.role.failed": "Retrait du rôle temporaire à reprendre",
+  "casier.command.notification.sent": "Notification de sanction envoyée par MP",
+  "casier.command.notification.failed": "Notification de sanction non remise ou à vérifier",
+  "casier.command.notification.corrected": "Notification MP corrigée après refus de sanction",
   "casier.command.log.sent": "Log de sanction publié sur Discord",
   "casier.command.log.failed": "Publication du log de sanction à reprendre",
 

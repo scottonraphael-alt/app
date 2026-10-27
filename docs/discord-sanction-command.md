@@ -7,7 +7,7 @@ La commande est enregistrée sur le serveur `DISCORD_GUILD_ID` par le bot Iris a
 1. Le rôle Staff est contrôlé dès le lancement ; un modal demande le **code personnel de 6 caractères**. Après validation, l’exécuteur reçoit un message V2 **éphémère**, avec un sélecteur d’utilisateur.
 2. Après vérification des accès, ce premier message est supprimé et remplacé par un résumé privé du casier : compteurs des cinq types, fiches S actives, liste paginée des sanctions, dates de Paris, durées, motifs et indication des fiches S actives ou clôturées.
 3. Le choix d’un type ouvre directement son modal : motif (1 000 caractères), explication interne (4 000), un à cinq justificatifs uploadés, durée pour mute/ban et choix de suppression des messages pour un ban. **Tous les champs affichés sont obligatoires**, dans Discord et côté serveur. Choisir « permanent » pour un ban définitif et « Ne supprimer aucun message » pour conserver les messages.
-4. Une confirmation privée récapitule les effets avant application. Aucun changement Discord, rôle temporaire ou sanction du casier n’est appliqué lors de la simple préparation.
+4. Une confirmation privée regroupe la cible, le motif, la note interne, les justificatifs et la notification prévue dans des sections distinctes, avec les boutons dans le panneau. Aucun changement Discord, rôle temporaire ou sanction du casier n’est appliqué lors de la simple préparation.
 5. Après confirmation : contrôle des rôles, rôle temporaire, action Discord, retrait du rôle, enregistrement du casier et publication d’un log V2 dans le salon configuré pour ce type.
 
 Le rappel à l’ordre et l’avertissement ajoutent une entrée au casier. Le mute applique un timeout Discord (durée positive, 28 jours maximum). Le kick expulse le membre. Le bannissement est définitif ou temporaire, de 1 minute à 365 jours. Pour le ban, les suppressions proposées sont aucune, dernière heure, 24 heures ou 7 jours. Les suppressions de messages sont irréversibles ; la confirmation les indique.
@@ -41,6 +41,14 @@ Valeurs configurées par défaut, correspondant aux IDs demandés :
 Les variables optionnelles `SANCTION_TEMP_ROLE_ID`, `SANCTION_PERMANENT_BAN_ROLE_ID` et `SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID` permettent de déplacer cette configuration. Aucun nouvel env n’est nécessaire avec ces IDs.
 
 L’obligation de retirer le rôle est enregistrée **avant** son attribution. Le retrait est tenté immédiatement après l’action puis dans un `finally`, même si Discord refuse la sanction. Un échec est persisté et repris par la maintenance du backend ; une nouvelle sanction de cet exécuteur est bloquée jusqu’au nettoyage. Après un arrêt du processus, les élévations non terminées sont retirées à la reprise ; un rôle temporaire n’est donc pas assorti d’une expiration native Discord. Un rôle que l’exécuteur possédait déjà n’est pas retiré. L’élévation automatique réduit la durée d’exposition des permissions ; elle ne remplace pas l’authentification et la protection du compte staff autorisé à appeler `/sanction`.
+
+## Notification au membre
+
+Une notification V2 est tentée par message privé pour **avertissement, mute, kick et bannissement**. Aucun MP n’est envoyé pour un **rappel à l’ordre**. Le MP contient uniquement le serveur, le type de sanction, le motif et la durée ; ni la note interne, ni les justificatifs, ni les codes d’accès, ni les données du modérateur ne sont transmis.
+
+Pour un avertissement ou un mute, l’envoi suit la confirmation de l’action. Pour un kick ou un ban, le MP annonce une décision en cours d’application et est tenté avant le retrait du membre, pour conserver la possibilité de le joindre. Le rôle temporaire n’est pas maintenu pendant cet envoi. Les accès sont revérifiés ensuite. Si l’action native est formellement refusée, le MP initial est corrigé pour indiquer que la sanction n’a pas pu être appliquée.
+
+Un refus de MP par Discord ou une erreur de livraison ne bloque pas la sanction. Le résultat de l’envoi est conservé et affiché à l’exécuteur et dans les logs Iris. Un envoi incertain n’est pas automatiquement répété. La maintenance peut reprendre un envoi d’avertissement ou de mute jamais commencé, sans réappliquer la sanction ; elle ne contacte pas les membres pour les sanctions historiques antérieures à cette fonctionnalité. L’envoi d’un MP ne prouve pas qu’il a été lu.
 
 ## Logs
 

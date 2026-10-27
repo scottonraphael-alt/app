@@ -264,7 +264,7 @@ async def prepare(guild, actor_id, member_id, values, attachments, interaction_i
     actor,member=await fresh_members(guild,actor_id,member_id,values['type'],values['type']=='bannissement' and values['duration_seconds'] is None)
     values=parameters(values['type'],values['reason'],values.get('explanation',''),values.get('duration') or '',values.get('purge_seconds',0))
     job={'_id':str(interaction_id),'access_session_id':access_session_id,'guild_id':str(guild.id),'member_id':str(member.id),'actor':identity(actor),'snapshot':snapshot(member),
-         **values,'log_channels':[str(cid) for cid,kind in config.DISCORD_MODERATION_CHANNEL_TYPES.items() if kind==values['type']],
+         **values,'notification_policy':1,'log_channels':[str(cid) for cid,kind in config.DISCORD_MODERATION_CHANNEL_TYPES.items() if kind==values['type']],
          'sanction_id':casiers.new_id(),'status':'preparing','files':[],'created_at':now(),'deadline':now()+timedelta(minutes=SESSION_MINUTES)}
     if not job['log_channels']:raise HTTPException(503,'Aucun salon de log n’est configuré pour cette sanction dans DISCORD_MODERATION_CHANNELS.')
     await temporary_role(guild,job)
@@ -322,6 +322,7 @@ async def record(job):
 
 async def apply(guild, actor_id, job_id):
     from services.sanction_access import require_session
+    from services import sanction_notifications as notifications
     job=await db.sanction_commands.find_one({'_id':job_id,'actor.id':str(actor_id),'guild_id':str(guild.id)})
     if not job:raise HTTPException(404,'Ce formulaire est introuvable ou ne t’appartient pas.')
     await require_session(job.get('access_session_id'),actor_id,guild.id)
@@ -352,6 +353,9 @@ async def apply(guild, actor_id, job_id):
             else:raise HTTPException(409,'Ce membre est déjà banni. Aucun bannissement existant ne sera remplacé.')
         for channel_id in job['log_channels']:await log_channel(guild,channel_id)
         await require_session(job.get('access_session_id'),actor_id,guild.id)
+        if job['type'] in ('kick','bannissement'):
+            await notifications.notify(guild,job,member)
+            await require_session(job.get('access_session_id'),actor_id,guild.id)
         await grant_role(guild,actor,job)
         # Recheck fresh roles after the elevation, including the permanent-ban admin gate.
         actor,member=await fresh_members(guild,actor_id,job['member_id'],job['type'],job['type']=='bannissement' and job['duration_seconds'] is None)
@@ -371,6 +375,7 @@ async def apply(guild, actor_id, job_id):
         job['status']='discord_applied'
         await revoke_role(guild,job)
         await audit('casier.command.discord.applied',job=job)
+        if job['type'] not in ('kick','bannissement'):await notifications.notify(guild,job,member)
         result=await record(job)
         try:await publish_logs(job['_id'])
         except Exception:logger.exception('Reprise du journal Discord nécessaire (%s)',job['_id'])
@@ -383,7 +388,10 @@ async def apply(guild, actor_id, job_id):
             await db.sanction_commands.update_one({'_id':job_id,'status':'applying'},
                 {'$set':{'status':'unknown' if uncertain else 'failed','error':'Action Discord à vérifier.' if uncertain else str(getattr(error,'detail','Discord a refusé cette action.'))[:500],'finished_at':now()}})
         current=await db.sanction_commands.find_one({'_id':job_id})
-        if current and current['status']=='failed':cleanup_files(job)
+        if current and current['status']=='failed':
+            cleanup_files(job)
+            await revoke_role(guild,job)
+            await notifications.correct_failed_removal(guild,job)
         await audit('casier.command.failed',job=job,reason=str(getattr(error,'detail','Action interrompue : consulte les logs Iris et le statut de la sanction.'))[:500])
         raise
     finally:
@@ -402,6 +410,7 @@ async def cancel(actor_id,job_id):
 
 
 async def dispatch(client):
+    from services.sanction_notifications import resume
     moment=now()
     await db.sanction_commands.update_many({'status':'recording','record_started_at':{'$lt':moment-timedelta(minutes=5)}},
         {'$set':{'status':'discord_applied'}})
@@ -452,6 +461,7 @@ async def dispatch(client):
             # A retry must fetch the current ban and check its exact reason again.
             await db.sanction_commands.update_one({'_id':job['_id']},{'$unset':{'ban_release':''}})
             logger.exception('Fin de bannissement temporaire en attente (%s)',job['_id'])
+    await resume(client)
     # A crashed release worker may safely resume the same guarded check.
     await db.sanction_commands.update_many({'ban_release':'checking','release_started_at':{'$lt':moment-timedelta(minutes=5)}},{'$unset':{'ban_release':''}})
 
