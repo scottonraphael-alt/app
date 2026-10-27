@@ -65,7 +65,7 @@ from services.casier_service import add_sanction
 
 # ai_moderation.py est dans le même dossier (services/). Importé APRÈS config, qui
 # charge le .env (load_dotenv) dont ai_moderation lit les variables.
-from services import ai_moderation
+from services import ai_moderation, server_statistics
 
 logger = logging.getLogger("moderation_bot")
 
@@ -260,11 +260,40 @@ async def on_ready():
         logger.info("Salons surveillés : %s", DISCORD_MODERATION_CHANNEL_TYPES)
 
     # Sans danger si on_ready est rappelé après une reconnexion.
+    server_statistics.start(moderation_client)
     ai_moderation.start(moderation_client)
 
 
 @moderation_client.event
 async def on_message(message: discord.Message):
+    # Les métriques sont indépendantes des filtres, de la clé et des appels IA.
+    await asyncio.gather(
+        server_statistics.safely(server_statistics.record_message, message),
+        handle_application_message(message),
+    )
+
+
+@moderation_client.event
+async def on_raw_message_edit(payload):
+    await server_statistics.safely(server_statistics.record_edit, payload)
+
+
+@moderation_client.event
+async def on_raw_message_delete(payload):
+    await server_statistics.safely(server_statistics.record_delete, payload)
+
+
+@moderation_client.event
+async def on_raw_bulk_message_delete(payload):
+    await server_statistics.safely(server_statistics.record_delete, payload)
+
+
+@moderation_client.event
+async def on_disconnect():
+    await server_statistics.safely(server_statistics.disconnected)
+
+
+async def handle_application_message(message: discord.Message):
     # Salons de journal de sanctions : logique existante, inchangée.
     if message.channel.id in DISCORD_MODERATION_CHANNEL_TYPES:
         await handle_sanction_log_message(message)
@@ -417,6 +446,7 @@ async def start_moderation_bot() -> None:
 
 
 async def stop_moderation_bot() -> None:
+    await server_statistics.safely(server_statistics.stop)
     try:
         await ai_moderation.stop()
     except Exception:

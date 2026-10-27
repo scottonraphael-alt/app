@@ -103,6 +103,8 @@ async def _create_index_or_log(collection, keys, **kwargs) -> None:
 
 
 async def initialize_indexes() -> None:
+    from services.server_statistics import ensure_indexes
+    await ensure_indexes()
     await db.tickets.create_index("id", unique=True)
     await db.tickets.create_index("channel_id", unique=True)
     await db.tickets.create_index("member_id")

@@ -23,6 +23,7 @@ const QuarterlyTasksPage = lazy(() => import("./pages/QuarterlyTasksPage"));
 const ProjectsListPage = lazy(() => import("./pages/ProjectsListPage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
 const ProjectCalendarPage = lazy(() => import("./pages/ProjectCalendarPage"));
+const ServerStatisticsPage = lazy(() => import("./pages/ServerStatisticsPage"));
 const ResponsableAuthLogsPage = lazy(() => import("./pages/ResponsableAuthLogsPage"));
 const ResponsableChannelArchivesPage = lazy(() => import("./pages/ResponsableChannelArchivesPage"));
 const ChannelArchiveWorkspacePage = lazy(() => import("./pages/ChannelArchiveWorkspacePage"));
@@ -269,6 +270,8 @@ function AuthenticatedApp({
               )
             }
           />
+
+          <Route path="/responsable/statistiques" element={isResponsable ? <ServerStatisticsPage /> : <Navigate to={defaultRoute} replace />} />
 
           <Route
             path="/responsable/auth-logs"

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
+  BarChart3,
   Archive,
   CalendarDays,
   FileText,
@@ -248,6 +249,12 @@ const pills = [
             className="nd-responsable-actions"
             aria-label="Outils du responsable"
           >
+            <Link to="/responsable/statistiques" className="nd-responsable-link">
+              <BarChart3 size={18} aria-hidden="true" />
+              <span>Statistiques du serveur</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+
             <Link
               to="/responsable/auth-logs"
               className="nd-responsable-link"
