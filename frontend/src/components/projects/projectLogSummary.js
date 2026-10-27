@@ -1,3 +1,4 @@
+import { durationLabel } from './rundownUtils';
 import { dateLabel, personName, PRIORITY, PROJECT_STATUS, TASK_STATUS } from './projectUtils';
 
 export const PROJECT_AUDIT_LABELS = {
@@ -29,7 +30,7 @@ function formatValue(key,value) {
   if (value == null || value === '') return key === 'blocked_reason' ? 'aucun blocage' : 'non renseigné';
   if (key === 'status') return TASK_STATUS[value] || PROJECT_STATUS[value] || value;
   if (key === 'priority') return PRIORITY[value] || value;
-  if (key === 'items') return value.length?value.map((item,index)=>`${index+1}. ${item.title} (${item.duration_minutes} min · ${item.speaker?personName(item.speaker):'à attribuer'})`).join(' ; '):'aucune séquence';
+  if (key === 'items') return value.length?value.map((item,index)=>`${index+1}. ${item.title} (${durationLabel(item.duration_minutes)} · ${item.speaker?personName(item.speaker):'à attribuer'})`).join(' ; '):'aucune séquence';
   if (key === 'checklist') return `${value.filter(item=>item.done).length}/${value.length} étapes cochées : ${value.map(item=>item.title).join(', ')}`;
   if (key === 'assignee') return personName(value);
   if (key.endsWith('_date')) return dateLabel(value);

@@ -2,7 +2,7 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import ProjectRundown from './ProjectRundown';
 import { api } from '../../api/client';
-import { clockLabel, durationLabel, rundownText, rundownTimeline } from './rundownUtils';
+import { clockLabel, durationLabel, durationParts, durationMinutes, rundownText, rundownTimeline } from './rundownUtils';
 
 jest.mock('react-router-dom',()=>({Link:({to,children,...props})=><a href={to} {...props}>{children}</a>}),{virtual:true});
 jest.mock('../../api/client',()=>({api:{get:jest.fn(),put:jest.fn()},getErrorMessage:()=> 'Erreur de déroulé'}));
@@ -53,4 +53,26 @@ it('conserve le brouillon en cas de conflit et permet de recharger la version en
   await act(async()=>container.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
   expect(container.querySelector('form')).not.toBeNull();expect(container.textContent).toContain('Copiez vos modifications');
   await click('Recharger le déroulé');expect(container.querySelector('form')).toBeNull();expect(container.textContent).toContain('Version de l’équipe');
+});
+
+it('calcule les dates réelles sur plusieurs jours, fins de mois et années bissextiles',()=>{
+  const items=[{id:'a',title:'Concours',duration_minutes:2*1440+195}];
+  const timeline=rundownTimeline('23:30',items,'2026-12-30');
+  expect(timeline[0].startDate).toBe('2026-12-30');expect(timeline[0].endDate).toBe('2027-01-02');expect(timeline[0].endClock).toBe('02:45');
+  const leap=rundownTimeline('20:00',[{duration_minutes:2880}],'2028-02-28');
+  expect(leap[0].endDate).toBe('2028-03-01');expect(leap[0].endClock).toBe('20:00');
+  expect(durationLabel(3075)).toBe('2 j 3 h 15 min');expect(durationMinutes(durationParts(3075))).toBe(3075);
+  expect(rundownText({...project,rundown:{...plan,event_date:'2026-12-30',items}})).toContain('2 janv. 2027');
+});
+it('enregistre une durée saisie en jours, heures et minutes et affiche les dates de chaque séquence',async()=>{
+  const saved=jest.fn();api.put.mockResolvedValue({data:{...project,rundown:plan}});
+  await act(async()=>root.render(<ProjectRundown project={{...project,rundown:plan}} manager onSaved={saved}/>));
+  expect(container.querySelector('.pj-sequence-date').textContent).toContain('27 oct. 2026');await click('Modifier le déroulé');
+  const fill=async(label,value)=>{const input=container.querySelector(`[aria-label="${label}"]`);await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});};
+  await fill('Jours de la séquence 1','2');await fill('Heures de la séquence 1','3');await fill('Minutes de la séquence 1','15');
+  expect(container.textContent).not.toContain('24 h au maximum');
+  const saveButton=[...container.querySelectorAll('button')].find(b=>b.textContent==='Enregistrer le déroulé');expect(saveButton.disabled).toBe(false);
+  await act(async()=>container.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  expect(api.put).toHaveBeenCalledWith('/animateur/projects/p/rundown',expect.objectContaining({items:expect.arrayContaining([expect.objectContaining({id:'a',duration_minutes:3075})])}));
+  expect(api.put.mock.calls[0][1].items[0].duration_days).toBeUndefined();
 });

@@ -444,3 +444,16 @@ body.projects-no-nav .app-shell > .app-main { grid-column:1/-1!important; margin
 .pj-sequence-copy details p { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.8; padding:14px; border-radius:10px; background:#faf6ed; }
 @media(max-width:850px) { .pj-sequence-fields { grid-template-columns:1fr 1fr; } .pj-sequence-fields > .pj-field:first-child { grid-column:1/-1; } }
 @media(max-width:600px) { .pj-rundown-fields { grid-template-columns:1fr; } .pj-rundown-timeline > li { grid-template-columns:90px minmax(0,1fr); gap:14px; } .pj-sequence-time strong { font-size:15px; } .pj-sequence-edit { padding:14px; } .pj-sequence-fields { gap:10px; } }
+
+/* Multi-day sequences use explicit civil dates and a compact days/hours/minutes control. */
+.pj-sequence-fields { grid-template-columns:minmax(0,1fr) minmax(240px,280px) minmax(150px,210px); }
+.pj-sequence-duration { min-width:0; margin:0; padding:0; border:0; }
+.pj-sequence-duration > legend { padding:0 0 8px; font-size:11px; font-weight:500; color:#627358; }
+.pj-sequence-duration > div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.pj-sequence-duration .pj-field { gap:5px; }
+.pj-sequence-duration .pj-field > span { font-size:10px; }
+.pj-sequence-duration input { padding:12px 9px; }
+.pj-sequence-time .pj-sequence-date { color:#857455; font-size:11px; line-height:1.55; }
+.pj-sequence-time .pj-sequence-end { color:#8b7248; line-height:1.65; overflow-wrap:anywhere; }
+@media(max-width:1050px) { .pj-sequence-fields { grid-template-columns:minmax(0,1fr) minmax(150px,1fr); } .pj-sequence-fields > .pj-field:first-child { grid-column:1/-1; } }
+@media(max-width:600px) { .pj-sequence-fields { grid-template-columns:1fr; } .pj-sequence-duration > div { max-width:350px; } }

@@ -3,7 +3,7 @@ import asyncio
 import mimetypes
 import os
 import tempfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, status
@@ -216,9 +216,12 @@ async def create_project(
     }
 
     if template and template.get("rundown", {}).get("items"):
-        project["rundown"] = {"event_date": end_date or start_date, "start_time": template["rundown"].get("start_time", "20:00"),
+        project["rundown"] = {"event_date": start_date, "start_time": template["rundown"].get("start_time", "20:00"),
                               "items": [{**item, "id": str(uuid4()), "speaker": None} for item in template["rundown"]["items"]],
                               "updated_at": now, "updated_by": identity}
+    if project.get("rundown"):
+        _validate_rundown_span(date.fromisoformat(project["rundown"]["event_date"]), project["rundown"]["start_time"],
+                              sum(item["duration_minutes"] for item in project["rundown"]["items"]))
     initial_tasks = instantiate_tasks(template, project["id"], identity, start_date, end_date, now) if template else []
     try:
         await db.projects.insert_one(project)
@@ -1243,8 +1246,7 @@ async def save_project_rundown(project_id: str, payload: RundownSave, request: R
         raise HTTPException(status_code=409, detail="Le déroulé a changé. Rechargez-le avant de le modifier.")
     if len({item.id for item in payload.items}) != len(payload.items):
         raise HTTPException(status_code=422, detail="Chaque séquence doit avoir un identifiant unique.")
-    if sum(item.duration_minutes for item in payload.items) > 1440:
-        raise HTTPException(status_code=422, detail="Un déroulé ne peut pas dépasser 24 heures.")
+    _validate_rundown_span(payload.event_date, payload.start_time, sum(item.duration_minutes for item in payload.items))
     members = {member["id"]: member for member in project.get("members", [])}
     items = []
     for item in payload.items:
@@ -1264,3 +1266,13 @@ async def save_project_rundown(project_id: str, payload: RundownSave, request: R
                          details={"project_id": project_id, "project_title": project["title"], "title": project["title"],
                                   "before": {key: previous.get(key) for key in fields}, "after": {key: rundown[key] for key in fields}})
     return Project(**{**project, **updates})
+
+
+
+def _validate_rundown_span(event_date, start_time, total_minutes):
+    if event_date is None:
+        return
+    try:
+        datetime.fromisoformat(f"{event_date.isoformat()}T{start_time}") + timedelta(minutes=total_minutes)
+    except (OverflowError, ValueError):
+        raise HTTPException(status_code=422, detail="La fin du déroulé dépasse la plage de dates possible.")

@@ -49,11 +49,11 @@ def test_member_cannot_edit_and_closed_projects_keep_the_plan_read_only():
     payload(items=[{'id':'a','title':'A','duration_minutes':0}]),
     payload(items=[{'id':'a','title':'A','duration_minutes':1.5}]),
     payload(items=[{'id':'a','title':'A','duration_minutes':True}]),
-    payload(items=[{'id':'a','title':'A','duration_minutes':241}]),
+    payload(items=[{'id':'a','title':'A','duration_minutes':2147483648}]),
     payload(items=[{'id':'a','title':'A','duration_minutes':10,'speaker_id':'unknown'}]),
     payload(items=[{'id':'a','title':'A','duration_minutes':10}]*2),
     payload(items=[{'id':str(i),'title':'A','duration_minutes':10} for i in range(51)]),
-    payload(items=[{'id':str(i),'title':'A','duration_minutes':240} for i in range(7)]),
+    payload(event_date='9999-12-31'),
 ])
 def test_rejects_invalid_dates_durations_speakers_and_overlong_or_duplicate_sequences(data):
     c=client(); p=create(c)
@@ -78,7 +78,7 @@ def test_model_reuses_sequences_with_new_ids_date_and_no_previous_speakers():
     assert all('speaker' not in item for item in template['rundown']['items'])
     copied=create(c,template_id=template['id'],start_date='2026-11-01',end_date='2026-11-10')
     plan=copied['rundown']
-    assert plan['event_date'] == '2026-11-10' and plan['start_time'] == '23:30'
+    assert plan['event_date'] == '2026-11-01' and plan['start_time'] == '23:30'
     assert len(plan['items']) == 2 and all(item['speaker'] is None for item in plan['items'])
     assert plan['items'][0]['id'] != 'welcome' and plan['items'][0]['notes'] == 'Tester le micro'
     assert 'rundown' not in c.get('/api/animateur/projects/workspace/overview').json()['projects'][0]
@@ -90,3 +90,28 @@ def test_empty_schedule_clears_entries_and_global_responsable_can_edit():
     assert saved.status_code == 200
     empty=c.put(f'/api/animateur/projects/{p["id"]}/rundown',json=payload(items=[],expected_updated_at=saved.json()['rundown']['updated_at']))
     assert empty.status_code == 200 and empty.json()['rundown']['items'] == []
+
+
+
+def test_a_single_sequence_and_the_whole_rundown_can_last_several_days():
+    c=client(); p=create(c,start_date='2026-10-27',end_date='2026-11-15')
+    data=payload(items=[{'id':'contest','title':'Concours communautaire','duration_minutes':3*1440+120},
+                        {'id':'voting','title':'Votes','duration_minutes':2*1440}])
+    result=c.put(f'/api/animateur/projects/{p["id"]}/rundown',json=data)
+    assert result.status_code == 200,result.text
+    assert result.json()['rundown']['items'][0]['duration_minutes'] == 4440
+    stored=c.get(f'/api/animateur/projects/{p["id"]}').json()['rundown']
+    assert sum(item['duration_minutes'] for item in stored['items']) == 7320
+    template=c.post(f'/api/animateur/projects/{p["id"]}/template',json={'name':'Concours sur plusieurs jours'}).json()
+    copied=create(c,template_id=template['id'],start_date='2026-12-28',end_date='2027-01-15')
+    assert copied['rundown']['event_date'] == '2026-12-28'
+    assert copied['rundown']['items'][0]['duration_minutes'] == 4440
+
+
+def test_model_cannot_generate_a_rundown_beyond_the_calendar_date_range():
+    c=client(); p=create(c)
+    assert c.put(f'/api/animateur/projects/{p["id"]}/rundown',json=payload(items=[{'id':'a','title':'Longue séquence','duration_minutes':3*1440}])).status_code == 200
+    template=c.post(f'/api/animateur/projects/{p["id"]}/template',json={'name':'Trois jours'}).json()
+    result=c.post('/api/animateur/projects',json={'title':'Hors plage','start_date':'9999-12-31','template_id':template['id']})
+    assert result.status_code == 422
+    assert h.run(h.db.projects.count_documents({})) == 1

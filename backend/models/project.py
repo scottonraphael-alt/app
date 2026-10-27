@@ -45,7 +45,7 @@ class ProjectReview(BaseModel):
 class RundownStepInput(BaseModel):
     id: str = Field(min_length=1, max_length=80)
     title: str = Field(min_length=1, max_length=160)
-    duration_minutes: int = Field(ge=1, le=240, strict=True)
+    duration_minutes: int = Field(ge=1, le=2147483647, strict=True)
     speaker_id: str | None = Field(default=None, max_length=80)
     notes: str = Field(default="", max_length=1500)
 
