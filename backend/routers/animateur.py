@@ -12,7 +12,7 @@ from typing import Literal
 
 from config import DISCORD_ANIMATEUR_ROLE_ID
 from database import db
-from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCreate, ChecklistItem
+from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCreate, ChecklistItem, RundownStepInput
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.audit_service import log_auth_event
 from services.project_audit import ProjectAuditRoute
@@ -156,7 +156,7 @@ async def search_animateur_members(_: AuthenticatedHelper = Depends(current_proj
 
 @router.get("")
 async def list_projects(_: AuthenticatedHelper = Depends(current_project_access)):
-    return await db.projects.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return await db.projects.find({}, {"_id": 0, "rundown": 0}).sort("created_at", -1).to_list(500)
 
 
 @router.get("/{project_id}", response_model=Project)
@@ -215,6 +215,10 @@ async def create_project(
         "updated_at": now,
     }
 
+    if template and template.get("rundown", {}).get("items"):
+        project["rundown"] = {"event_date": end_date or start_date, "start_time": template["rundown"].get("start_time", "20:00"),
+                              "items": [{**item, "id": str(uuid4()), "speaker": None} for item in template["rundown"]["items"]],
+                              "updated_at": now, "updated_by": identity}
     initial_tasks = instantiate_tasks(template, project["id"], identity, start_date, end_date, now) if template else []
     try:
         await db.projects.insert_one(project)
@@ -885,7 +889,7 @@ class WorkspaceComment(BaseModel):
 
 @router.get("/workspace/overview")
 async def workspace_overview(helper: AuthenticatedHelper = Depends(current_project_editor)):
-    projects = await db.projects.find({}, {"_id": 0, "content_markdown": 0, "review": 0}).sort("updated_at", -1).to_list(500)
+    projects = await db.projects.find({}, {"_id": 0, "content_markdown": 0, "review": 0, "rundown": 0}).sort("updated_at", -1).to_list(500)
     ids = [p["id"] for p in projects]
     # Aggregate in MongoDB; no per-project request and no rich-text / file payload.
     summaries = await db.project_tasks.aggregate([
@@ -1000,10 +1004,14 @@ async def workspace_remove_member(project_id: str, member_id: str, request: Requ
         raise HTTPException(status_code=409, detail="Le créateur reste membre du projet.")
     if await db.project_tasks.count_documents({"project_id": project_id, "assignee.id": member_id, "status": {"$ne": "valide"}}):
         raise HTTPException(status_code=409, detail="Réattribuez les tâches ouvertes de ce membre avant de le retirer.")
+    if any((item.get("speaker") or {}).get("id") == member_id for item in (project.get("rundown") or {}).get("items", [])):
+        raise HTTPException(status_code=409, detail="Réattribuez les séquences du déroulé de ce membre avant de le retirer.")
     if not any(m["id"] == member_id for m in project.get("members", [])):
         raise HTTPException(status_code=404, detail="Membre introuvable.")
     updates = {"members": [m for m in project["members"] if m["id"] != member_id], "updated_at": _now()}
-    await db.projects.update_one({"id": project_id}, {"$set": updates})
+    result = await db.projects.update_one({"id": project_id, "updated_at": project.get("updated_at")}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Le projet a changé. Rechargez-le avant de retirer ce membre.")
     await log_auth_event("project.member.removed", request, helper=helper, status_code=200,
                          details={"project_id": project_id, "project_title": project.get("title"), "member_id": member_id,
                                   "member_username": next((m.get("display_name") or m.get("username") for m in project.get("members", []) if m["id"] == member_id), member_id)})
@@ -1158,6 +1166,9 @@ async def save_project_template(project_id: str, payload: TemplateSave, request:
     template = {"id": str(uuid4()), "name": name, "description": project.get("description", ""),
                 "content_markdown": project.get("content_markdown", ""), "tags": project.get("tags", []),
                 "created_by": _helper_identity(helper), "created_at": _now(),
+                "rundown": {"start_time": (project.get("rundown") or {}).get("start_time", "20:00"),
+                            "items": [{"title": item["title"], "duration_minutes": item["duration_minutes"], "notes": item.get("notes", "")}
+                                      for item in (project.get("rundown") or {}).get("items", [])]},
                 "tasks": [{"title": task["title"], "description": task.get("description", ""), "priority": task.get("priority", "normale"),
                            "offset_days": (date.fromisoformat(task.get("due_date") or anchor.isoformat()) - anchor).days,
                            "checklist": [item["title"] for item in task.get("checklist", [])]} for task in tasks]}
@@ -1211,4 +1222,45 @@ async def save_project_review(project_id: str, payload: ReviewSave, request: Req
     await log_auth_event("project.review.updated", request, helper=helper, status_code=200,
                          details={"project_id": project_id, "project_title": project["title"], "title": project["title"],
                                   "before": {key: previous.get(key) for key in fields}, "after": {key: review[key] for key in fields}})
+    return Project(**{**project, **updates})
+
+
+class RundownSave(BaseModel):
+    event_date: date | None = None
+    start_time: str = Field(default="20:00", pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    items: list[RundownStepInput] = Field(default_factory=list, max_length=50)
+    expected_updated_at: str | None = Field(default=None, max_length=80)
+
+
+@router.put("/{project_id}/rundown", response_model=Project)
+async def save_project_rundown(project_id: str, payload: RundownSave, request: Request,
+                               helper: AuthenticatedHelper = Depends(current_project_editor)):
+    project = await _get_project(project_id)
+    await _ensure_project_manager(project, helper)
+    _ensure_active(project)
+    previous = project.get("rundown") or {}
+    if previous.get("updated_at") != payload.expected_updated_at:
+        raise HTTPException(status_code=409, detail="Le déroulé a changé. Rechargez-le avant de le modifier.")
+    if len({item.id for item in payload.items}) != len(payload.items):
+        raise HTTPException(status_code=422, detail="Chaque séquence doit avoir un identifiant unique.")
+    if sum(item.duration_minutes for item in payload.items) > 1440:
+        raise HTTPException(status_code=422, detail="Un déroulé ne peut pas dépasser 24 heures.")
+    members = {member["id"]: member for member in project.get("members", [])}
+    items = []
+    for item in payload.items:
+        if item.speaker_id is not None and item.speaker_id not in members:
+            raise HTTPException(status_code=422, detail="L'intervenant doit faire partie de l'équipe du projet.")
+        items.append({"id": item.id, "title": item.title, "duration_minutes": item.duration_minutes,
+                      "notes": item.notes.strip(), "speaker": members.get(item.speaker_id)})
+    rundown = {"event_date": payload.event_date.isoformat() if payload.event_date else None,
+               "start_time": payload.start_time, "items": items, "updated_at": _now(), "updated_by": _helper_identity(helper)}
+    updates = {"rundown": rundown, "updated_at": rundown["updated_at"]}
+    result = await db.projects.update_one({"id": project_id, "rundown.updated_at": payload.expected_updated_at,
+                                          "updated_at": project.get("updated_at")}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Le projet a changé. Rechargez-le avant de modifier le déroulé.")
+    fields = ("event_date", "start_time", "items")
+    await log_auth_event("project.rundown.updated", request, helper=helper, status_code=200,
+                         details={"project_id": project_id, "project_title": project["title"], "title": project["title"],
+                                  "before": {key: previous.get(key) for key in fields}, "after": {key: rundown[key] for key in fields}})
     return Project(**{**project, **updates})

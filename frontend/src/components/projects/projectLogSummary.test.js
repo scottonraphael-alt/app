@@ -25,3 +25,7 @@ it('décrit les cases cochées et les changements du bilan',()=>{
   const review=projectLogSummary('project.review.updated',{title:'Soirée',before:{attendance:null},after:{attendance:0,successes:'Un bon accueil'}});
   expect(review.text).toContain('le bilan du projet');expect(review.extras).toContainEqual(['Participants','non renseigné → 0']);
 });
+it('décrit le changement d’heure et des séquences du déroulé',()=>{
+  const result=projectLogSummary('project.rundown.updated',{title:'Soirée',before:{start_time:'20:00',items:[]},after:{start_time:'21:00',items:[{title:'Accueil',duration_minutes:10,speaker:{username:'Alex'}}]}});
+  expect(result.text).toContain('le déroulé du projet');expect(result.extras).toContainEqual(['Heure de départ','20:00 → 21:00']);expect(result.extras.find(([label])=>label==='Séquences')[1]).toContain('Accueil (10 min · Alex)');
+});

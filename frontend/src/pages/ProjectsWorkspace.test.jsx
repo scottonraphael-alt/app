@@ -247,3 +247,7 @@ it('journalise les interactions et marque les tâches bloquées dans les deux vu
   await act(async()=>outside.click());outside.remove();
   expect(api.post).toHaveBeenCalledTimes(count);
 });
+it('ouvre le nouvel onglet Déroulé dans la fiche du projet',async()=>{
+  await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+  await click('Déroulé');expect(container.textContent).toContain('Le fil de l’animation');expect(container.textContent).toContain('Préparer le déroulé');
+});

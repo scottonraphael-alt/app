@@ -55,3 +55,13 @@ Les tâches générées sont attribuées au créateur et repartent à faire, ave
 **Bilan.** L'onglet Bilan rassemble date, nombre de participants (zéro est une valeur valide), réussites, pistes d'amélioration et idées pour la prochaine fois. Le pilote et les responsables globaux peuvent le préparer et le modifier sur un projet actif ou terminé. Une archive est en lecture seule jusqu'à restauration. Le bilan porte auteur et date de modification et refuse une écriture basée sur une version dépassée. Le formulaire conserve le brouillon en cas d'erreur et permet de recharger le bilan en cas de conflit.
 
 Les nouveaux gestes sont inclus dans les interactions d'interface et les logs métier : modèle enregistré/appliqué/supprimé, étape cochée/décochée, structure modifiée et bilan avant/après. Aucun nouveau secret, rôle Discord ou variable d'environnement n'est nécessaire. Déployer frontend et backend ensemble.
+
+## Déroulé de l’animation
+
+L'onglet Déroulé propose une chronologie paginée par huit séquences, un éditeur à hauteur limitée, une trame accueil/animation/clôture et un export texte. Le pilote et les responsables globaux modifient date, heure de départ (Paris), ordre, titres, durées, intervenants et consignes. Les horaires sont recalculés par addition des durées ; le passage à minuit est signalé par J+1. Il s'agit d'un programme prévisionnel en heures civiles, sans minuteur ou déclenchement automatique.
+
+Le serveur limite le plan à 50 séquences, 1 à 240 minutes chacune et 24 heures au total. Les identifiants sont uniques et chaque intervenant choisi est vérifié dans l'équipe. Réattribuer les séquences est nécessaire avant de retirer leur intervenant du projet. Le projet actif est modifiable ; les projets terminés ou archivés restent consultables et exportables jusqu'à réouverture/restauration.
+
+`PUT /projects/{id}/rundown` refuse un conflit de version du déroulé ou une modification concurrente du projet. Les ajouts, suppressions, réordonnancements et consignes sont audités avant/après, avec leur auteur ; les interactions restent capturées dans les logs d'interface. Le brouillon est conservé en cas d'erreur et un bouton permet de recharger la version du serveur. Aucun script de migration n'est nécessaire pour les anciens projets.
+
+Les modèles personnalisés conservent l'heure et la structure du déroulé ; à l'application, la date reprend la fin prévue du nouveau projet (ou son début), les identifiants sont régénérés et les intervenants restent à attribuer. Aucun contenu de déroulé n'est ajouté aux chargements groupés du carnet ou du calendrier. Déployer le backend et le frontend ensemble.

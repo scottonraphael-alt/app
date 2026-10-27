@@ -62,6 +62,7 @@ export function filterProjects(projects, {
   return projects.filter(p => (status === 'tous' || (status === 'actifs' ? p.status === 'en_cours' : p.status === status)) && (!mine || p.created_by?.id === helperId || p.members?.some(m => m.id === helperId)) && (!priority || (p.priority || 'normale') === priority) && (!term || `${p.title} ${p.description} ${(p.tags || []).join(' ')} ${p.members?.map(personName).join(' ')}`.toLocaleLowerCase('fr').includes(term))).sort((a, b) => sort === 'date' ? (a.end_date || '9999').localeCompare(b.end_date || '9999') : sort === 'title' ? a.title.localeCompare(b.title, 'fr') : sort === 'priority' ? weight[a.priority || 'normale'] - weight[b.priority || 'normale'] || a.title.localeCompare(b.title, 'fr') : String(b.updated_at).localeCompare(String(a.updated_at)));
 }
 export const ACTIVITY_LABELS = {
+  'project.rundown.updated':'a mis à jour le déroulé de l’animation',
   'project.template.created':'a enregistré un modèle',
   'project.template.applied':'a utilisé un modèle',
   'project.task.checklist.updated':'a mis à jour une étape de checklist',

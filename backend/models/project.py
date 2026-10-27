@@ -42,6 +42,38 @@ class ProjectReview(BaseModel):
     updated_by: ProjectMember
 
 
+class RundownStepInput(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=160)
+    duration_minutes: int = Field(ge=1, le=240, strict=True)
+    speaker_id: str | None = Field(default=None, max_length=80)
+    notes: str = Field(default="", max_length=1500)
+
+    @field_validator("title")
+    @classmethod
+    def non_blank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Le titre de la séquence est requis.")
+        return value
+
+
+class RundownStep(BaseModel):
+    id: str
+    title: str
+    duration_minutes: int
+    speaker: ProjectMember | None = None
+    notes: str = ""
+
+
+class ProjectRundown(BaseModel):
+    event_date: date | None = None
+    start_time: str = "20:00"
+    items: list[RundownStep] = Field(default_factory=list)
+    updated_at: str
+    updated_by: ProjectMember
+
+
 class ProjectCreate(BaseModel):
     template_id: str | None = Field(default=None, max_length=80)
     title: str = Field(min_length=1, max_length=160)
@@ -82,6 +114,7 @@ class Project(BaseModel):
     created_by: ProjectMember
     template_id: str | None = None
     review: ProjectReview | None = None
+    rundown: ProjectRundown | None = None
     created_at: datetime
     updated_at: datetime
 

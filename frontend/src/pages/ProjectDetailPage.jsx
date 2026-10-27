@@ -9,12 +9,13 @@ import SummaryReader from '../components/SummaryReader';
 import AddMemberModal from '../components/AddMemberModal';
 import { Avatar, Empty, Field, Panel, Priority, ProjectPage } from '../components/projects/ProjectUI';
 import ProjectTasksList from '../components/projects/ProjectTasksList';
+import ProjectRundown from '../components/projects/ProjectRundown';
 import ProjectReview from '../components/projects/ProjectReview';
 import ProjectTemplateSave from '../components/projects/ProjectTemplateSave';
 import ProjectForm from '../components/projects/ProjectForm';
 import ProjectTaskDialog, { TaskForm } from '../components/projects/ProjectTaskDialog';
 import { ACTIVITY_LABELS, dateLabel, isLate, personName, progress, PROJECT_STATUS, TASK_STATUS, taskCounts } from '../components/projects/projectUtils';
-const TABS = [['overview', 'Vue d’ensemble', LayoutGrid], ['tasks', 'Tâches', ClipboardList], ['brief', 'Le brief', FileText], ['team', 'L’équipe', Users], ['files', 'Fichiers', Download], ['review', 'Bilan', CheckCheck], ['activity', 'Journal', MessageSquare]];
+const TABS = [['overview', 'Vue d’ensemble', LayoutGrid], ['tasks', 'Tâches', ClipboardList], ['brief', 'Le brief', FileText], ['team', 'L’équipe', Users], ['files', 'Fichiers', Download], ['rundown', 'Déroulé', Clock3], ['review', 'Bilan', CheckCheck], ['activity', 'Journal', MessageSquare]];
 export default function ProjectDetailPage({
   helper,
   isResponsableGlobal
@@ -175,7 +176,7 @@ export default function ProjectDetailPage({
         setProject(r.data);
         toast.success('Bienvenue dans l’équipe !');
       })}><UserPlus size={16} /> Rejoindre</button></div>}
-    <nav className="pj-tabs pj-detail-tabs" aria-label="Rubriques du projet">{TABS.filter(([key]) => key !== 'activity' || canEdit).map(([key, label, Icon]) => <button key={key} className={tab === key ? 'is-active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => {
+    <nav className="pj-tabs pj-detail-tabs" aria-label="Rubriques du projet">{TABS.filter(([key]) => key !== 'activity' || canEdit).map(([key, label, Icon]) => <button key={key} data-project-tab={key} className={tab === key ? 'is-active' : ''} aria-current={tab === key ? 'page' : undefined} onClick={() => {
         if (editingBrief && tab === 'brief' && key !== 'brief' && !projectConfirm('Quitter le brief sans enregistrer ?')) return;
         if (key !== 'brief') setEditingBrief(false);
         setTab(key);
@@ -213,6 +214,7 @@ export default function ProjectDetailPage({
               setResources(v => v.filter(r => r.id !== resource.id));
             });
           }}><Trash2 size={16} /></button>}</div>)}</div>}</Panel>}
+    {tab === 'rundown' && <ProjectRundown project={project} manager={manager} onSaved={setProject}/>}
     {tab === 'review' && <ProjectReview project={project} manager={manager} onSaved={setProject}/>}
     {tab === 'activity' && canEdit && <Panel title="Le fil de l’équipe" intro="Partagez une décision ou un point d’étape. Les dernières actions complètent ce journal ; les responsables disposent aussi des logs IRIS.">{writable && <form className="pj-comment" onSubmit={e => {
         e.preventDefault();
