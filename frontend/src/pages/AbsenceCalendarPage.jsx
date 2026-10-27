@@ -1,504 +1,686 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  addDays,
-  addMonths,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isBefore,
-  isSameDay,
-  isSameMonth,
-  isWithinInterval,
-  parseISO,
-  startOfMonth,
-  startOfWeek,
-  subMonths,
-} from "date-fns";
-import { fr } from "date-fns/locale";
-import { Link } from "react-router-dom";
-import {
-  ArrowUpRight,
-  CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
-  FilePlus2,
-  FileText,
-  Plus,
-  RadioTower,
-  Trash2,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { CalendarDays, CircleAlert, Lock, Pencil, RefreshCw, Settings2, Trash2, UserMinus } from "lucide-react";
 
-import { api, getErrorMessage } from "../api/client";
+import AgendaHomeLink from "@/components/agenda/AgendaHomeLink";
+import HelperAvatar from "@/components/agenda/HelperAvatar";
+import ReminderSettingsDialog from "@/components/agenda/ReminderSettingsDialog";
+import useAgendaNoNav from "@/components/agenda/useAgendaNoNav";
+import {
+  agendaQueries,
+  deleteAbsence,
+  deleteEntry,
+  deleteMeeting,
+  elementQuery,
+  invalidateAfterAbsenceChange,
+  invalidateAgenda,
+  readStoredFilters,
+  returnFromAbsence,
+  writeStoredFilters,
+} from "@/components/agenda/agendaApi";
+import { LIST_DAYS, TYPE_ORDER } from "@/components/agenda/agendaConstants";
+import { agendaErrorMessage, errorStatus, isNotFound } from "@/components/agenda/agendaErrors";
+import {
+  absenceGroups,
+  absencePeriodLabel,
+  anchorFromParam,
+  applyFilters,
+  countByType,
+  extendListDays,
+  feedRange,
+  findItem,
+  helperName,
+  isFilterActive,
+  myPresence,
+  normalizeByKind,
+  normalizeFeed,
+  parseElementParam,
+  periodTitle,
+  shiftAnchor,
+  toggleFilterType,
+  viewFromParam,
+} from "@/components/agenda/calendarModel";
+import { isIsoDate, resolveToday } from "@/components/agenda/dateUtils";
+import AbsenceDialog from "@/components/agenda/calendar/AbsenceDialog";
+import AddMenu from "@/components/agenda/calendar/AddMenu";
+import AgendaListView from "@/components/agenda/calendar/AgendaListView";
+import CalendarFilters from "@/components/agenda/calendar/CalendarFilters";
+import CalendarToolbar from "@/components/agenda/calendar/CalendarToolbar";
+import DayPopover from "@/components/agenda/calendar/DayPopover";
+import EntryDialog from "@/components/agenda/calendar/EntryDialog";
+import ItemDetailDrawer from "@/components/agenda/calendar/ItemDetailDrawer";
+import MonthView from "@/components/agenda/calendar/MonthView";
+import QuickAddPopover from "@/components/agenda/calendar/QuickAddPopover";
+import { NextEventsCard, RemindersCard } from "@/components/agenda/calendar/SideCards";
+import WeekView from "@/components/agenda/calendar/WeekView";
+import { defaultAddDate, restoreFocus, useMediaQuery } from "@/components/agenda/calendar/calendarHelpers";
+import MeetingDialog from "@/components/agenda/meetings/MeetingDialog";
+import "@/components/agenda/calendar/agenda-calendar.css";
 
-const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+let quickCounter = 0;
 
-function toIsoDate(date) {
-  return format(date, "yyyy-MM-dd");
-}
-
-function capitalize(text) {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-
-
-function HelperAvatar({ helper, size = 20 }) {
-  const [imageError, setImageError] = useState(false);
-  const label = helper?.display_name || helper?.username || "?";
-  const avatarUrl = helper?.avatar_url;
-
-  if (!avatarUrl || imageError) {
-    return (
-      <span
-        className="helper-avatar-fallback"
-        style={{
-          width: size,
-          height: size,
-          lineHeight: `${size}px`,
-          borderRadius: "50%",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
-        title={label}
-      >
-        {label.charAt(0).toUpperCase()}
-      </span>
-    );
-  }
-
+function CalendarSkeleton() {
   return (
-    <img
-      src={avatarUrl}
-      alt={label}
-      width={size}
-      height={size}
-      className="helper-avatar-image"
-      style={{
-        borderRadius: "50%",
-        objectFit: "cover",
-        display: "block",
-        overflow: "hidden",
-      }}
-      onError={() => setImageError(true)}
-    />
+    <div className="ag-cal-skeleton" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <span key={index} className="ag-skeleton" />
+      ))}
+    </div>
   );
 }
 
-export default function AbsenceCalendarPage({ isResponsable, currentHelperId }) {
-  const [absences, setAbsences] = useState([]);
-  const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [mode, setMode] = useState("view"); // "view" | "absence" | "meeting"
-  const [selection, setSelection] = useState(null);
-  const [viewedDay, setViewedDay] = useState(null);
-  const [reason, setReason] = useState("");
-  const [meetingDay, setMeetingDay] = useState(null);
-  const [meetingTitle, setMeetingTitle] = useState("");
-  const [meetingAgenda, setMeetingAgenda] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+function PanelError({ message, onRetry }) {
+  return (
+    <div className="ag-error" role="alert">
+      <span className="ag-error-text">
+        <CircleAlert size={15} aria-hidden="true" />
+        {message}
+      </span>
+      {onRetry ? (
+        <button type="button" className="ag-error-retry" onClick={onRetry}>
+          <RefreshCw size={13} aria-hidden="true" />
+          Réessayer
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
+// Calendrier du staff : absences, réunions et autres entrées (vues Mois, Semaine et Liste).
+export default function AbsenceCalendarPage({ isResponsable = false, currentHelperId = null }) {
+  useAgendaNoNav();
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const narrow = useMediaQuery("(max-width: 899px)");
+  const phone = useMediaQuery("(max-width: 639px)");
+
+  const [filters, setFilters] = useState(() => readStoredFilters());
   useEffect(() => {
-    let isMounted = true;
-    Promise.all([api.get("/staff/calendrier"), api.get("/staff/meetings")])
-      .then(([absencesResponse, meetingsResponse]) => {
-        if (!isMounted) return;
-        setAbsences(absencesResponse.data);
-        setMeetings(meetingsResponse.data);
-      })
-      .catch((error) => {
-        toast.error(getErrorMessage(error));
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    writeStoredFilters(filters);
+  }, [filters]);
 
-  const days = useMemo(() => {
-    const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 1 });
-    const end = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 1 });
-    const result = [];
-    let cursor = start;
-    while (cursor <= end) {
-      result.push(cursor);
-      cursor = addDays(cursor, 1);
+  const [listState, setListState] = useState({ anchor: "", days: LIST_DAYS });
+  const [dialog, setDialog] = useState(null);
+  const [quick, setQuick] = useState(null);
+  const [dayPop, setDayPop] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [busyKey, setBusyKey] = useState("");
+
+  // Données de la page. « Aujourd'hui » vient du serveur (date de Paris), avec un repli calculé à Paris.
+  const upcomingQuery = useQuery(agendaQueries.upcoming());
+  const settingsQuery = useQuery(agendaQueries.settings());
+  const today = resolveToday(upcomingQuery.data?.today);
+
+  const view = viewFromParam(searchParams.get("vue"), { narrow });
+  const anchor = anchorFromParam(searchParams.get("date"), today);
+  const listDays = listState.anchor === anchor ? listState.days : LIST_DAYS;
+  const range = feedRange(view, anchor, { listDays });
+  const feedQuery = useQuery(agendaQueries.feed(range?.start, range?.end));
+
+  const viewerId = feedQuery.data?.viewer?.id ?? upcomingQuery.data?.viewer?.id ?? currentHelperId ?? null;
+
+  const allItems = useMemo(() => normalizeFeed(feedQuery.data, { viewerId }), [feedQuery.data, viewerId]);
+  const visibleItems = useMemo(() => applyFilters(allItems, filters, viewerId), [allItems, filters, viewerId]);
+  const counts = useMemo(
+    () =>
+      countByType(applyFilters(allItems, { types: TYPE_ORDER, onlyMine: filters.onlyMine }, viewerId), {
+        from: range?.start,
+        to: range?.end,
+      }),
+    [allItems, filters.onlyMine, range?.end, range?.start, viewerId],
+  );
+
+  const patchParams = useCallback(
+    (changes) => {
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value === null || value === undefined || value === "") next.delete(key);
+            else next.set(key, value);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // ---- Élément ouvert dans le tiroir (?element=kind:id) ----
+
+  const elementParam = searchParams.get("element");
+  const element = useMemo(() => parseElementParam(elementParam), [elementParam]);
+  const feedItem = element ? findItem(allItems, element.key) : null;
+  const detailQuery = useQuery({
+    ...elementQuery(element),
+    enabled: Boolean(element) && !feedItem && !feedQuery.isPending,
+  });
+  const fetchedItem = useMemo(
+    () => (element && detailQuery.data ? normalizeByKind(element.kind, detailQuery.data, { today, viewerId }) : null),
+    [detailQuery.data, element, today, viewerId],
+  );
+  const selectedItem = feedItem || fetchedItem;
+
+  const handledParam = useRef("");
+  useEffect(() => {
+    if (!elementParam) {
+      handledParam.current = "";
+      return;
     }
-    return result;
-  }, [currentMonth]);
+    const failed = Boolean(element) && !feedItem && detailQuery.isError;
+    if ((element && !failed) || handledParam.current === elementParam) return;
+    handledParam.current = elementParam;
+    toast.error(!element || isNotFound(detailQuery.error) ? "Élément introuvable." : agendaErrorMessage(detailQuery.error));
+    patchParams({ element: null });
+  }, [detailQuery.error, detailQuery.isError, element, elementParam, feedItem, patchParams]);
 
-  const absencesByDay = useMemo(() => {
-    const map = new Map();
-    for (const entry of absences) {
-      const start = parseISO(entry.start_date);
-      const end = parseISO(entry.end_date);
-      for (const day of days) {
-        const withinRange =
-          isWithinInterval(day, { start, end }) || isSameDay(day, start) || isSameDay(day, end);
-        if (withinRange) {
-          const key = toIsoDate(day);
-          if (!map.has(key)) map.set(key, []);
-          map.get(key).push(entry);
-        }
+  // Lien partagé sans `date` : la vue se place sur la date de l'élément une fois chargé.
+  const jumpedTo = useRef("");
+  const hasDateParam = Boolean(searchParams.get("date"));
+  useEffect(() => {
+    if (!fetchedItem || feedItem || hasDateParam || jumpedTo.current === fetchedItem.key) return;
+    jumpedTo.current = fetchedItem.key;
+    patchParams({ date: fetchedItem.start });
+  }, [fetchedItem, feedItem, hasDateParam, patchParams]);
+
+  const triggerRef = useRef(null);
+  const openItem = useCallback(
+    (item) => {
+      triggerRef.current = typeof document !== "undefined" ? document.activeElement : null;
+      setDayPop(null);
+      patchParams({ element: item.key });
+    },
+    [patchParams],
+  );
+  const openElement = useCallback(
+    (kind, id) => {
+      triggerRef.current = typeof document !== "undefined" ? document.activeElement : null;
+      patchParams({ element: `${kind}:${id}` });
+    },
+    [patchParams],
+  );
+  const closeItem = useCallback(() => patchParams({ element: null }), [patchParams]);
+
+  // ---- Navigation ----
+
+  const goTo = useCallback((iso) => patchParams({ date: iso === today ? null : iso }), [patchParams, today]);
+  const handleViewChange = (next) => patchParams({ vue: next });
+  const handlePrevious = () => goTo(shiftAnchor(view, anchor, -1, { listDays }));
+  const handleNext = () => goTo(shiftAnchor(view, anchor, 1, { listDays }));
+
+  const nextListDays = view === "liste" ? extendListDays(listDays) : null;
+  const handleExtend = () => {
+    if (nextListDays) setListState({ anchor, days: nextListDays });
+  };
+
+  // Une création hors de la période affichée : la vue se place sur sa date.
+  const ensureVisible = useCallback(
+    (iso) => {
+      if (!range || !isIsoDate(iso)) return;
+      if (iso < range.start || iso > range.end) goTo(iso);
+    },
+    [goTo, range],
+  );
+
+  // ---- Filtres ----
+
+  const handleToggleType = (type) => setFilters((old) => toggleFilterType(old, type));
+  const handleToggleMine = (onlyMine) => setFilters((old) => ({ ...old, onlyMine }));
+  const handleResetFilters = () => setFilters({ types: [...TYPE_ORDER], onlyMine: false });
+  const showAllAbsences = () => {
+    setFilters({ types: ["absence"], onlyMine: false });
+    patchParams({ vue: "liste", date: null });
+  };
+
+  // ---- Ajouts et modifications ----
+
+  const handleAddSelect = (type) => {
+    const date = defaultAddDate(range, anchor, today);
+    if (type === "absence") setDialog({ kind: "absence", defaults: { start: date } });
+    else if (type === "reunion") setDialog({ kind: "meeting", date });
+    else setDialog({ kind: "entry", type, defaults: { start: date } });
+  };
+
+  const handleQuickAdd = (request) => {
+    quickCounter += 1;
+    setDayPop(null);
+    setQuick({ ...request, nonce: quickCounter });
+  };
+
+  const handleOpenDay = (day, anchorEl) => setDayPop({ day, anchorEl: anchorEl || null });
+
+  const handleAddDay = (day) => {
+    quickCounter += 1;
+    setQuick({ start: day, end: day, fromRange: false, anchorEl: dayPop?.anchorEl || null, nonce: quickCounter });
+    setDayPop(null);
+  };
+
+  const handleOpenFull = (values) => {
+    if (values.type === "absence") {
+      setDialog({
+        kind: "absence",
+        defaults: { start: values.start, end: values.end, openEnded: values.openEnded, reason: values.reason },
+      });
+    } else if (values.type === "reunion") {
+      setDialog({ kind: "meeting", date: values.start });
+    } else {
+      setDialog({
+        kind: "entry",
+        type: values.type,
+        defaults: {
+          title: values.title,
+          start: values.start,
+          end: values.end,
+          allDay: values.allDay,
+          startTime: values.startTime,
+          endTime: values.endTime,
+        },
+      });
+    }
+  };
+
+  const handleEdit = (item, detail) => {
+    if (item.kind === "absence") setDialog({ kind: "absence", absence: item.raw });
+    else if (item.kind === "entry") setDialog({ kind: "entry", entry: item.raw });
+    else if (detail) setDialog({ kind: "meeting", meeting: detail });
+  };
+  const handleDuplicate = (item) => setDialog({ kind: "entry", template: item.raw });
+  const closeDialog = (next) => {
+    if (!next) setDialog(null);
+  };
+
+  // ---- Actions sur les éléments ----
+
+  const removeAbsence = useCallback(
+    async (absenceId) => {
+      if (!window.confirm("Supprimer cette absence ?")) return;
+      setBusyKey(`absence:${absenceId}`);
+      try {
+        await deleteAbsence(absenceId);
+        toast.success("Absence supprimée.");
+        if (elementParam === `absence:${absenceId}`) closeItem();
+        await invalidateAfterAbsenceChange(queryClient);
+      } catch (error) {
+        toast.error(agendaErrorMessage(error));
+      } finally {
+        setBusyKey("");
       }
-    }
-    return map;
-  }, [absences, days]);
+    },
+    [closeItem, elementParam, queryClient],
+  );
 
-  const meetingsByDay = useMemo(() => {
-    const map = new Map();
-    for (const meeting of meetings) {
-      if (!meeting.meeting_date) continue;
-      if (!map.has(meeting.meeting_date)) map.set(meeting.meeting_date, []);
-      map.get(meeting.meeting_date).push(meeting);
-    }
-    return map;
-  }, [meetings]);
+  const removeItem = useCallback(
+    async (item) => {
+      if (item.kind === "absence") {
+        await removeAbsence(item.id);
+        return;
+      }
+      const isMeeting = item.kind === "meeting";
+      if (!window.confirm(isMeeting ? "Supprimer cette réunion ?" : "Supprimer cet élément ?")) return;
+      setBusyKey(item.key);
+      try {
+        if (isMeeting) await deleteMeeting(item.id);
+        else await deleteEntry(item.id);
+        toast.success(isMeeting ? "Réunion supprimée." : "Élément supprimé.");
+        if (elementParam === item.key) closeItem();
+        await invalidateAgenda(queryClient);
+      } catch (error) {
+        toast.error(agendaErrorMessage(error));
+      } finally {
+        setBusyKey("");
+      }
+    },
+    [closeItem, elementParam, queryClient, removeAbsence],
+  );
 
-  const resetPanels = () => {
-    setSelection(null);
-    setReason("");
-    setMeetingDay(null);
-    setMeetingTitle("");
-    setMeetingAgenda("");
-  };
+  const returnNow = useCallback(
+    async (absence) => {
+      setBusyKey(`return:${absence.id}`);
+      try {
+        await returnFromAbsence(absence.id);
+        toast.success("Bon retour parmi nous !");
+        await invalidateAfterAbsenceChange(queryClient);
+      } catch (error) {
+        toast.error(agendaErrorMessage(error));
+      } finally {
+        setBusyKey("");
+      }
+    },
+    [queryClient],
+  );
 
-  const enterAbsenceMode = () => {
-    setMode("absence");
-    setViewedDay(null);
-    resetPanels();
-  };
+  // ---- Panneau latéral ----
 
-  const enterMeetingMode = () => {
-    setMode("meeting");
-    setViewedDay(null);
-    resetPanels();
-  };
+  const upcoming = upcomingQuery.data;
+  const groups = useMemo(() => (upcoming ? absenceGroups(upcoming) : []), [upcoming]);
+  const presence = useMemo(
+    () => (upcoming ? myPresence(upcoming.absences_current, viewerId, today) : null),
+    [today, upcoming, viewerId],
+  );
+  const canReturn = Boolean(presence?.absence) && presence.absence.start_date < today;
 
-  const cancelMode = () => {
-    setMode("view");
-    resetPanels();
-  };
+  const forbidden = errorStatus(feedQuery.error) === 403 || errorStatus(upcomingQuery.error) === 403;
 
-  const handleDayClick = (day) => {
-    if (mode === "view") {
-      setViewedDay(day);
-      return;
-    }
-    if (mode === "meeting") {
-      setMeetingDay(day);
-      return;
-    }
-    if (!selection || !selection.start) {
-      setSelection({ start: day, end: day });
-      return;
-    }
-    if (isBefore(day, selection.start)) {
-      setSelection({ start: day, end: day });
-      return;
-    }
-    setSelection({ start: selection.start, end: day });
-  };
+  if (forbidden) {
+    return (
+      <main className="ag-page ag-cal-page">
+        <header className="ag-header">
+          <div>
+            <p className="ag-eyebrow">Espace staff</p>
+            <h1>Calendrier</h1>
+          </div>
+          <div className="ag-header-actions">
+            <AgendaHomeLink />
+          </div>
+        </header>
+        <div className="ag-panel">
+          <div className="ag-empty">
+            <span className="ag-empty-icon">
+              <Lock size={28} aria-hidden="true" />
+            </span>
+            <h3>Cette page est réservée au staff.</h3>
+            <p>Le rôle Discord Staff est nécessaire pour voir le calendrier.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
-  const submitAbsence = async () => {
-    if (!selection) return;
-    setSubmitting(true);
-    try {
-      const response = await api.post("/staff/calendrier", {
-        start_date: toIsoDate(selection.start),
-        end_date: toIsoDate(selection.end),
-        reason,
-      });
-      setAbsences((current) => [...current, response.data]);
-      cancelMode();
-      toast.success("Absence enregistrée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const submitMeeting = async () => {
-    if (!meetingDay || !meetingTitle.trim()) {
-      toast.error("Ajoutez au moins un titre.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const response = await api.post("/staff/meetings", {
-        title: meetingTitle,
-        agenda: meetingAgenda,
-        meeting_date: toIsoDate(meetingDay),
-      });
-      setMeetings((current) => [response.data, ...current]);
-      cancelMode();
-      toast.success("Réunion ajoutée.");
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const removeAbsence = async (absenceId) => {
-    try {
-      await api.delete(`/staff/calendrier/${absenceId}`);
-      setAbsences((current) => current.filter((entry) => entry.id !== absenceId));
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const upcoming = [...absences].sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const viewedDayAbsences = viewedDay ? absencesByDay.get(toIsoDate(viewedDay)) || [] : [];
-  const viewedDayMeetings = viewedDay ? meetingsByDay.get(toIsoDate(viewedDay)) || [] : [];
+  const feedLoading = feedQuery.isPending && !feedQuery.data;
+  const feedRefreshing = feedQuery.isFetching && !feedLoading;
 
   return (
-    <section className="page-content staff-page" data-testid="absence-calendar-page">
-      <header className="page-header">
+    <main className="ag-page ag-cal-page">
+      <header className="ag-header">
         <div>
-          <p className="eyebrow">ESPACE STAFF</p>
-          <h1>Calendrier </h1>
+          <p className="ag-eyebrow">Espace staff</p>
+          <h1>Calendrier</h1>
+          <p className="ag-intro">Absences, réunions et temps forts de l'équipe, au même endroit.</p>
+          <div className="ag-header-meta">
+            {presence ? (
+              <span className={`ag-presence ag-presence--${presence.status}`} role="status">
+                <span className="ag-presence-dot" aria-hidden="true" />
+                {presence.label}
+              </span>
+            ) : (
+              <span className="ag-skeleton ag-cal-presence-skeleton" aria-hidden="true" />
+            )}
+            {canReturn ? (
+              <button
+                type="button"
+                className="ag-button ag-button--secondary ag-button--small"
+                disabled={busyKey === `return:${presence.absence.id}`}
+                onClick={() => returnNow(presence.absence)}
+              >
+                Je suis de retour
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="dashboard-actions">
-          {mode === "view" && isResponsable && (
-            <button className="calm-primary-button is-secondary" type="button" onClick={enterMeetingMode} data-testid="enter-meeting-mode-button">
-              <Plus size={17} /> Ajouter une réunion
+        <div className="ag-header-actions">
+          <AgendaHomeLink />
+          {phone ? null : <AddMenu canManage={isResponsable} onSelect={handleAddSelect} />}
+          {isResponsable ? (
+            <button
+              type="button"
+              className="ag-icon-button"
+              aria-label="Réglages des rappels Discord"
+              title="Réglages des rappels Discord"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings2 size={18} aria-hidden="true" />
             </button>
-          )}
-          {mode === "view" && (
-            <button className="calm-primary-button" type="button" onClick={enterAbsenceMode} data-testid="enter-absence-mode-button">
-              <CalendarPlus size={17} /> Entrer une absence
-            </button>
-          )}
-          {mode !== "view" && (
-            <button className="calm-primary-button is-cancel" type="button" onClick={cancelMode}>
-              <X size={17} /> Annuler
-            </button>
-          )}
+          ) : null}
         </div>
       </header>
 
-      <div className="staff-grid">
-        <div className="absence-calendar">
-          <div className="absence-calendar-header">
-            <h2>{capitalize(format(currentMonth, "MMMM yyyy", { locale: fr }))}</h2>
-            <div className="absence-calendar-nav">
-              <button type="button" onClick={() => setCurrentMonth((current) => subMonths(current, 1))} aria-label="Mois précédent">
-                <ChevronLeft size={16} />
-              </button>
-              <button type="button" onClick={() => setCurrentMonth(new Date())}>
-                Aujourd’hui
-              </button>
-              <button type="button" onClick={() => setCurrentMonth((current) => addMonths(current, 1))} aria-label="Mois suivant">
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-
-          {mode === "absence" && (
-            <p className="absence-mode-hint">Sélectionnez une date de début, puis une date de fin (ou cliquez le même jour pour une absence d’un jour).</p>
-          )}
-          {mode === "meeting" && (
-            <p className="absence-mode-hint">Cliquez sur le jour de la réunion à ajouter.</p>
-          )}
-
-          <div className="absence-calendar-weekdays">
-            {WEEKDAYS.map((day) => (
-              <span key={day}>{day}</span>
-            ))}
-          </div>
-
-          <div className="absence-calendar-grid">
-            {days.map((day) => {
-              const key = toIsoDate(day);
-              const dayAbsences = absencesByDay.get(key) || [];
-              const dayMeetings = meetingsByDay.get(key) || [];
-              const inCurrentMonth = isSameMonth(day, currentMonth);
-              const isToday = isSameDay(day, new Date());
-              const isSelected =
-                mode === "absence" &&
-                selection &&
-                isWithinInterval(day, { start: selection.start, end: selection.end });
-              const isMeetingPicked = mode === "meeting" && meetingDay && isSameDay(day, meetingDay);
-              const isViewed = mode === "view" && viewedDay && isSameDay(day, viewedDay);
-
-              const classNames = ["absence-day"];
-              if (!inCurrentMonth) classNames.push("is-outside");
-              if (isToday) classNames.push("is-today");
-              if (isSelected) classNames.push("is-selected");
-              if (isMeetingPicked) classNames.push("is-selected");
-              if (isViewed) classNames.push("is-viewed");
-
-              return (
-                <button type="button" key={key} className={classNames.join(" ")} onClick={() => handleDayClick(day)}>
-                  <span className="absence-day-number">{format(day, "d")}</span>
-                  <span className="absence-day-chips">
-                    {dayAbsences.slice(0, 3).map((entry) => (
-                      <HelperAvatar helper={entry.helper} size={18} key={entry.id} />
-                    ))}
-                    {dayAbsences.length > 3 && <span className="absence-day-chip is-more">+{dayAbsences.length - 3}</span>}
-                  </span>
-                  {dayMeetings.length > 0 && (
-                    <span className="absence-day-events">
-                      {dayMeetings.slice(0, 2).map((meeting) => (
-                        <span className="absence-day-event" key={meeting.id} title={meeting.title}>
-                          {meeting.title}
-                        </span>
-                      ))}
-                      {dayMeetings.length > 2 && <span className="absence-day-event is-more">+{dayMeetings.length - 2}</span>}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {mode === "view" && viewedDay && (
-            <div className="absence-detail-panel">
-              <div>
-                <strong>{capitalize(format(viewedDay, "EEEE d MMMM yyyy", { locale: fr }))}</strong>
-                <button type="button" className="icon-button" onClick={() => setViewedDay(null)} aria-label="Fermer">
-                  <X size={15} />
-                </button>
-              </div>
-
-              {viewedDayAbsences.length === 0 && viewedDayMeetings.length === 0 ? (
-                <p className="resources-empty">Rien de prévu ce jour.</p>
-              ) : (
-                <>
-                  {viewedDayAbsences.length > 0 && (
-                    <div className="absence-detail-list">
-                      {viewedDayAbsences.map((entry) => (
-                        <div className="absence-detail-row" key={entry.id}>
-                          <HelperAvatar helper={entry.helper} size={30} />
-                          <div>
-                            <strong>{entry.helper.display_name || entry.helper.username}</strong>
-                            <small>
-                              {entry.start_date === entry.end_date
-                                ? entry.start_date
-                                : `${entry.start_date} → ${entry.end_date}`}
-                            </small>
-                            {entry.reason && <p>{entry.reason}</p>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {viewedDayMeetings.length > 0 && (
-                    <div className="absence-detail-list">
-                      {viewedDayMeetings.map((meeting) => (
-                        <div className="absence-detail-row absence-meeting-info-row" key={meeting.id}>
-                          <span className="absence-meeting-icon">
-                            <FileText size={16} />
-                          </span>
-                          <div>
-                            <strong>{meeting.title}</strong>
-                            <small>Par {meeting.author.display_name || meeting.author.username}</small>
-                            {meeting.agenda && <p>{meeting.agenda}</p>}
-                            <span className={`meeting-status-badge ${meeting.status === "en_attente_resume" ? "is-pending" : "is-done"}`}>
-                              {meeting.status === "en_attente_resume" ? "En attente de résumé" : "Rédigé"}
-                            </span>
-                          </div>
-                          <Link className="icon-button absence-meeting-open" to={`/staff/meetings/${meeting.id}`} aria-label="Ouvrir la réunion" title="Ouvrir">
-                            <ArrowUpRight size={16} />
-                          </Link>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {mode === "absence" && selection && (
-            <div className="absence-confirm-panel">
-              <div>
-                <strong>
-                  {isSameDay(selection.start, selection.end)
-                    ? format(selection.start, "d MMMM yyyy", { locale: fr })
-                    : `${format(selection.start, "d MMM", { locale: fr })} → ${format(selection.end, "d MMMM yyyy", { locale: fr })}`}
-                </strong>
-                <button type="button" className="icon-button" onClick={() => setSelection(null)} aria-label="Réinitialiser la sélection">
-                  <X size={15} />
-                </button>
-              </div>
-              <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Motif (optionnel)" maxLength={500} rows={2} />
-              <button className="calm-primary-button" type="button" onClick={submitAbsence} disabled={submitting}>
-                {submitting ? "Enregistrement…" : "Ajouter l’absence"}
-              </button>
-            </div>
-          )}
-
-          {mode === "meeting" && meetingDay && (
-            <div className="meeting-inline-form">
-              <div className="meeting-inline-form-header">
-                <strong>{capitalize(format(meetingDay, "EEEE d MMMM yyyy", { locale: fr }))}</strong>
-                <button type="button" className="icon-button" onClick={() => setMeetingDay(null)} aria-label="Réinitialiser la sélection">
-                  <X size={15} />
-                </button>
-              </div>
-              <input
-                className="meeting-inline-input"
-                value={meetingTitle}
-                onChange={(event) => setMeetingTitle(event.target.value)}
-                placeholder="Titre de la réunion"
-                maxLength={160}
-              />
-              <textarea
-                className="meeting-inline-textarea"
-                value={meetingAgenda}
-                onChange={(event) => setMeetingAgenda(event.target.value)}
-                placeholder="Raison / ordre du jour (optionnel)"
-                rows={4}
-              />
-              <p className="meeting-inline-hint">Le résumé détaillé se rédige ensuite depuis la page « Résumés de réunions ».</p>
-              <button className="meeting-inline-submit" type="button" onClick={submitMeeting} disabled={submitting}>
-                <FilePlus2 size={17} /> {submitting ? "Enregistrement…" : "Ajouter la réunion"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <aside className="absence-upcoming">
-          <p className="eyebrow">ABSENCES À VENIR</p>
-          {loading ? (
-            <p className="resources-empty">Chargement…</p>
-          ) : upcoming.length === 0 ? (
-            <p className="resources-empty">Aucune absence enregistrée.</p>
+      <div className="ag-layout">
+        <section className="ag-panel ag-cal" aria-label="Calendrier" aria-busy={feedLoading || feedRefreshing}>
+          <CalendarToolbar
+            title={periodTitle(view, anchor, today)}
+            view={view}
+            onViewChange={handleViewChange}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onToday={() => patchParams({ date: null })}
+          />
+          <CalendarFilters
+            filters={filters}
+            counts={counts}
+            onToggleType={handleToggleType}
+            onToggleMine={handleToggleMine}
+            onReset={handleResetFilters}
+          />
+          {feedQuery.isError && !feedQuery.data ? (
+            <PanelError message="Impossible de charger le calendrier." onRetry={() => feedQuery.refetch()} />
+          ) : feedLoading ? (
+            <CalendarSkeleton />
           ) : (
-            upcoming.map((entry) => (
-              <div className="absence-upcoming-row" key={entry.id}>
-                <HelperAvatar helper={entry.helper} size={28} />
-                <div>
-                  <strong>{entry.helper.display_name || entry.helper.username}</strong>
-                  <small>
-                    {entry.start_date === entry.end_date
-                      ? entry.start_date
-                      : `${entry.start_date} → ${entry.end_date}`}
-                  </small>
-                  {entry.reason && <p>{entry.reason}</p>}
-                </div>
-                {/* Même règle que l’API : l’auteur de l’absence ou un responsable. */}
-                {(isResponsable || (currentHelperId && entry.helper?.id === currentHelperId)) && (
-                  <button type="button" className="icon-button" onClick={() => removeAbsence(entry.id)} aria-label="Supprimer l’absence">
-                    <Trash2 size={15} />
-                  </button>
-                )}
-              </div>
-            ))
+            <div className={feedRefreshing ? "ag-cal-body is-refreshing" : "ag-cal-body"}>
+              {view === "mois" ? (
+                <MonthView
+                  anchor={anchor}
+                  today={today}
+                  items={visibleItems}
+                  mobile={phone}
+                  onOpenItem={openItem}
+                  onOpenDay={handleOpenDay}
+                  onQuickAdd={handleQuickAdd}
+                  onNavigateDate={goTo}
+                />
+              ) : null}
+              {view === "semaine" ? (
+                <WeekView
+                  anchor={anchor}
+                  today={today}
+                  items={visibleItems}
+                  stacked={narrow}
+                  onOpenItem={openItem}
+                  onOpenDay={handleOpenDay}
+                  onQuickAdd={handleQuickAdd}
+                />
+              ) : null}
+              {view === "liste" ? (
+                <AgendaListView
+                  range={range}
+                  today={today}
+                  items={visibleItems}
+                  onOpenItem={openItem}
+                  onAdd={() => handleAddSelect("evenement")}
+                  onExtend={handleExtend}
+                  canExtend={Boolean(nextListDays)}
+                  extendLabel={nextListDays ? `Afficher les ${nextListDays - listDays} jours suivants` : ""}
+                />
+              ) : null}
+              {feedQuery.isError ? (
+                <PanelError message="Mise à jour du calendrier impossible." onRetry={() => feedQuery.refetch()} />
+              ) : null}
+              {isFilterActive(filters) && !visibleItems.length && view !== "liste" ? (
+                <p className="ag-cal-filtered-note" role="status">
+                  <CalendarDays size={14} aria-hidden="true" />
+                  Aucun élément ne correspond aux filtres sur cette période.
+                </p>
+              ) : null}
+            </div>
           )}
+        </section>
+
+        <aside className="ag-side" aria-label="Informations complémentaires">
+          <section className="ag-panel ag-cal-side-card" aria-labelledby="ag-cal-absences-title" aria-busy={upcomingQuery.isPending}>
+            <div className="ag-panel-header">
+              <span className="ag-panel-icon">
+                <UserMinus size={20} aria-hidden="true" />
+              </span>
+              <div className="ag-panel-heading">
+                <p className="ag-eyebrow">Absences</p>
+                <h2 className="ag-panel-title" id="ag-cal-absences-title">
+                  Qui est absent ?
+                </h2>
+              </div>
+            </div>
+            {upcomingQuery.isError ? (
+              <PanelError message="Impossible de charger les absences." onRetry={() => upcomingQuery.refetch()} />
+            ) : upcomingQuery.isPending ? (
+              <div className="ag-skeleton-stack" aria-hidden="true">
+                <span className="ag-skeleton ag-skeleton-line" style={{ width: "40%" }} />
+                <span className="ag-skeleton" style={{ height: 48 }} />
+                <span className="ag-skeleton" style={{ height: 48 }} />
+              </div>
+            ) : (
+              <div className="ag-panel-body ag-cal-absences">
+                {groups.map((group) => (
+                  <div key={group.key} className="ag-cal-abs-group">
+                    <h3 className="ag-cal-abs-heading">
+                      {group.title}
+                      <span className="ag-count">{group.total}</span>
+                    </h3>
+                    {group.items.length ? (
+                      <ul className="ag-cal-abs-list">
+                        {group.items.map((entry) => (
+                          <li key={entry.id} className="ag-cal-abs-item">
+                            <HelperAvatar person={entry.helper} size={30} decorative />
+                            <button type="button" className="ag-cal-abs-main" onClick={() => openElement("absence", entry.id)}>
+                              <strong>{helperName(entry.helper)}</strong>
+                              <small>{absencePeriodLabel(entry, today)}</small>
+                              {entry.reason ? <span className="ag-cal-abs-reason">{entry.reason}</span> : null}
+                            </button>
+                            <div className="ag-cal-abs-actions">
+                              {entry.can_edit ? (
+                                <button
+                                  type="button"
+                                  className="ag-icon-button ag-icon-button--small"
+                                  aria-label={`Modifier l’absence de ${helperName(entry.helper)}`}
+                                  onClick={() => setDialog({ kind: "absence", absence: entry })}
+                                >
+                                  <Pencil size={14} aria-hidden="true" />
+                                </button>
+                              ) : null}
+                              {(isResponsable || (currentHelperId && entry.helper?.id === currentHelperId)) && (
+                                <button
+                                  onClick={() => removeAbsence(entry.id)}
+                                  type="button"
+                                  className="ag-icon-button ag-icon-button--small ag-icon-button--danger"
+                                  aria-label="Supprimer l’absence"
+                                  disabled={busyKey === `absence:${entry.id}`}
+                                >
+                                  <Trash2 size={15} aria-hidden="true" />
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="ag-cal-abs-empty">{group.emptyLabel}</p>
+                    )}
+                    {group.hasMore ? (
+                      <button type="button" className="ag-link-button" onClick={showAllAbsences}>
+                        Tout voir ({group.total})
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <NextEventsCard
+            events={upcoming?.next_events}
+            today={today}
+            loading={upcomingQuery.isPending}
+            error={upcomingQuery.isError}
+            onRetry={() => upcomingQuery.refetch()}
+            onOpen={openItem}
+          />
+
+          <RemindersCard
+            settings={settingsQuery.data}
+            loading={settingsQuery.isPending}
+            error={settingsQuery.isError}
+            isResponsable={isResponsable}
+            onRetry={() => settingsQuery.refetch()}
+            onConfigure={() => setSettingsOpen(true)}
+          />
         </aside>
       </div>
-    </section>
+
+      {phone ? <AddMenu canManage={isResponsable} onSelect={handleAddSelect} floating /> : null}
+
+      <ItemDetailDrawer
+        open={Boolean(element) && !(detailQuery.isError && !selectedItem)}
+        onOpenChange={(next) => {
+          if (!next) closeItem();
+        }}
+        item={selectedItem}
+        loading={Boolean(element) && !selectedItem}
+        today={today}
+        isResponsable={isResponsable}
+        viewerId={viewerId}
+        busy={Boolean(busyKey)}
+        onEdit={handleEdit}
+        onDuplicate={handleDuplicate}
+        onReturn={returnNow}
+        onDelete={removeItem}
+        onCloseAutoFocus={(event) => restoreFocus(event, triggerRef.current)}
+      />
+
+      <DayPopover
+        open={Boolean(dayPop)}
+        onOpenChange={(next) => {
+          if (!next) setDayPop(null);
+        }}
+        day={dayPop?.day || ""}
+        anchorEl={dayPop?.anchorEl || null}
+        items={visibleItems}
+        today={today}
+        sheet={phone}
+        onOpenItem={openItem}
+        onAddDay={handleAddDay}
+      />
+
+      <QuickAddPopover
+        request={quick}
+        canManage={isResponsable}
+        onClose={() => setQuick(null)}
+        onOpenFull={handleOpenFull}
+        onCreated={ensureVisible}
+      />
+
+      <AbsenceDialog
+        open={dialog?.kind === "absence"}
+        onOpenChange={closeDialog}
+        absence={dialog?.absence || null}
+        defaults={dialog?.defaults || null}
+        today={today}
+        isResponsable={isResponsable}
+        viewerId={viewerId}
+        onSaved={(saved) => ensureVisible(saved?.start_date)}
+      />
+      <EntryDialog
+        open={dialog?.kind === "entry"}
+        onOpenChange={closeDialog}
+        entry={dialog?.entry || null}
+        template={dialog?.template || null}
+        defaults={dialog?.defaults || null}
+        type={dialog?.type || "evenement"}
+        today={today}
+        isResponsable={isResponsable}
+        onSaved={(saved) => ensureVisible(saved?.start_date)}
+      />
+      {isResponsable ? (
+        <MeetingDialog
+          open={dialog?.kind === "meeting"}
+          onOpenChange={closeDialog}
+          meeting={dialog?.meeting || null}
+          defaultDate={dialog?.date || ""}
+          today={today}
+          onSaved={(detail) => ensureVisible(detail?.meeting_date)}
+        />
+      ) : null}
+      {isResponsable ? <ReminderSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
+    </main>
   );
 }

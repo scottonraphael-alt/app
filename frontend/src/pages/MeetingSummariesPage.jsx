@@ -1,164 +1,143 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowRight, Calendar, FileText, NotebookPen, Plus, Radio, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { api, getErrorMessage } from "../api/client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarPlus } from "lucide-react";
 
-export default function MeetingSummariesPage({ isResponsable }) { // ← ajout de la prop
-  const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(true);
+import "@/Agenda.css";
+import "@/components/agenda/meetings/meetings.css";
 
-  const loadMeetings = () => {
-    setLoading(true);
-    api
-      .get("/staff/meetings")
-      .then((response) => setMeetings(response.data))
-      .catch((error) => toast.error(getErrorMessage(error)))
-      .finally(() => setLoading(false));
-  };
+import AgendaHomeLink from "@/components/agenda/AgendaHomeLink";
+import useAgendaNoNav from "@/components/agenda/useAgendaNoNav";
+import { agendaQueries } from "@/components/agenda/agendaApi";
+import { isForbidden } from "@/components/agenda/agendaErrors";
+import { resolveToday } from "@/components/agenda/dateUtils";
+import MeetingDialog from "@/components/agenda/meetings/MeetingDialog";
+import MeetingsListPanel from "@/components/agenda/meetings/MeetingsListPanel";
+import { MeetingsForbidden } from "@/components/agenda/meetings/MeetingsStates";
+import NextMeetingCard from "@/components/agenda/meetings/NextMeetingCard";
+import OpenActionsPanel from "@/components/agenda/meetings/OpenActionsPanel";
+import ToWriteCard from "@/components/agenda/meetings/ToWriteCard";
 
+export default function MeetingSummariesPage({ isResponsable }) {
+  useAgendaNoNav();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [phase, setPhase] = useState("");
+  const listRef = useRef(null);
+
+  const overviewQuery = useQuery(agendaQueries.meetingsOverview());
+  const overview = overviewQuery.data || null;
+  const today = resolveToday(overview?.today);
+  const canManage = Boolean(isResponsable) || Boolean(overview?.viewer?.is_responsable);
+  const overviewLoading = overviewQuery.isPending;
+  const overviewError = overviewQuery.isError && !overview ? overviewQuery.error : null;
+  const retryOverview = useCallback(() => overviewQuery.refetch(), [overviewQuery]);
+
+  // Ancienne route /staff/meetings/new → ?nouvelle=1 : ouvre la fenêtre (responsables), puis retire le paramètre.
+  // On attend la vue d'ensemble pour que la date proposée soit celle du serveur.
+  const wantsNew = searchParams.get("nouvelle") === "1";
   useEffect(() => {
-    loadMeetings();
+    if (!wantsNew || overviewLoading) return;
+    if (canManage) setDialogOpen(true);
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        next.delete("nouvelle");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [wantsNew, overviewLoading, canManage, setSearchParams]);
+
+  const openDialog = useCallback(() => setDialogOpen(true), []);
+
+  const showToWrite = useCallback(() => {
+    setPhase("a_rediger");
+    const node = listRef.current;
+    if (node) {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+      node.focus({ preventScroll: true });
+    }
   }, []);
 
-  const handleDelete = async (meetingId) => {
-    if (!window.confirm("Supprimer ce résumé ?")) return;
-    try {
-      await api.delete(`/staff/meetings/${meetingId}`);
-      toast.success("Résumé supprimé.");
-      setMeetings((prev) => prev.filter((m) => m.id !== meetingId));
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    }
-  };
-
-  const pendingCount = meetings.filter((m) => m.status === "en_attente_resume").length;
-  const doneCount = meetings.filter((m) => m.status === "redige").length;
-  const latest = meetings[0];
+  if (isForbidden(overviewQuery.error)) {
+    return (
+      <main className="ag-page ag-meetings" data-testid="meetings-page">
+        <header className="ag-header">
+          <div>
+            <p className="ag-eyebrow">Espace staff</p>
+            <h1>Réunions</h1>
+          </div>
+          <div className="ag-header-actions">
+            <AgendaHomeLink />
+          </div>
+        </header>
+        <MeetingsForbidden />
+      </main>
+    );
+  }
 
   return (
-    <section className="page-content dashboard-page" data-testid="meetings-page">
-      <header className="page-header">
+    <main className="ag-page ag-meetings" data-testid="meetings-page">
+      <header className="ag-header">
         <div>
-          <p className="eyebrow">ESPACE STAFF</p>
-          <h1>Résumés de réunion.</h1>
+          <p className="ag-eyebrow">Espace staff</p>
+          <h1>Réunions</h1>
+          <p className="ag-intro">
+            Préparez l'ordre du jour, rédigez le compte-rendu et suivez les décisions de l'équipe.
+          </p>
+        </div>
+        <div className="ag-header-actions">
+          <AgendaHomeLink />
+          {canManage ? (
+            <button type="button" className="ag-button" onClick={openDialog}>
+              <CalendarPlus size={16} aria-hidden="true" />
+              Nouvelle réunion
+            </button>
+          ) : null}
         </div>
       </header>
 
-      <div className="metrics-grid" data-testid="meeting-statistics">
-        <div className="metric-block">
-          <NotebookPen size={18} />
-          <span>Résumés totaux</span>
-          <strong>{meetings.length}</strong>
-        </div>
-        <div className="metric-block">
-          <FileText size={18} />
-          <span>À rédiger</span>
-          <strong>{pendingCount}</strong>
-        </div>
-        <div className="metric-block">
-          <Calendar size={18} />
-          <span>Rédigés</span>
-          <strong>{doneCount}</strong>
-        </div>
+      <div className="ag-meet-top">
+        <NextMeetingCard
+          meeting={overview?.next_meeting || null}
+          today={today}
+          loading={overviewLoading}
+          error={overviewError}
+          onRetry={retryOverview}
+          canManage={canManage}
+          onPlan={openDialog}
+        />
+        <ToWriteCard
+          meetings={overview?.to_write}
+          count={overview?.counts?.a_rediger}
+          today={today}
+          loading={overviewLoading}
+          error={overviewError}
+          onRetry={retryOverview}
+          onShowAll={showToWrite}
+        />
       </div>
 
-      <section className="care-hero" data-testid="latest-meeting-hero">
-        <div>
-          <p className="eyebrow">DERNIÈRE RÉUNION</p>
-          <h2>{latest ? latest.title : "Aucune réunion pour le moment."}</h2>
-          <p>
-            {latest
-              ? `${new Date(latest.meeting_date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} · ${latest.agenda || "Ouvrez le résumé pour le compléter."}`
-              : "Créez un nouveau résumé pour commencer."}
-          </p>
-        </div>
-        {latest ? (
-          <Link to={`/staff/meetings/${latest.id}`} className="care-open">
-            <span>Ouvrir le résumé</span>
-            <ArrowRight size={20} />
-          </Link>
-        ) : (
-          <Radio size={32} />
-        )}
-      </section>
-
-      <div className="dashboard-grid">
-        <section className="activity-pane" data-testid="meetings-list-panel">
-          <div className="section-heading">
-            <span>RÉUNIONS</span>
-            <span className="live-dot">CONFIDENTIEL</span>
-          </div>
-
-          {loading ? (
-            <p className="dashboard-loading">Chargement…</p>
-          ) : meetings.length === 0 ? (
-            <div className="dashboard-empty">
-              <Radio size={28} />
-              <p>Aucun résumé pour le moment.</p>
-              <Link to="/staff/meetings/new">
-                Créer un premier résumé <ArrowRight size={14} />
-              </Link>
-            </div>
-          ) : (
-            <div className="ticket-table">
-              {meetings.map((meeting) => (
-                <div className="meeting-row-stacked" key={meeting.id}>
-                  <div className="meeting-row-top">
-                    <div className="meeting-row-heading">
-                      <strong>{meeting.title}</strong>
-                      <span className="meeting-row-date-inline">
-                        {new Date(meeting.meeting_date).toLocaleDateString("fr-FR", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-                    <span className={`status-dot ${meeting.status === "redige" ? "active" : "pending"}`}>
-                      {meeting.status === "redige" ? "RÉDIGÉ" : "À RÉDIGER"}
-                    </span>
-                  </div>
-
-                  <p className="meeting-agenda-full">{meeting.agenda || "Aucun ordre du jour renseigné."}</p>
-
-                  <div className="meeting-row-buttons">
-                    <Link to={`/staff/meetings/${meeting.id}`} className="btn-consult">
-                      Consulter <ArrowRight size={14} />
-                    </Link>
-                    {isResponsable && ( // ← condition ajoutée ici
-                      <button
-                        type="button"
-                        className="icon-btn-danger"
-                        onClick={() => handleDelete(meeting.id)}
-                        aria-label="Supprimer le résumé"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <aside className="system-pane">
-          <p className="eyebrow">REPÈRES</p>
-          <div>
-            <span><NotebookPen size={15} /> Résumés en attente</span>
-            <b>{pendingCount}</b>
-          </div>
-          <div>
-            <span><FileText size={15} /> Résumés rédigés</span>
-            <b>{doneCount}</b>
-          </div>
-          <div>
-            <span>Dernière réunion</span>
-            <strong>{latest ? latest.title : "—"}</strong>
-          </div>
-        </aside>
+      <div className="ag-meet-stack">
+        <OpenActionsPanel
+          actions={overview?.open_actions}
+          counts={overview?.counts}
+          today={today}
+          loading={overviewLoading}
+          error={overviewError}
+          onRetry={retryOverview}
+        />
+        <MeetingsListPanel
+          phase={phase}
+          onPhaseChange={setPhase}
+          canManage={canManage}
+          onPlan={openDialog}
+          panelRef={listRef}
+        />
       </div>
-    </section>
+
+      {canManage ? <MeetingDialog open={dialogOpen} onOpenChange={setDialogOpen} today={today} /> : null}
+    </main>
   );
 }

@@ -1,0 +1,394 @@
+/* Éditeur partagé (TiptapSummaryEditor, SummaryReader) aux couleurs de la charte.
+   Tout est préfixé par .iris-editor : aucune règle ne touche le reste de l'application. */
+
+.iris-editor {
+  --iris-editor-ink: #1c2622;
+  --iris-editor-muted: #64706a;
+  --iris-editor-sage: #4a675c;
+  --iris-editor-sage-soft: #e8efea;
+  --iris-editor-line: #e2e8e2;
+  --iris-editor-placeholder-color: #7a857f;
+  --iris-editor-font-size: 15px;
+  --iris-editor-line-height: 1.65;
+  --iris-editor-padding-inline: 46px 18px;
+  position: relative;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* MentalHealth.css met overflow: hidden sur .tiptap-editor : le menu « / » et la barre d'outils seraient rognés. */
+.iris-editor.tiptap-editor {
+  overflow: visible;
+  border: 1px solid var(--iris-editor-line);
+  border-radius: 14px;
+  background: #ffffff;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.iris-editor.iris-editor--default:not(.iris-editor--locked):focus-within,
+.iris-editor.iris-editor--compact:not(.iris-editor--locked):focus-within {
+  border-color: #88a492;
+  box-shadow: 0 0 0 3px rgba(74, 103, 92, 0.08);
+}
+
+/* La zone de saisie a un tabindex : le cadre ci-dessus suffit (pas de second contour, ni en mode concentration). */
+.iris-editor.iris-editor--default:not(.iris-editor--locked) .bn-editor:focus-visible,
+.iris-editor.iris-editor--compact:not(.iris-editor--locked) .bn-editor:focus-visible,
+.iris-editor.iris-editor--focus .bn-editor:focus-visible {
+  outline: none;
+}
+
+/* Toute la hauteur de l'éditeur est cliquable. */
+.iris-editor .bn-container {
+  display: flex;
+  flex-direction: column;
+  border-radius: inherit;
+}
+
+.iris-editor .bn-editor {
+  flex: 1 1 auto;
+  padding-block: 6px;
+  padding-inline: var(--iris-editor-padding-inline);
+  color: var(--iris-editor-ink);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: var(--iris-editor-font-size);
+  line-height: var(--iris-editor-line-height);
+}
+
+.iris-editor .bn-editor ::selection {
+  background: rgba(74, 103, 92, 0.2);
+}
+
+/* ---------- Titres ---------- */
+
+.iris-editor .bn-editor [data-content-type="heading"] {
+  --level: 1.75em;
+}
+
+.iris-editor .bn-editor [data-content-type="heading"][data-level="2"] {
+  --level: 1.4em;
+}
+
+.iris-editor .bn-editor [data-content-type="heading"][data-level="3"] {
+  --level: 1.15em;
+}
+
+.iris-editor .bn-editor [data-prev-level="1"] {
+  --prev-level: 1.75em;
+}
+
+.iris-editor .bn-editor [data-prev-level="2"] {
+  --prev-level: 1.4em;
+}
+
+.iris-editor .bn-editor [data-prev-level="3"] {
+  --prev-level: 1.15em;
+}
+
+.iris-editor .bn-editor .bn-block > .bn-block-content[data-content-type="heading"] {
+  padding-top: 0.6em;
+  padding-bottom: 0.15em;
+  font-family: Manrope, "IBM Plex Sans", sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.iris-editor .bn-editor > .bn-block-group > .bn-block-outer:first-child > .bn-block > .bn-block-content[data-content-type="heading"] {
+  padding-top: 3px;
+}
+
+/* ---------- Listes et cases à cocher ---------- */
+
+.iris-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"]::before,
+.iris-editor .bn-editor .bn-block-content[data-content-type="numberedListItem"]::before {
+  color: var(--iris-editor-sage);
+}
+
+.iris-editor .bn-editor .bn-block-content[data-content-type="checkListItem"] input[type="checkbox"] {
+  accent-color: var(--iris-editor-sage);
+}
+
+.iris-editor .bn-editor .bn-block-content[data-content-type="checkListItem"][data-checked="true"] .bn-inline-content {
+  color: var(--iris-editor-muted);
+}
+
+/* ---------- Liens et code ---------- */
+
+.iris-editor .bn-editor a {
+  color: #3d6b58;
+  text-decoration: underline;
+  text-decoration-color: rgba(61, 107, 88, 0.45);
+  text-underline-offset: 2px;
+}
+
+.iris-editor .bn-editor a:hover {
+  text-decoration-color: currentColor;
+}
+
+.iris-editor .bn-editor .bn-inline-content code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #f1f4f1;
+  color: #2c3b35;
+  font-family: "JetBrains Mono", "IBM Plex Mono", monospace;
+  font-size: 0.88em;
+}
+
+.iris-editor .bn-editor .bn-block-content[data-content-type="codeBlock"] {
+  border-radius: 10px;
+  background-color: var(--iris-editor-ink);
+  color: #eef3ef;
+}
+
+.iris-editor .bn-editor .bn-block-content[data-content-type="codeBlock"] > pre {
+  padding: 16px 18px;
+  font-family: "JetBrains Mono", "IBM Plex Mono", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---------- Tableaux ---------- */
+
+.iris-editor .bn-editor [data-content-type="table"] table {
+  border-collapse: collapse;
+}
+
+.iris-editor .bn-editor [data-content-type="table"] th,
+.iris-editor .bn-editor [data-content-type="table"] td {
+  border: 1px solid var(--iris-editor-line);
+  padding: 7px 11px;
+  vertical-align: top;
+}
+
+.iris-editor .bn-editor [data-content-type="table"] th,
+.iris-editor .bn-editor [data-content-type="table"] tr:first-child > td {
+  background: var(--iris-editor-sage-soft);
+  font-weight: 600;
+}
+
+.iris-editor .bn-editor [data-content-type="table"] .selectedCell::after {
+  background: rgba(74, 103, 92, 0.14);
+}
+
+.iris-editor .bn-editor [data-content-type="table"] .column-resize-handle {
+  background-color: var(--iris-editor-sage);
+}
+
+/* ---------- Médias ---------- */
+
+.iris-editor .bn-editor [data-file-block] .bn-visual-media {
+  border-radius: 10px;
+}
+
+.iris-editor .bn-editor [data-file-block] .bn-add-file-button {
+  border-radius: 10px;
+  background-color: #f5f6f2;
+  color: var(--iris-editor-muted);
+}
+
+/* ---------- Textes d'invite ---------- */
+
+.iris-editor .bn-editor .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  color: var(--iris-editor-placeholder-color);
+  font-style: normal;
+}
+
+/* BlockNote écrit ses textes d'invite dans une feuille globale : le dernier éditeur monté l'emporterait.
+   Chaque éditeur affiche ici son propre `placeholder` (variable posée sur son enveloppe). */
+.iris-editor .bn-editor .bn-block-content[data-content-type="paragraph"][data-is-empty-and-focused] .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  content: var(--iris-editor-placeholder);
+}
+
+/* Document vide : texte d'invite visible même sans le focus. */
+.iris-editor .bn-editor[contenteditable="true"] > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"] > .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  content: var(--iris-editor-placeholder);
+}
+
+/* Lecture seule ou verrouillé : aucun texte d'invite (BlockNote en met aussi sur les titres et listes vides). */
+.iris-editor .bn-editor[contenteditable="false"] .bn-block-content .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before {
+  content: none;
+}
+
+/* ---------- Menus : « / », barre de mise en forme, panneaux ---------- */
+
+.iris-editor .bn-mantine .bn-suggestion-menu {
+  min-width: 280px;
+  max-width: min(340px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--iris-editor-line);
+  border-radius: 14px;
+  box-shadow: 0 18px 44px rgba(28, 38, 34, 0.16);
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu-label {
+  padding: 10px 10px 4px;
+  color: var(--iris-editor-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu-item {
+  height: 46px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  padding: 7px;
+  border-radius: 9px;
+  background-color: #f1f5f1;
+  color: var(--iris-editor-sage);
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu-item[aria-selected="true"] .bn-mt-suggestion-menu-item-section[data-position="left"] {
+  background-color: #ffffff;
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu .bn-mt-suggestion-menu-item-title {
+  color: var(--iris-editor-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu .bn-mt-suggestion-menu-item-subtitle {
+  color: var(--iris-editor-muted);
+  font-size: 12px;
+}
+
+.iris-editor .bn-mantine .bn-suggestion-menu .mantine-Badge-root {
+  background-color: #f1f4f1;
+  color: var(--iris-editor-muted);
+  font-weight: 500;
+  text-transform: none;
+}
+
+.iris-editor .bn-mantine .bn-toolbar,
+.iris-editor .bn-mantine .bn-panel,
+.iris-editor .bn-mantine .bn-form-popover {
+  border: 1px solid var(--iris-editor-line);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(28, 38, 34, 0.14);
+}
+
+/* ---------- Chargement ---------- */
+
+.iris-editor .iris-editor-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 18px 18px 18px 54px;
+}
+
+.iris-editor .iris-editor-skeleton span {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef1ec 0%, #f6f8f5 50%, #eef1ec 100%);
+  background-size: 200% 100%;
+  animation: iris-editor-shimmer 1.4s ease-in-out infinite;
+}
+
+.iris-editor .iris-editor-skeleton span:nth-child(1) {
+  width: 92%;
+}
+
+.iris-editor .iris-editor-skeleton span:nth-child(2) {
+  width: 78%;
+}
+
+.iris-editor .iris-editor-skeleton span:nth-child(3) {
+  width: 54%;
+}
+
+@keyframes iris-editor-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* ---------- Variantes ---------- */
+
+.iris-editor.iris-editor--compact {
+  min-height: 160px;
+}
+
+.iris-editor.iris-editor--compact .bn-container {
+  min-height: 158px;
+}
+
+.iris-editor.iris-editor--focus {
+  --iris-editor-font-size: 17px;
+  --iris-editor-line-height: 1.75;
+  --iris-editor-padding-inline: 56px;
+  min-height: 60vh;
+  border-color: transparent;
+  background: transparent;
+}
+
+.iris-editor.iris-editor--focus .bn-container {
+  min-height: 60vh;
+}
+
+.iris-editor.iris-editor--locked {
+  background: #fafbf9;
+}
+
+.iris-editor.iris-editor--locked .bn-editor {
+  background: transparent;
+}
+
+/* Lecture seule : le texte s'aligne sur la page, sans cadre ni hauteur minimale. */
+.iris-editor.iris-editor--readonly {
+  --iris-editor-padding-inline: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.iris-editor.iris-editor--readonly .bn-container {
+  min-height: 0;
+  padding: 0;
+}
+
+.iris-editor.iris-editor--readonly .bn-editor {
+  padding-block: 0;
+  background: transparent;
+}
+
+.iris-editor.iris-editor--readonly .iris-editor-skeleton {
+  padding: 4px 0;
+}
+
+@media (max-width: 640px) {
+  .iris-editor:not(.iris-editor--readonly) {
+    --iris-editor-padding-inline: 28px 12px;
+  }
+
+  .iris-editor.iris-editor--focus {
+    --iris-editor-font-size: 16px;
+  }
+
+  .iris-editor .iris-editor-skeleton {
+    padding-left: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .iris-editor.tiptap-editor,
+  .iris-editor .bn-block-content,
+  .iris-editor .bn-block-content::before,
+  .iris-editor .bn-block-outer::before {
+    transition: none;
+  }
+
+  .iris-editor .iris-editor-skeleton span {
+    animation: none;
+  }
+}

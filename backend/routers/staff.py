@@ -1,4 +1,6 @@
 import asyncio
+import inspect
+import logging
 import os
 import tempfile
 import re
@@ -22,11 +24,20 @@ from models.staff import (
     QuarterlyTaskCreate,
 )
 from models.ticket import AuthenticatedHelper, HelperIdentity
+from services import agenda_absences, agenda_indexes, agenda_meetings, agenda_reminders, agenda_time
 from services.auth_service import current_responsable, current_staff, is_responsable_helper
 from services.discord_service import DiscordService
 from services.storage_service import extension_from_filename, get_object, put_object_from_file
 
 router = APIRouter(prefix="/staff", tags=["staff"])
+logger = logging.getLogger(__name__)
+
+# Identités Discord des absences : au plus une tentative d'actualisation par membre toutes les 12 h.
+IDENTITY_REFRESH_MAX_AGE = timedelta(hours=12)
+# Réunions créées par l'ancienne API : sans rappel tant qu'un responsable ne les active pas.
+LEGACY_REMINDERS = {"enabled": False, "offsets": [], "ping_role": False}
+# Lectures de l'ancienne API : réponse inchangée, sans les champs de recherche dérivés (jusqu'à 120 000 caractères).
+LEGACY_MEETING_PROJECTION = {"_id": 0, "content_text": 0, "search_text": 0}
 
 MEETING_MEDIA_TYPES = {
     "jpg", "jpeg", "png", "webp", "gif",
@@ -44,7 +55,7 @@ PRIVATE_VOLUNTEER_FIELDS = {"rating", "note"}
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return agenda_time.now_iso()
 
 
 def _meeting_status(content_markdown: str) -> str:
@@ -85,7 +96,7 @@ async def _hide_private_ratings(tasks: list[dict], helper: AuthenticatedHelper) 
 @router.get("/calendrier", response_model=list[AbsenceEntry])
 async def list_absences(
     _: AuthenticatedHelper = Depends(current_staff),
-) -> list[AbsenceEntry]:
+) -> list[dict]:
     absences = await db.absences.find(
         {},
         {"_id": 0},
@@ -94,50 +105,11 @@ async def list_absences(
     if not absences:
         return []
 
-    discord = DiscordService()
+    # Une tentative Discord par membre et par 12 h au plus ; sans bot configuré, le GET répond quand même.
+    absences = await agenda_absences.refresh_identities(absences, max_age=IDENTITY_REFRESH_MAX_AGE)
 
-    helper_ids = {
-        entry.get("helper", {}).get("id")
-        for entry in absences
-        if entry.get("helper", {}).get("id")
-    }
-
-    async def refresh_helper(helper_id: str):
-        try:
-            member = await discord.fetch_member(helper_id)
-            return helper_id, member
-        except Exception:
-            return helper_id, None
-
-    refreshed_helpers = dict(
-        await asyncio.gather(
-            *(refresh_helper(helper_id) for helper_id in helper_ids)
-        )
-    )
-
-    for entry in absences:
-        helper = entry.get("helper", {})
-        helper_id = helper.get("id")
-        member = refreshed_helpers.get(helper_id)
-
-        if not member:
-            continue
-
-        updated_helper = {
-            "id": member.id,
-            "username": member.username,
-            "display_name": member.display_name,
-            "avatar_url": member.avatar_url,
-        }
-
-        entry["helper"] = updated_helper
-
-        await db.absences.update_one(
-            {"id": entry["id"]},
-            {"$set": {"helper": updated_helper}},
-        )
-
-    return absences
+    # Vue legacy : une absence sans fin porte la sentinelle "9999-12-31" (lue par le tableau de bord).
+    return [agenda_absences.legacy_view(entry) for entry in absences]
 
 
 @router.post("/calendrier", response_model=AbsenceEntry, status_code=status.HTTP_201_CREATED)
@@ -147,15 +119,17 @@ async def create_absence(
 ) -> AbsenceEntry:
     if payload.end_date < payload.start_date:
         raise HTTPException(status_code=422, detail="La date de fin doit suivre la date de début.")
+    identity = _helper_identity(helper)
     entry = AbsenceEntry(
         id=str(uuid4()),
-        helper=_helper_identity(helper),
+        helper=identity,
         start_date=payload.start_date,
         end_date=payload.end_date,
+        open_ended=False,
         reason=payload.reason.strip(),
         created_at=_now(),
     )
-    await db.absences.insert_one(entry.model_dump())
+    await db.absences.insert_one({**entry.model_dump(), "created_by": identity})
     return entry
 
 
@@ -416,7 +390,7 @@ async def nominate_volunteer(
 
 @router.get("/meetings", response_model=list[MeetingSummary])
 async def list_meetings(_: AuthenticatedHelper = Depends(current_staff)) -> list[MeetingSummary]:
-    return await db.meeting_summaries.find({}, {"_id": 0}).sort("meeting_date", -1).to_list(500)
+    return await db.meeting_summaries.find({}, LEGACY_MEETING_PROJECTION).sort("meeting_date", -1).to_list(500)
 
 
 @router.get("/meetings/{meeting_id}", response_model=MeetingSummary)
@@ -424,10 +398,26 @@ async def get_meeting(
     meeting_id: str,
     _: AuthenticatedHelper = Depends(current_staff),
 ) -> MeetingSummary:
-    meeting = await db.meeting_summaries.find_one({"id": meeting_id}, {"_id": 0})
+    meeting = await db.meeting_summaries.find_one({"id": meeting_id}, LEGACY_MEETING_PROJECTION)
     if not meeting:
         raise HTTPException(status_code=404, detail="Résumé introuvable.")
     return meeting
+
+
+async def _derived_fields(doc: dict) -> dict:
+    """content_text, search_text, word_count et excerpt, calculés comme la migration du démarrage."""
+    try:
+        fields = agenda_meetings.derived_fields(doc)
+        if inspect.isawaitable(fields):
+            fields = await fields
+        if not isinstance(fields, dict):
+            fields = dict(zip(agenda_indexes.DERIVED_FIELDS, fields))
+    except Exception:  # noqa: BLE001 - contenu illisible : recherche limitée au titre et à l'ordre du jour
+        logger.warning("Réunion %s : contenu illisible, champs de recherche réduits.", doc.get("id"))
+        fields = agenda_indexes.unreadable_fields(doc, agenda_meetings)
+    derived = {key: fields.get(key) for key in agenda_indexes.DERIVED_FIELDS}
+    derived["excerpt"] = derived["excerpt"] or ""
+    return derived
 
 
 @router.post("/meetings", response_model=MeetingSummary, status_code=status.HTTP_201_CREATED)
@@ -436,19 +426,22 @@ async def create_meeting(
     helper: AuthenticatedHelper = Depends(current_responsable),
 ) -> MeetingSummary:
     now = _now()
+    content, _text, _words = agenda_meetings.prepare_content(payload.content_markdown, allow_text=True)
     meeting = MeetingSummary(
         id=str(uuid4()),
         title=payload.title.strip(),
         agenda=payload.agenda.strip(),
-        content_markdown=payload.content_markdown,
-        status=_meeting_status(payload.content_markdown),
+        content_markdown=content,
+        status=_meeting_status(content),
         meeting_date=payload.meeting_date,
         author=_helper_identity(helper),
         created_at=now,
         updated_at=now,
         is_locked=False,
     )
-    await db.meeting_summaries.insert_one(meeting.model_dump())
+    doc = {**meeting.model_dump(), "revision": 0, "reminders": dict(LEGACY_REMINDERS)}
+    doc.update(await _derived_fields(doc))
+    await db.meeting_summaries.insert_one(doc)
     return meeting
 
 
@@ -456,7 +449,7 @@ async def create_meeting(
 async def update_meeting(
     meeting_id: str,
     payload: MeetingSummaryUpdate,
-    _: AuthenticatedHelper = Depends(current_staff),
+    helper: AuthenticatedHelper = Depends(current_staff),
 ) -> MeetingSummary:
     existing = await db.meeting_summaries.find_one({"id": meeting_id}, {"_id": 0})
     if not existing:
@@ -464,25 +457,31 @@ async def update_meeting(
     if existing.get("is_locked", False):
         raise HTTPException(status_code=403, detail="Ce résumé est verrouillé.")
 
-    updated_at = _now()
-    new_status = _meeting_status(payload.content_markdown)
-    await db.meeting_summaries.update_one(
-        {"id": meeting_id},
-        {"$set": {
-            "title": payload.title.strip(),
-            "agenda": payload.agenda.strip(),
-            "content_markdown": payload.content_markdown,
-            "status": new_status,
-            "updated_at": updated_at,
-        }},
+    # Ancien format accepté (texte brut) ; aucun nouveau champ n'est modifié, sauf l'ordre du jour structuré absent.
+    content, _text, _words = agenda_meetings.prepare_content(payload.content_markdown, allow_text=True)
+    updates = {
+        "title": payload.title.strip(),
+        "agenda": payload.agenda.strip(),
+        "content_markdown": content,
+        "status": _meeting_status(content),
+        "updated_at": _now(),
+        "updated_by": _helper_identity(helper),
+    }
+    if not existing.get("agenda_items"):
+        updates["agenda_items"] = agenda_meetings.legacy_agenda_items(updates["agenda"])
+    updates.update(await _derived_fields({**existing, **updates}))
+
+    # Même filtre que le PATCH de l'agenda : aucune écriture après un verrouillage simultané.
+    result = await db.meeting_summaries.update_one(
+        {"id": meeting_id, "is_locked": {"$ne": True}},
+        {"$set": updates, "$inc": {"revision": 1}},
     )
-    existing.update(
-        title=payload.title.strip(),
-        agenda=payload.agenda.strip(),
-        content_markdown=payload.content_markdown,
-        status=new_status,
-        updated_at=updated_at,
-    )
+    if result.matched_count == 0:
+        if not await db.meeting_summaries.find_one({"id": meeting_id}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=404, detail="Résumé introuvable.")
+        raise HTTPException(status_code=403, detail="Ce résumé est verrouillé.")
+    existing.update(updates)
+    existing["revision"] = (existing.get("revision") or 0) + 1
     return existing
 
 @router.delete("/meetings/{meeting_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -496,21 +495,28 @@ async def delete_meeting(
     if existing.get("is_locked", False):
         raise HTTPException(status_code=403, detail="Ce résumé est verrouillé.")
     await db.meeting_summaries.delete_one({"id": meeting_id})
+    await agenda_reminders.cancel_target_reminders("meeting", meeting_id, "target_deleted")
 
 @router.post("/meetings/{meeting_id}/lock", response_model=MeetingSummary)
 async def toggle_meeting_lock(
     meeting_id: str,
-    _: AuthenticatedHelper = Depends(current_responsable),
+    helper: AuthenticatedHelper = Depends(current_responsable),
 ) -> MeetingSummary:
     existing = await db.meeting_summaries.find_one({"id": meeting_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Résumé introuvable.")
     new_lock_state = not existing.get("is_locked", False)
+    # Le verrouillage ne change pas `revision` : la personne qui rédige reçoit un 403, pas un faux conflit.
+    lock_fields = {
+        "is_locked": new_lock_state,
+        "locked_by": _helper_identity(helper) if new_lock_state else None,
+        "locked_at": _now() if new_lock_state else None,
+    }
     await db.meeting_summaries.update_one(
         {"id": meeting_id},
-        {"$set": {"is_locked": new_lock_state}},
+        {"$set": lock_fields},
     )
-    existing["is_locked"] = new_lock_state
+    existing.update(lock_fields)
     return existing
 
 
