@@ -6,7 +6,7 @@ La commande est enregistrée sur le serveur `DISCORD_GUILD_ID` par le bot Iris a
 
 1. L’exécuteur reçoit un message V2 **éphémère**, avec un sélecteur d’utilisateur.
 2. Après vérification des accès, ce premier message est supprimé et remplacé par un résumé privé du casier : compteurs des cinq types, fiches S actives, trois dernières sanctions et motifs.
-3. Le choix d’un type ouvre directement son modal : motif (1 000 caractères), explication interne (4 000), jusqu’à cinq justificatifs uploadés, durée pour mute/ban et suppression éventuelle de messages pour un ban.
+3. Le choix d’un type ouvre directement son modal : motif (1 000 caractères), explication interne (4 000), un à cinq justificatifs uploadés, durée pour mute/ban et choix de suppression des messages pour un ban. **Tous les champs affichés sont obligatoires**, dans Discord et côté serveur. Choisir « permanent » pour un ban définitif et « Ne supprimer aucun message » pour conserver les messages.
 4. Une confirmation privée récapitule les effets avant application. Aucun changement Discord, rôle temporaire ou sanction du casier n’est appliqué lors de la simple préparation.
 5. Après confirmation : contrôle des rôles, rôle temporaire, action Discord, retrait du rôle, enregistrement du casier et publication d’un log V2 dans le salon configuré pour ce type.
 
@@ -16,7 +16,7 @@ Les justificatifs acceptent les formats du casier : PNG, JPG/JPEG, GIF, WebP, PD
 
 ## Rôles et sécurité
 
-Accès : rôles Staff, Opérateur/Opérateur+, Coordinateur/Admin et Responsable configurés pour Iris, rôle admin spécifique ci-dessous, ou propriétaire du serveur. Les permissions natives ordinaires ne sont pas requises sur le rôle staff de base. Chaque interaction reste liée à l’exécuteur et au serveur. Un staff ne peut sanctionner **aucun autre staff**, y compris depuis un compte Responsable : sont protégés les rôles d’équipe configurés, les rôles de modération, les bots et le propriétaire du serveur. Le membre doit être présent ; la commande ne permet pas de bannir arbitrairement un ID externe.
+Accès : le rôle Staff **`1081957992401997830`** est obligatoire dès le lancement, même pour un admin ou le propriétaire du serveur. Il est revérifié à chaque étape sensible et ne peut pas être remplacé par les permissions natives administrateur. La variable optionnelle `SANCTION_REQUIRED_STAFF_ROLE_ID` permet de déplacer cette configuration. Les permissions natives ordinaires ne sont pas requises sur le rôle staff de base. Chaque interaction reste liée à l’exécuteur et au serveur. Un staff ne peut sanctionner **aucun autre staff**, y compris depuis un compte Responsable : sont protégés les rôles d’équipe configurés, les rôles de modération, les bots et le propriétaire du serveur. Le membre doit être présent ; la commande ne permet pas de bannir arbitrairement un ID externe.
 
 Les rôles et hiérarchies sont relus depuis Discord lors de la sélection, de la soumission, de la confirmation et après l’élévation temporaire. Le bot doit avoir les permissions natives pour les actions, `Gérer les rôles`, un rôle supérieur au rôle temporaire et à la cible, et pouvoir écrire dans les salons de logs.
 
@@ -34,7 +34,7 @@ L’obligation de retirer le rôle est enregistrée **avant** son attribution. L
 
 ## Logs
 
-Les salons sont ceux de `DISCORD_MODERATION_CHANNELS`, avec les cinq clés existantes (`avertissement`, `rappel_a_lordre`, `mute`, `kick`, `bannissement`). Un type sans salon configuré ne peut pas être appliqué. Les logs V2 comprennent l’exécuteur, le membre, le motif, la durée, un extrait de l’explication, le nombre de justificatifs et un lien vers le casier Iris. Aucune mention ne notifie. Les justificatifs complets restent consultables sur Iris ; ils ne sont pas rediffusés dans Discord.
+Les destinations sont celles de `DISCORD_MODERATION_CHANNELS` : salons textuels, salons d’annonces ou **IDs des posts d’un forum** (fils de discussion), avec les cinq clés existantes (`avertissement`, `rappel_a_lordre`, `mute`, `kick`, `bannissement`). Un type sans destination configurée ne peut pas être appliqué. Pour un forum, renseigner l’ID de chaque post, pas l’ID du forum parent. Le bot doit avoir `Envoyer des messages dans les fils de discussion`. Un post archivé non verrouillé se réactive à l’envoi ; un post archivé verrouillé est réactivé avant publication si le bot a `Gérer les fils`, sans retirer le verrouillage. La simple préparation ne modifie pas les posts. Les logs V2 comprennent l’exécuteur, le membre, le motif, la durée, un extrait de l’explication, le nombre de justificatifs et un lien vers le casier Iris. Aucune mention ne notifie. Les justificatifs complets restent consultables sur Iris ; ils ne sont pas rediffusés dans Discord.
 
 Une livraison de log interrompue est reprise avec un nonce stable. La sanction Discord n’est jamais réappliquée pour réparer un log. Les messages portent la référence de la commande pour que l’import automatique des salons ne crée pas une deuxième sanction dans le casier. La reprise d’un log après une longue interruption et une réponse perdue peut produire un log en double si la fenêtre d’idempotence Discord est dépassée ; la référence protège l’entrée du casier.
 

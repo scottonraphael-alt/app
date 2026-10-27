@@ -34,9 +34,9 @@ def configured_roles(names):return {str(getattr(config,name,'')) for name in nam
 def executor_roles():
     return configured_roles(('DISCORD_STAFF_ROLE_ID','DISCORD_OPERATEUR_ROLE_ID','DISCORD_OPERATEUR_ROLE2_ID','DISCORD_ADMIN_ROLE_ID','DISCORD_RESPONSABLE_ROLE_ID','SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID'))
 def protected_roles():
-    return executor_roles() | configured_roles(('DISCORD_HELPER_ROLE_ID','DISCORD_HELPER_ROLE2_ID','DISCORD_ANIMATEUR_ROLE_ID','DISCORD_ADJOINT_ROLE_ID'))
+    return executor_roles() | configured_roles(('DISCORD_HELPER_ROLE_ID','DISCORD_HELPER_ROLE2_ID','DISCORD_ANIMATEUR_ROLE_ID','DISCORD_ADJOINT_ROLE_ID','SANCTION_REQUIRED_STAFF_ROLE_ID'))
 def is_executor(member):
-    return bool(role_ids(member) & executor_roles()) or member.id == member.guild.owner_id
+    return config.SANCTION_REQUIRED_STAFF_ROLE_ID in role_ids(member)
 
 def is_protected(member):
     permissions=member.guild_permissions
@@ -58,7 +58,7 @@ async def audit(event, actor=None, member_id=None, job=None, **details):
 async def fresh_members(guild, actor_id, member_id=None, sanction_type=None, permanent_ban=False):
     if not guild or str(guild.id)!=str(config.DISCORD_GUILD_ID):raise HTTPException(403,'Cette commande est réservée au serveur Iris configuré.')
     actor=await guild.fetch_member(int(actor_id))
-    if not is_executor(actor):raise HTTPException(403,'La commande /sanction est réservée au staff de modération.')
+    if not is_executor(actor):raise HTTPException(403,f'Le rôle Staff ({config.SANCTION_REQUIRED_STAFF_ROLE_ID}) est obligatoire pour utiliser /sanction.')
     if member_id is None:return actor,None
     member=await guild.fetch_member(int(member_id))
     if member.id==actor.id:raise HTTPException(403,'Tu ne peux pas te sanctionner toi-même.')
@@ -78,9 +78,10 @@ def parameters(sanction_type, reason, explanation='', duration='', purge=0):
     if sanction_type not in casiers.SANCTION_TYPES:raise HTTPException(422,'Type de sanction invalide.')
     reason=reason.strip();explanation=explanation.strip();duration=duration.strip()
     if not reason or len(reason)>1000:raise HTTPException(422,'La raison est obligatoire et limitée à 1 000 caractères.')
-    if len(explanation)>4000:raise HTTPException(422,'L’explication du casier est limitée à 4 000 caractères.')
+    if not explanation or len(explanation)>4000:raise HTTPException(422,'L’explication du casier est obligatoire et limitée à 4 000 caractères.')
     label,seconds=None,None
     if sanction_type in casiers.DURATION_TYPES:
+        if not duration:raise HTTPException(422,'La durée est obligatoire. Indique une durée ou « permanent » pour un bannissement définitif.')
         if len(duration)>80:raise HTTPException(422,'La durée est trop longue.')
         label,seconds=casier_log_parser.parse_duration_text(duration)
         if sanction_type=='mute' and (not seconds or seconds>28*86400):
@@ -106,9 +107,15 @@ async def temporary_role(guild,job):
 
 async def log_channel(guild,channel_id):
     channel=await guild.fetch_channel(int(channel_id))
-    if channel.guild.id!=guild.id or channel.type not in (discord.ChannelType.text,discord.ChannelType.news):
-        raise HTTPException(403,'Le salon de log doit être un salon textuel du serveur configuré.')
-    if not channel.permissions_for(guild.me).send_messages:raise HTTPException(403,'Le bot ne peut pas écrire dans le salon de log de cette sanction.')
+    if channel.guild.id!=guild.id:raise HTTPException(403,'Le salon de log n’appartient pas au serveur configuré.')
+    thread=channel.type in (discord.ChannelType.news_thread,discord.ChannelType.public_thread,discord.ChannelType.private_thread)
+    if channel.type not in (discord.ChannelType.text,discord.ChannelType.news) and not thread:
+        raise HTTPException(403,'Indique l’ID du post de forum ou d’un salon textuel, pas l’ID du forum ou d’une catégorie.')
+    permissions=channel.permissions_for(guild.me)
+    allowed=permissions.send_messages_in_threads if thread else permissions.send_messages
+    if not allowed:raise HTTPException(403,'Le bot doit pouvoir envoyer des messages dans les fils de discussion de ce post.' if thread else 'Le bot ne peut pas écrire dans le salon de log de cette sanction.')
+    if thread and channel.locked and not permissions.manage_threads:
+        raise HTTPException(403,'Le post de logs est verrouillé : la permission Gérer les fils est nécessaire pour y publier.')
     return channel
 
 
@@ -166,16 +173,18 @@ def log_payload(job,channel_id):
     import hashlib
     verb={'avertissement':'a averti','rappel_a_lordre':"a rappelé à l’ordre",'mute':'a mute','kick':'a expulsé','bannissement':'a banni'}[job['type']]
     reason=job['reason'].replace('```','` ` `')
-    text=f"## {LABELS[job['type']]}\n<@{job['actor']['id']}> {verb} <@{job['member_id']}> (`{job['member_id']}`).\n### Raison de la sanction\n```{reason}```"
-    if job['duration']:text+=f"\n**Durée** : {job['duration']}"
+    icons={'rappel_a_lordre':'📣','avertissement':'⚠️','mute':'🔇','kick':'🚪','bannissement':'🔨'}
+    text=f"<@{job['actor']['id']}> {verb} <@{job['member_id']}> (`{job['member_id']}`).\n### 📝 Raison de la sanction\n```{reason}```"
+    if job['duration']:text+=f"\n⏱️ **Durée** : {job['duration']}"
     if job['explanation']:
         explanation=discord.utils.escape_markdown(job['explanation'])[:1200]
-        text+=f"\n**Explication pour le casier (extrait)**\n{explanation}"
-    text+=f"\n**Justificatifs conservés sur Iris** : {len(job['files'])}"
+        text+=f"\n📂 **Explication pour le casier (extrait)**\n{explanation}"
+    text+=f"\n📎 **Justificatifs conservés sur Iris** : {len(job['files'])}"
     if job['purge_seconds']:text+=f"\n**Messages supprimés** : {job['purge_seconds']//3600} heures."
-    text=text.encode('utf-16-le')[:7400].decode('utf-16-le','ignore')
+    text=text.encode('utf-16-le')[:7000].decode('utf-16-le','ignore')
     text+=f"\n-# Iris /sanction · Référence : {job['_id']}"
-    children=[{'type':10,'content':text}]
+    children=[{'type':10,'content':f"## {icons[job['type']]} {LABELS[job['type']]}\n-# 🛡️ Iris · Journal de modération"},
+              {'type':14,'divider':True,'spacing':1},{'type':10,'content':text}]
     if job.get('casier_id') and config.FRONTEND_URL.startswith('https://'):
         children.append({'type':1,'components':[{'type':2,'style':5,'label':'Consulter le casier Iris',
             'url':f"{config.FRONTEND_URL}/moderation/casiers?casier={job['casier_id']}&sanction={job['sanction_id']}"}]})
@@ -186,6 +195,13 @@ def log_payload(job,channel_id):
 
 async def post_log(channel_id,payload):
     from services.announcement_publishing import discord_request
+    from services.moderation_bot import moderation_client
+    guild=moderation_client.get_guild(int(config.DISCORD_GUILD_ID))
+    if not guild:raise HTTPException(503,'Serveur indisponible pour publier le log.')
+    channel=await log_channel(guild,channel_id)
+    if isinstance(channel,discord.Thread) and channel.archived and channel.locked:
+        # Reactivate the existing post; never unlock it or create a replacement post.
+        await channel.edit(archived=False,reason='Iris /sanction : publication dans le post de logs configuré')
     return await discord_request('POST',channel_id,payload,[])
 
 
@@ -209,7 +225,7 @@ async def publish_logs(job_id):
 
 
 async def stage_files(job, attachments):
-    if len(attachments)>5:raise HTTPException(422,'Cinq justificatifs maximum par sanction.')
+    if not 1<=len(attachments)<=5:raise HTTPException(422,'Au moins un justificatif est obligatoire ; cinq fichiers maximum par sanction.')
     for attachment in attachments:
         if not 0<attachment.size<=config.CASIER_UPLOAD_MAX_BYTES:raise HTTPException(422,'Chaque justificatif doit être non vide et respecter la limite de taille du casier.')
         filename=casier_log_parser.clean_filename(attachment.filename)

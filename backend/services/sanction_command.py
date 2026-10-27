@@ -18,9 +18,26 @@ def safe(value,limit=700):
     return discord.utils.escape_markdown(str(value or '').replace('\r','')).encode('utf-16-le')[:limit*2].decode('utf-16-le','ignore')
 
 
+EMOJIS={'rappel_a_lordre':'📣','avertissement':'⚠️','mute':'🔇','kick':'🚪','bannissement':'🔨'}
+
+
+def panel(title,*sections,colour=0x78618C,footer=None):
+    children=[discord.ui.TextDisplay(f'## {title}')]
+    for section in sections:
+        if section:
+            children.extend((discord.ui.Separator(spacing=discord.SeparatorSpacing.small),discord.ui.TextDisplay(section)))
+    if footer:children.append(discord.ui.TextDisplay(f'-# {footer}'))
+    return discord.ui.Container(*children,accent_colour=colour)
+
+
 def message_view(title,text):
+    lowered=title.lower()
+    warning=any(word in lowered for word in ('refusé','corriger','vérifier','résultat','indisponible'))
+    success='appliquée' in lowered
+    icon='⚠️' if warning else '✅' if success else '⌛' if 'expiré' in lowered else '🛑' if 'annulé' in lowered else '🛡️'
     view=discord.ui.LayoutView(timeout=TIMEOUT)
-    view.add_item(discord.ui.Container(discord.ui.TextDisplay(f'## {title}\n{text}'),accent_colour=0x78618C))
+    view.add_item(panel(f'{icon} {title}',text,colour=0xB38B46 if warning else 0x547568 if success else 0x78618C,
+                        footer='🔒 Visible uniquement par toi · Iris Modération'))
     return view
 
 
@@ -62,7 +79,7 @@ class PrivateView(discord.ui.LayoutView):
 class MemberPicker(PrivateView):
     def __init__(self,actor_id,guild_id):
         super().__init__(actor_id,guild_id)
-        self.add_item(discord.ui.Container(discord.ui.TextDisplay('## Sanctionner un membre\nSélectionne un utilisateur pour consulter son casier et préparer une sanction.\n-# Ce parcours est privé. Aucune sanction n’est appliquée avant ta confirmation.'),accent_colour=0x78618C))
+        self.add_item(panel('🛡️ Préparer une sanction','**1 · Choisir le membre**\nConsulte son casier avant de sélectionner une mesure adaptée.','**Le parcours**\n👤 Membre → 📂 Casier → 📝 Formulaire → ✅ Confirmation',footer='🔒 Parcours privé · Les membres du staff sont protégés.'))
         picker=discord.ui.UserSelect(placeholder='Choisir le membre concerné',min_values=1,max_values=1)
         async def selected(interaction):
             await interaction.response.defer()
@@ -91,15 +108,15 @@ class SummaryView(PrivateView):
         self.member_id=member.id
         record=record or {'sanctions':[],'fiches_s':[]}
         counts=casiers.build_sanctions_summary(record)
-        heading=f'## Casier de {safe(member.display_name,100)}\nIdentifiant : `{member.id}`\n'
-        heading+='\n'.join(f'**{actions.LABELS[k]}** : {counts.get(k,0)}' for k in actions.ORDER)
+        heading=f'👤 **{safe(member.display_name,100)}**\nIdentifiant : `{member.id}`'
+        counts_text='\n'.join(' · '.join(f'{EMOJIS[k]} {actions.LABELS[k]} : **{counts.get(k,0)}**' for k in actions.ORDER[i:i+2]) for i in range(0,len(actions.ORDER),2))
         active=sum(1 for f in record.get('fiches_s',[]) if f.get('active') is not False and not f.get('deleted_at'))
-        heading+=f'\n**Fiches S actives** : {active}\n\n'
-        recent=sorted(record.get('sanctions',[]),key=lambda s:str(s.get('created_at','')),reverse=True)[:3]
-        heading+='### Dernières sanctions\n'+ ('\n'.join(f'• **{safe(actions.LABELS.get(s.get("type"),s.get("type")),40)}** — {safe(s.get("reason"),260)}' for s in recent) if recent else 'Aucune sanction enregistrée.')
-        heading+='\n-# Le casier décrit l’historique ; les sanctions affichées ne sont pas forcément encore actives.'
-        self.add_item(discord.ui.Container(discord.ui.TextDisplay(heading),accent_colour=0x547568))
-        selector=discord.ui.Select(placeholder='Choisir la sanction à préparer',options=[discord.SelectOption(label=actions.LABELS[k],value=k) for k in actions.ORDER])
+        counts_text+=f'\n📌 Fiches S actives : **{active}**'
+        recent=sorted(record.get('sanctions',[]),key=lambda entry:str(entry.get('created_at','')),reverse=True)[:3]
+        history='### 🕘 Dernières sanctions\n'+ ('\n\n'.join(f'{EMOJIS.get(entry.get("type"),"📋")} **{safe(actions.LABELS.get(entry.get("type"),entry.get("type")),40)}**\n> {safe(entry.get("reason"),260).replace(chr(10),chr(10)+"> ")}' for entry in recent) if recent else '🌿 Aucun antécédent enregistré.')
+        self.add_item(panel('📂 Casier du membre',heading,counts_text,history,colour=0x547568,
+            footer='🔒 Historique privé · Une ancienne sanction n’est pas forcément encore active.'))
+        selector=discord.ui.Select(placeholder='Choisir la sanction à préparer',options=[discord.SelectOption(label=actions.LABELS[k],value=k,emoji=EMOJIS[k]) for k in actions.ORDER])
         async def selected(interaction):
             # No REST call before opening the modal: Discord requires an immediate response.
             if not actions.is_executor(interaction.user):
@@ -127,24 +144,24 @@ class SummaryView(PrivateView):
 
 class SanctionModal(discord.ui.Modal):
     def __init__(self,actor_id,guild_id,member_id,kind,previous_interaction=None):
-        super().__init__(title=f'{actions.LABELS[kind]} · Configuration',timeout=TIMEOUT)
+        super().__init__(title=f'{EMOJIS[kind]} {actions.LABELS[kind]}',timeout=TIMEOUT)
         self.actor_id=int(actor_id);self.guild_id=int(guild_id);self.member_id=int(member_id);self.kind=kind
         self.previous_interaction=previous_interaction
         self.reason=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,max_length=1000,placeholder='Décris précisément le comportement sanctionné.')
-        self.add_item(discord.ui.Label(text='Raison de la sanction',component=self.reason,description='Motif enregistré dans le casier et le journal Discord.'))
-        self.explanation=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=False,max_length=4000,placeholder='Contexte, chronologie, échanges, éléments de décision…')
-        self.add_item(discord.ui.Label(text='Explication interne pour le casier',component=self.explanation,description='Information complémentaire privée, conservée dans Iris.'))
+        self.add_item(discord.ui.Label(text='📝 Raison de la sanction',component=self.reason,description='Motif enregistré dans le casier et le journal Discord.'))
+        self.explanation=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,min_length=1,max_length=4000,placeholder='Contexte, chronologie, échanges, éléments de décision…')
+        self.add_item(discord.ui.Label(text='📂 Explication pour le casier',component=self.explanation,description='Obligatoire · contexte et éléments de décision conservés dans Iris.'))
         self.duration=None;self.purge=None
         if kind in casiers.DURATION_TYPES:
-            self.duration=discord.ui.TextInput(required=kind=='mute',max_length=80,default='30 min' if kind=='mute' else 'permanent',placeholder='Ex. 30 min, 2 h, 7 jours')
-            self.add_item(discord.ui.Label(text='Durée du mute' if kind=='mute' else 'Durée du bannissement',component=self.duration,
+            self.duration=discord.ui.TextInput(required=True,min_length=1,max_length=80,default='30 min' if kind=='mute' else 'permanent',placeholder='Ex. 30 min, 2 h, 7 jours')
+            self.add_item(discord.ui.Label(text='⏱️ Durée du mute' if kind=='mute' else '⏱️ Durée du bannissement',component=self.duration,
                 description='Timeout Discord : 28 jours maximum.' if kind=='mute' else 'Permanent ou temporaire (1 min à 365 jours).'))
         if kind=='bannissement':
             self.purge=discord.ui.Select(options=[discord.SelectOption(label=label,value=str(seconds),default=seconds==0) for seconds,label in [(0,'Ne supprimer aucun message'),(3600,'Supprimer la dernière heure'),(86400,'Supprimer les dernières 24 heures'),(604800,'Supprimer les 7 derniers jours')]])
-            self.add_item(discord.ui.Label(text='Messages à supprimer lors du ban',component=self.purge,description='Attention : cette suppression est définitive.'))
-        self.evidence=discord.ui.FileUpload(required=False,min_values=0,max_values=5)
-        self.add_item(discord.ui.Label(text='Documents justificatifs',component=self.evidence,
-            description=f'5 fichiers max. Images, PDF, TXT · {config.CASIER_UPLOAD_MAX_BYTES//1024//1024} Mo/fichier · stockés sur Iris.'))
+            self.add_item(discord.ui.Label(text='🗑️ Messages à supprimer lors du ban',component=self.purge,description='Attention : cette suppression est définitive.'))
+        self.evidence=discord.ui.FileUpload(required=True,min_values=1,max_values=5)
+        self.add_item(discord.ui.Label(text='📎 Documents justificatifs',component=self.evidence,
+            description=f'Obligatoire · 1 à 5 fichiers. Images, PDF, TXT · {config.CASIER_UPLOAD_MAX_BYTES//1024//1024} Mo/fichier · stockés sur Iris.'))
     async def interaction_check(self,interaction):
         if interaction.user.id!=self.actor_id or interaction.guild_id!=self.guild_id:
             await private(interaction,'Accès refusé','Ce formulaire ne t’appartient pas.');return False
@@ -152,6 +169,8 @@ class SanctionModal(discord.ui.Modal):
     async def on_submit(self,interaction):
         await interaction.response.defer(ephemeral=True,thinking=True)
         try:
+            if self.purge is not None and not self.purge.values:
+                raise HTTPException(422,'Choisis explicitement les messages à supprimer, ou « Ne supprimer aucun message ».')
             values=actions.parameters(self.kind,str(self.reason),str(self.explanation),str(self.duration) if self.duration else '',int(self.purge.values[0]) if self.purge and self.purge.values else 0)
             job=await actions.prepare(interaction.guild,self.actor_id,self.member_id,values,list(self.evidence.values),str(interaction.id))
             view=ConfirmView(job)
@@ -172,14 +191,14 @@ class ConfirmView(PrivateView):
         self.job=job
         effect={'rappel_a_lordre':'Enregistrement du rappel dans le casier Iris.', 'avertissement':'Enregistrement de l’avertissement dans le casier Iris.',
                 'mute':'Application d’un timeout Discord et ajout au casier.', 'kick':'Expulsion immédiate du serveur et ajout au casier.', 'bannissement':'Bannissement Discord et ajout au casier.'}[job['type']]
-        text=f'## Confirmer : {actions.LABELS[job["type"]]}\n**Membre** : {safe(job["snapshot"]["display_name"],100)} (`{job["member_id"]}`)\n**Effet** : {effect}\n'
-        if job['duration']:text+=f'**Durée** : {safe(job["duration"],80)}\n'
-        text+=f'**Motif**\n{safe(job["reason"],1000)}\n'
-        if job['explanation']:text+=f'**Explication interne**\n{safe(job["explanation"],800)}\n'
-        text+='**Justificatifs** : '+(', '.join(safe(f['filename'],70) for f in job['files']) or 'aucun')
+        text=f'👤 **Membre** : {safe(job["snapshot"]["display_name"],100)} (`{job["member_id"]}`)\n{EMOJIS[job["type"]]} **{actions.LABELS[job["type"]]}**\n{effect}\n'
+        if job['duration']:text+=f'⏱️ **Durée** : {safe(job["duration"],80)}\n'
+        text+=f'\n📝 **Motif**\n{safe(job["reason"],1000)}\n'
+        if job['explanation']:text+=f'\n📂 **Explication interne**\n{safe(job["explanation"],800)}\n'
+        text+='\n📎 **Justificatifs** : '+(', '.join(safe(f['filename'],70) for f in job['files']) or 'aucun')
         if job['purge_seconds']:text+=f'\n**Suppression définitive des messages** : {job["purge_seconds"]//3600} heures.'
         text+='\n**Accès temporaire** : le rôle de sanction est ajouté pour l’action puis retiré automatiquement.\n-# Ce parcours reste privé. Un log V2 sera publié dans le salon de modération configuré.'
-        self.add_item(discord.ui.Container(discord.ui.TextDisplay(text),accent_colour=0xB38B46))
+        self.add_item(panel('🛡️ Vérifier avant d’appliquer',text,colour=0xB38B46))
         apply=discord.ui.Button(label='Appliquer la sanction',style=discord.ButtonStyle.danger)
         async def confirmed(interaction):
             await interaction.response.defer()
@@ -221,7 +240,8 @@ async def sanction(interaction:discord.Interaction):
         view=MemberPicker(actor.id,interaction.guild_id)
         view.message=await interaction.edit_original_response(view=view,allowed_mentions=NO_MENTIONS)
     except Exception as error:
-        await interaction.edit_original_response(view=message_view('Accès à /sanction',safe(getattr(error,'detail','Commande indisponible. Réessaie plus tard.'))),allowed_mentions=NO_MENTIONS)
+        title='Accès refusé' if isinstance(error,HTTPException) and error.status_code==403 else 'Commande indisponible'
+        await interaction.edit_original_response(view=message_view(title,safe(getattr(error,'detail','Commande indisponible. Réessaie plus tard.'))),allowed_mentions=NO_MENTIONS)
         await actions.audit('casier.command.denied',actor=interaction.user,reason=str(getattr(error,'detail','Commande indisponible.'))[:500])
 
 

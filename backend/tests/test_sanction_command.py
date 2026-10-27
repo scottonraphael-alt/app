@@ -12,6 +12,7 @@ from services import casier_service as cs, sanction_actions as a, sanction_comma
 
 ACTOR=h.USER_IDS['staff'];TARGET='710000000000000001';BOT='910000000000000001'
 LOGS=[]
+REAL_POST_LOG=a.post_log
 class Role:
     def __init__(self,id,rank=70):self.id=int(id);self.rank=rank;self.managed=False
     def __ge__(self,other):return self.rank>=other
@@ -27,7 +28,7 @@ def member(guild,uid,roles=(),rank=1,bot=False,**permissions):
 class Guild:
     def __init__(self):
         self.id=int(h.GUILD_ID);self.owner_id=999999999999999999;self.calls=[];self.bans={};self.fetches=[];self.role_calls=[]
-        self.members={ACTOR:member(self,ACTOR,[h.ROLE_IDS['staff']],rank=50,moderate_members=True,kick_members=True,ban_members=True),TARGET:member(self,TARGET)}
+        self.members={ACTOR:member(self,ACTOR,[h.ROLE_IDS['staff'],config.SANCTION_REQUIRED_STAFF_ROLE_ID],rank=50,moderate_members=True,kick_members=True,ban_members=True),TARGET:member(self,TARGET)}
         self.me=member(self,BOT,rank=100,bot=True,moderate_members=True,kick_members=True,ban_members=True,manage_roles=True);self.members[BOT]=self.me
     async def fetch_roles(self):return [Role(config.SANCTION_TEMP_ROLE_ID),Role(config.SANCTION_PERMANENT_BAN_ROLE_ID)]
     async def fetch_channel(self,cid):return NS(id=int(cid),guild=self,type=discord.ChannelType.text,permissions_for=lambda member:NS(send_messages=True))
@@ -46,8 +47,8 @@ class Evidence:
     async def read(self):return self.content
 
 def prepare(guild,kind='avertissement',id='810000000000000001',attachments=None,duration=None,purge=0):
-    values=a.parameters(kind,'Comportement interdit','Contexte interne',duration if duration is not None else '30 min' if kind=='mute' else '',purge)
-    return h.run(a.prepare(guild,ACTOR,TARGET,values,attachments or [],id))
+    values=a.parameters(kind,'Comportement interdit','Contexte interne',duration if duration is not None else '30 min' if kind=='mute' else 'permanent' if kind=='bannissement' else '',purge)
+    return h.run(a.prepare(guild,ACTOR,TARGET,values,[Evidence()] if attachments is None else attachments,id))
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch,tmp_path):
     h.reset_db();h.reset_discord();LOGS.clear()
@@ -57,7 +58,7 @@ def isolated(monkeypatch,tmp_path):
     monkeypatch.setattr(storage_service,'STORAGE_ROOT',tmp_path);monkeypatch.setattr(cs,'_schedule_mirror',lambda *args:None)
 @pytest.mark.parametrize('role',[h.ROLE_IDS[k] for k in ['staff','helper','admin','responsable','animateur','operateur']])
 def test_all_staff_protected_even_from_responsables(role):
-    g=Guild();g.members[TARGET].roles=[NS(id=int(role))];g.members[ACTOR].roles=[NS(id=int(h.ROLE_IDS['responsable']))]
+    g=Guild();g.members[TARGET].roles=[NS(id=int(role))];g.members[ACTOR].roles=[NS(id=int(h.ROLE_IDS['responsable'])),NS(id=int(config.SANCTION_REQUIRED_STAFF_ROLE_ID))]
     with pytest.raises(HTTPException) as error:h.run(a.fresh_members(g,ACTOR,TARGET,'bannissement'))
     assert error.value.status_code==403 and not g.calls and h.run(h.db.casiers.count_documents({}))==0
 
@@ -111,7 +112,7 @@ def test_existing_mute_cannot_be_shortened():
     assert not g.calls
 @pytest.mark.parametrize('kind,duration',[('mute','permanent'),('mute','29 jours'),('mute','invalid'),('bannissement','invalid'),('bannissement','30 secondes'),('bannissement','366 jours')])
 def test_invalid_duration(kind,duration):
-    with pytest.raises(HTTPException):a.parameters(kind,'Motif',duration=duration)
+    with pytest.raises(HTTPException):a.parameters(kind,'Motif','Contexte',duration=duration)
 
 def test_evidence_stored_on_iris_and_attached_after_confirmation():
     g=Guild();job=prepare(g,attachments=[Evidence()]);path=job['files'][0]['staging_path']
@@ -288,7 +289,7 @@ def test_v2_logs_use_configured_channel_and_do_not_repeat_native_action_when_ret
     monkeypatch.setattr(a,'post_log',original);h.run(a.dispatch(NS(get_guild=lambda gid:g)));h.run(a.dispatch(NS(get_guild=lambda gid:g)))
     assert len(LOGS)==1 and len(g.calls)==1
     channel,payload=LOGS[0];assert channel==job['log_channels'][0] and payload['flags']==32768 and payload['allowed_mentions']['parse']==[]
-    text=payload['components'][0]['components'][0]['content']
+    text='\n'.join(component.get('content','') for component in payload['components'][0]['components'])
     assert f'Iris /sanction · Référence : {job["_id"]}' in text and 'Comportement interdit' in text
     assert str(ACTOR) in text and TARGET in text and payload['enforce_nonce']
     assert h.run(h.db.sanction_commands.find_one({'_id':job['_id']}))['log_complete']
@@ -338,7 +339,7 @@ def test_bot_without_manage_roles_cannot_prepare_a_sanction():
 def test_modal_submit_then_confirmation_callback_stays_private():
     g=Guild();it=interaction(g)
     async def checked():
-        modal=ui.SanctionModal(ACTOR,h.GUILD_ID,TARGET,'avertissement');modal.reason._value='Motif';modal.explanation._value='Contexte'
+        modal=ui.SanctionModal(ACTOR,h.GUILD_ID,TARGET,'avertissement');modal.reason._value='Motif';modal.explanation._value='Contexte';modal.evidence._values=[Evidence()]
         await modal.on_submit(it);assert it.response.calls[0]==('defer',{'ephemeral':True,'thinking':True})
         view=it.events[-1][1]['view'];assert isinstance(view,ui.ConfirmView) and not g.role_calls
         confirm=next(i for i in view.walk_children() if isinstance(i,discord.ui.Button) and i.label=='Appliquer la sanction')
@@ -346,3 +347,107 @@ def test_modal_submit_then_confirmation_callback_stays_private():
         assert 'Sanction appliquée' in str(it.events[-1][1]['view'].to_components())
         assert await h.db.casiers.count_documents({})==1
     h.run(checked())
+
+@pytest.mark.parametrize('channel_id',[1488814610134990848,1534253401364238366,1534253534642442411,1534254156309594223,1549574006221443132])
+def test_forum_posts_accepted_with_thread_permission_even_without_send_messages(channel_id):
+    g=Guild();thread=NS(id=channel_id,guild=g,type=discord.ChannelType.public_thread,archived=False,locked=False,
+        permissions_for=lambda bot:NS(send_messages=False,send_messages_in_threads=True,manage_threads=False))
+    async def fetch(cid):assert cid==channel_id;return thread
+    g.fetch_channel=fetch
+    assert h.run(a.log_channel(g,str(channel_id))) is thread
+
+
+def test_forum_parent_or_foreign_guild_rejected_and_threads_need_their_specific_permission():
+    g=Guild();channel=NS(id=123,guild=g,type=discord.ChannelType.forum)
+    async def fetch(cid):return channel
+    g.fetch_channel=fetch
+    with pytest.raises(HTTPException) as error:h.run(a.log_channel(g,'123'))
+    assert 'ID du post' in error.value.detail
+    channel.type=discord.ChannelType.public_thread;channel.locked=False
+    channel.permissions_for=lambda bot:NS(send_messages=True,send_messages_in_threads=False,manage_threads=True)
+    with pytest.raises(HTTPException) as error:h.run(a.log_channel(g,'123'))
+    assert 'fils' in error.value.detail
+    channel.guild=NS(id=g.id+1)
+    with pytest.raises(HTTPException):h.run(a.log_channel(g,'123'))
+
+
+def test_locked_forum_post_requires_manage_threads():
+    g=Guild();channel=NS(id=123,guild=g,type=discord.ChannelType.public_thread,locked=True,archived=True,
+        permissions_for=lambda bot:NS(send_messages_in_threads=True,manage_threads=False))
+    async def fetch(cid):return channel
+    g.fetch_channel=fetch
+    with pytest.raises(HTTPException) as error:h.run(a.log_channel(g,'123'))
+    assert 'verrouillé' in error.value.detail
+
+
+@pytest.mark.parametrize('locked',[True,False])
+def test_log_delivery_to_archived_post_reactivates_without_unlocking(monkeypatch,locked):
+    from unittest.mock import Mock,AsyncMock
+    from services import moderation_bot,announcement_publishing
+    g=Guild();channel=Mock(spec=discord.Thread);channel.id=123;channel.guild=g;channel.type=discord.ChannelType.public_thread
+    channel.locked=locked;channel.archived=True;channel.permissions_for=lambda bot:NS(send_messages_in_threads=True,manage_threads=True)
+    channel.edit=AsyncMock()
+    async def fetch(cid):return channel
+    g.fetch_channel=fetch;monkeypatch.setattr(moderation_bot.moderation_client,'get_guild',lambda gid:g)
+    sent=[]
+    async def send(method,cid,payload,assets):sent.append((method,cid,payload));return {'id':'933000000000000001'}
+    monkeypatch.setattr(announcement_publishing,'discord_request',send)
+    h.run(REAL_POST_LOG('123',{'flags':32768,'components':[]}))
+    if locked:
+        channel.edit.assert_awaited_once();assert channel.edit.call_args.kwargs['archived'] is False
+        assert 'locked' not in channel.edit.call_args.kwargs
+    else:channel.edit.assert_not_awaited()  # Discord reopens an unlocked post on send.
+    assert sent[0][0:2]==('POST','123')
+
+
+@pytest.mark.parametrize('privileged',['admin','owner'])
+def test_launch_requires_exact_staff_role_even_for_privileged_accounts(privileged):
+    g=Guild();actor=g.members[ACTOR];actor.roles=[NS(id=int(config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID))]
+    actor.guild_permissions.administrator=True
+    if privileged=='owner':g.owner_id=actor.id
+    it=interaction(g)
+    async def check():
+        await ui.sanction(it)
+        assert it.response.calls[0]==('defer',{'ephemeral':True,'thinking':True})
+        result=it.events[-1][1]['view'];text=str(result.to_components())
+        assert config.SANCTION_REQUIRED_STAFF_ROLE_ID in text and not isinstance(result,ui.MemberPicker)
+        assert not g.calls and not g.role_calls
+    h.run(check())
+
+
+def test_removing_only_the_required_staff_role_blocks_confirmation():
+    g=Guild();job=prepare(g,'kick')
+    g.members[ACTOR].roles=[r for r in g.members[ACTOR].roles if str(r.id)!=config.SANCTION_REQUIRED_STAFF_ROLE_ID]
+    assert h.ROLE_IDS['staff'] in a.role_ids(g.members[ACTOR])
+    with pytest.raises(HTTPException):h.run(a.apply(g,ACTOR,job['_id']))
+    assert not g.calls and not g.role_calls
+
+
+def test_all_modal_fields_required_and_server_rejects_missing_explanation_duration_or_proof():
+    async def check():
+        for kind in a.ORDER:
+            modal=ui.SanctionModal(ACTOR,h.GUILD_ID,TARGET,kind)
+            for label in modal.to_dict()['components']:
+                component=label['component'];assert component.get('required',True) is True
+                if component['type']==19:assert component['min_values']==1
+        for title in ['Configuration à corriger','Sanction appliquée','Parcours annulé']:
+            components=ui.message_view(title,'**Détail**').to_components()
+            assert components[0]['type']==17 and any(c['type']==14 for c in components[0]['components'])
+    h.run(check())
+    with pytest.raises(HTTPException):a.parameters('avertissement','Motif','  ')
+    with pytest.raises(HTTPException):a.parameters('bannissement','Motif','Contexte',duration='')
+    g=Guild()
+    with pytest.raises(HTTPException):prepare(g,attachments=[])
+    assert not g.calls and not g.role_calls
+
+
+def test_missing_ban_message_deletion_choice_is_rejected_before_any_action():
+    g=Guild();it=interaction(g)
+    async def check():
+        modal=ui.SanctionModal(ACTOR,h.GUILD_ID,TARGET,'bannissement')
+        modal.reason._value='Motif';modal.explanation._value='Contexte';modal.evidence._values=[Evidence()]
+        modal.purge._values=[]
+        await modal.on_submit(it)
+        assert 'Choisis explicitement' in str(it.events[-1][1]['view'].to_components())
+        assert not g.calls and not g.role_calls
+    h.run(check())
