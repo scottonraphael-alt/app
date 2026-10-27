@@ -734,3 +734,65 @@
     grid-column: 1 / -1;
   }
 }
+
+/* Thème sombre */
+:root[data-theme="dark"] .ag-page .ag-meet-hero::before {
+  background: rgba(141, 180, 232, 0.08);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-hero-agenda {
+  border-color: rgba(141, 180, 232, 0.22);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-hero-secondary:hover:not(:disabled) {
+  background: rgba(141, 180, 232, 0.16);
+}
+
+:root[data-theme="dark"] .ag-page :is(.ag-meet-hero, .ag-meet-towrite) .ag-skeleton {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-towrite-link {
+  border-color: rgba(230, 191, 115, 0.26);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-towrite-link:hover {
+  background: rgba(230, 191, 115, 0.14);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-towrite-all {
+  text-decoration-color: rgba(230, 191, 115, 0.5);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-actions-filters .ag-chip {
+  background: var(--ag-surface);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-actions-filters .ag-chip[aria-pressed="true"] {
+  background: var(--ag-line);
+}
+
+:root[data-theme="dark"] .ag-page .ag-action-check {
+  border-color: #4a584f;
+  background: var(--ag-field);
+}
+
+:root[data-theme="dark"] .ag-page .ag-action-check[aria-checked="true"] {
+  border-color: #4f7d66;
+  background: #4f7d66;
+  color: #fff;
+}
+
+:root[data-theme="dark"] .ag-page .ag-action-meeting {
+  text-decoration-color: rgba(143, 187, 163, 0.45);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-month-title {
+  background: rgba(17, 21, 19, 0.96);
+}
+
+:root[data-theme="dark"] .ag-page .ag-meet-row-excerpt {
+  color: var(--ag-muted);
+}

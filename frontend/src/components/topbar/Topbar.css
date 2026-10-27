@@ -67,3 +67,34 @@
 /* Plus de sidebar : le shell occupe toute la largeur. */
 .app-shell { display: block !important; grid-template-columns: minmax(0, 1fr) !important; padding: 0 !important; }
 .app-main { grid-column: auto !important; margin: 0 !important; width: 100%; max-width: none; }
+
+/* Thème sombre */
+:root[data-theme="dark"] .tb-bar { background: var(--iris-surface); border-bottom-color: var(--iris-border); color: var(--iris-text); }
+:root[data-theme="dark"] .tb-star { color: var(--iris-warn); }
+:root[data-theme="dark"] .tb-hint,
+:root[data-theme="dark"] .tb-empty,
+:root[data-theme="dark"] .tb-note-body,
+:root[data-theme="dark"] .tb-account-text small,
+:root[data-theme="dark"] .tb-chip-tools button,
+:root[data-theme="dark"] .tb-icon-btn { color: var(--iris-text-muted); }
+:root[data-theme="dark"] .tb-chip,
+:root[data-theme="dark"] .tb-link { color: var(--iris-accent); }
+:root[data-theme="dark"] .tb-chip:hover,
+:root[data-theme="dark"] .tb-account:hover,
+:root[data-theme="dark"] .tb-menu button:hover,
+:root[data-theme="dark"] .tb-chip-tools button:hover:not(:disabled),
+:root[data-theme="dark"] .tb-icon-btn:hover { background: var(--iris-surface-3); color: var(--iris-text); }
+:root[data-theme="dark"] .tb-chip.active { background: var(--iris-accent-soft); border-color: var(--iris-border-strong); color: var(--iris-text); }
+:root[data-theme="dark"] .tb-chip-add { border-color: var(--iris-border-strong); }
+:root[data-theme="dark"] .tb-icon-btn:focus-visible, :root[data-theme="dark"] .tb-chip:focus-visible,
+:root[data-theme="dark"] .tb-note:focus-visible, :root[data-theme="dark"] .tb-menu button:focus-visible { outline-color: var(--iris-accent); }
+:root[data-theme="dark"] .tb-badge { background: var(--iris-danger); color: #1a0f10; }
+:root[data-theme="dark"] .tb-menu, :root[data-theme="dark"] .tb-panel { background: var(--iris-surface-2); border-color: var(--iris-border-strong); box-shadow: var(--iris-shadow); }
+:root[data-theme="dark"] .tb-menu button, :root[data-theme="dark"] .tb-note { color: var(--iris-text); }
+:root[data-theme="dark"] .tb-panel-head { border-bottom-color: var(--iris-border); }
+:root[data-theme="dark"] .tb-note { border-bottom-color: var(--iris-border); }
+:root[data-theme="dark"] .tb-note:hover { background: var(--iris-surface-3); }
+:root[data-theme="dark"] .tb-note.is-unread { background: var(--iris-accent-soft); box-shadow: inset 3px 0 0 var(--iris-accent); }
+:root[data-theme="dark"] .tb-note time { color: var(--iris-text-soft); }
+:root[data-theme="dark"] .tb-identity { border-left-color: var(--iris-border); }
+:root[data-theme="dark"] .tb-avatar { background: var(--iris-surface-3); color: var(--iris-accent); }

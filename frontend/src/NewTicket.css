@@ -45,3 +45,17 @@ body.new-ticket-no-nav .app-shell > .app-main { grid-column:1 / -1 !important; m
 .nt-page .nt-form-wrap .command-form .optional-command-row { margin:0; padding:0; opacity:1; }
 .nt-page .nt-form-wrap .command-form button[type="submit"] { margin:2px 0 0; }
 .nt-page .nt-form-wrap .command-form .form-error { margin:0; color:#a14455; font-size:13px; line-height:1.6; }
+
+/* ===== Thème sombre ===== */
+:root[data-theme="dark"] .nt-page { --ink:var(--iris-text,#e7ece9); --muted:var(--iris-text-muted,#a2b0a9); --sage:var(--iris-accent,#8fbba3); --line:var(--iris-border,#2c3631); --canvas:var(--iris-bg,#111513); color:var(--iris-text,#e7ece9); background:var(--iris-bg,#111513); color-scheme:dark; }
+:root[data-theme="dark"] .nt-page .nt-home { border-color:var(--iris-border,#2c3631); background:var(--iris-surface,#181e1b); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .nt-page .nt-guide { border-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .nt-page .nt-step-icon, :root[data-theme="dark"] .nt-page .nt-form-icon { background:var(--iris-accent-soft,rgba(143,187,163,.14)); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .nt-page .nt-step small { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .nt-page .nt-tip { border-top-color:var(--iris-border,#2c3631); }
+:root[data-theme="dark"] .nt-page .nt-form-card { border-color:var(--iris-border,#2c3631); background:var(--iris-surface,#181e1b); }
+:root[data-theme="dark"] .nt-page .nt-form-card > header { border-bottom-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .nt-page .nt-form-wrap input, :root[data-theme="dark"] .nt-page .nt-form-wrap textarea, :root[data-theme="dark"] .nt-page .nt-form-wrap select { border-color:var(--iris-border-strong,#3a4640); background:var(--iris-surface-2,#1f2723); color:var(--iris-text,#e7ece9); }
+:root[data-theme="dark"] .nt-page .nt-form-wrap input:focus, :root[data-theme="dark"] .nt-page .nt-form-wrap textarea:focus { border-color:var(--iris-accent,#8fbba3); box-shadow:0 0 0 3px rgba(143,187,163,.2); }
+:root[data-theme="dark"] .nt-page .nt-form-wrap button[type=submit] { background:var(--iris-accent-strong,#4f7d66); color:#fff; }
+:root[data-theme="dark"] .nt-page .nt-form-wrap .command-form .form-error { color:var(--iris-danger,#e88b8b); }

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bell, Check, CheckCheck, LogOut, Pencil, Plus, Radio, Star, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
 
 import { api } from "../../api/client";
+import useTheme from "../../hooks/useTheme";
+import { OPEN_EVENT } from "../command/CommandPalette";
 import "./Topbar.css";
 
 const FAVORITES_KEY = ["profile", "favorites"];
@@ -164,11 +166,37 @@ function NotificationBell() {
   );
 }
 
+const THEME_META = {
+  light: { Icon: Sun, label: "Thème clair", next: "sombre" },
+  dark: { Icon: Moon, label: "Thème sombre", next: "système" },
+  system: { Icon: Monitor, label: "Thème du système", next: "clair" },
+};
+
+function ThemeToggle() {
+  const { preference, cycleTheme } = useTheme();
+  const { Icon, label, next } = THEME_META[preference];
+  return (
+    <button
+      type="button" className="tb-icon-btn" onClick={cycleTheme} data-testid="theme-toggle"
+      aria-label={`${label}. Passer au thème ${next}`} title={`${label} (cliquer pour : ${next})`}
+    >
+      <Icon size={16} />
+    </button>
+  );
+}
+
 export default function Topbar({ helper, roleLabel, onLogout }) {
   return (
     <header className="tb-bar" data-testid="topbar">
       <FavoritesBar />
       <div className="tb-right">
+        <button
+          type="button" className="tb-icon-btn" onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
+          aria-label="Rechercher une page (Ctrl+K)" title="Rechercher (Ctrl+K)" data-testid="command-open"
+        >
+          <Search size={16} />
+        </button>
+        <ThemeToggle />
         <NotificationBell />
         {(helper || onLogout) && (
           <div className="tb-identity" data-testid="helper-identity">

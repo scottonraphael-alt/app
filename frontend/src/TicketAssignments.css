@@ -723,3 +723,38 @@ body.assignments-no-nav .app-shell > .app-main {
 .ta-page .ta-reminder-result a { display:inline-flex; align-items:center; gap:5px; margin-right:12px; text-decoration:underline; }
 .ta-page .ta-reminder-error { color:#a14e54; }
 @media(max-width:640px) { .ta-page .ta-reminder-panel { padding:16px; } .ta-page .ta-reminder-panel > button { width:100%; justify-content:center; } .ta-page .ta-reminder-copy { min-width:0; } }
+
+/* ===== Thème sombre ===== */
+:root[data-theme="dark"] .ta-page { --ink:var(--iris-text,#e7ece9); --muted:var(--iris-text-muted,#a2b0a9); --sage:var(--iris-accent,#8fbba3); --sage-soft:var(--iris-accent-soft,rgba(143,187,163,.14)); --line:var(--iris-border,#2c3631); --canvas:var(--iris-bg,#111513); background:var(--iris-bg,#111513); color:var(--iris-text,#e7ece9); color-scheme:dark; }
+:root[data-theme="dark"] .ta-page .ta-home-button, :root[data-theme="dark"] .ta-page .ta-secondary-button, :root[data-theme="dark"] .ta-page .ta-refresh-button { background:var(--iris-surface,#181e1b); }
+:root[data-theme="dark"] .ta-page .ta-home-button:hover, :root[data-theme="dark"] .ta-page .ta-secondary-button:hover { background:var(--iris-surface-3,#27302b); }
+:root[data-theme="dark"] .ta-page .ta-summary-item, :root[data-theme="dark"] .ta-page .ta-ticket-panel, :root[data-theme="dark"] .ta-page .ta-assignment-panel, :root[data-theme="dark"] .ta-page .ta-state { background:var(--iris-surface,#181e1b); }
+:root[data-theme="dark"] .ta-page .ta-summary-item--orange { border-color:var(--iris-border,#2c3631); background:var(--iris-warn-soft,rgba(230,191,115,.14)); }
+:root[data-theme="dark"] .ta-page .ta-summary-item--orange span, :root[data-theme="dark"] .ta-page .ta-summary-item--orange strong { color:var(--iris-warn,#e6bf73); }
+:root[data-theme="dark"] .ta-page .ta-ticket-toolbar, :root[data-theme="dark"] .ta-page .ta-list-note, :root[data-theme="dark"] .ta-page .ta-assignment-footer { background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .ta-page .ta-search { border-color:var(--iris-border-strong,#3a4640); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .ta-page .ta-search:focus-within { border-color:var(--iris-accent,#8fbba3); box-shadow:0 0 0 3px rgba(143,187,163,.2); }
+:root[data-theme="dark"] .ta-page .ta-filters button.is-selected { border-color:var(--iris-border-strong,#3a4640); }
+:root[data-theme="dark"] .ta-page .ta-ticket { background:var(--iris-surface,#181e1b); }
+:root[data-theme="dark"] .ta-page .ta-ticket:hover { background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .ta-page .ta-ticket.is-selected { background:var(--iris-accent-soft,rgba(143,187,163,.14)); }
+:root[data-theme="dark"] .ta-page .ta-ticket-assignee { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .ta-page .ta-ticket-badge.is-unassigned { background:var(--iris-warn-soft,rgba(230,191,115,.14)); color:var(--iris-warn,#e6bf73); }
+:root[data-theme="dark"] .ta-page .ta-assignment-heading { border-bottom-color:var(--iris-border,#2c3631); background:var(--iris-warn-soft,rgba(230,191,115,.14)); }
+:root[data-theme="dark"] .ta-page .ta-assignment-heading .ta-eyebrow, :root[data-theme="dark"] .ta-page .ta-open-ticket { color:var(--iris-warn,#e6bf73); }
+:root[data-theme="dark"] .ta-page .ta-selected-member p { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .ta-page .ta-helper-option { background:var(--iris-surface,#181e1b); }
+:root[data-theme="dark"] .ta-page .ta-helper-option:hover { background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .ta-page .ta-helper-option.is-selected { border-color:var(--iris-accent-strong,#4f7d66); background:var(--iris-accent-soft,rgba(143,187,163,.14)); }
+:root[data-theme="dark"] .ta-page .ta-no-helper { background:var(--iris-surface-3,#27302b); color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .ta-page .ta-vigilance { border-color:var(--iris-border,#2c3631); background:var(--iris-danger-soft,rgba(232,139,139,.14)); color:var(--iris-danger,#e88b8b); }
+:root[data-theme="dark"] .ta-page .ta-save-button { background:var(--iris-accent-strong,#4f7d66); color:#fff; }
+:root[data-theme="dark"] .ta-page .ta-placeholder-icon { background:var(--iris-warn-soft,rgba(230,191,115,.14)); color:var(--iris-warn,#e6bf73); }
+:root[data-theme="dark"] .ta-page .ta-error, :root[data-theme="dark"] .ta-page .ta-refresh-error { border-color:var(--iris-border,#2c3631); background:var(--iris-danger-soft,rgba(232,139,139,.14)); color:var(--iris-danger,#e88b8b); }
+:root[data-theme="dark"] .ta-page .ta-reminder-panel { border-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .ta-page .ta-reminder-icon { color:var(--iris-accent,#8fbba3); background:var(--iris-accent-soft,rgba(143,187,163,.14)); }
+:root[data-theme="dark"] .ta-page .ta-reminder-copy h2 span { background:var(--iris-surface-3,#27302b); color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .ta-page .ta-reminder-copy p { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .ta-page .ta-reminder-copy p.ta-reminder-notice { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .ta-page .ta-reminder-result { border-top-color:var(--iris-border,#2c3631); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .ta-page .ta-reminder-error { color:var(--iris-danger,#e88b8b); }

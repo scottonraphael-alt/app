@@ -482,3 +482,29 @@ body.profile-no-nav .app-shell > .app-main {
     transition: none;
   }
 }
+
+/* ===== Thème sombre (data-theme="dark" sur <html>) ===== */
+:root[data-theme="dark"] .hp-page {
+  --ink: var(--iris-text, #e7ece9);
+  --muted: var(--iris-text-muted, #a2b0a9);
+  --sage: var(--iris-accent, #8fbba3);
+  --sage-soft: var(--iris-accent-soft, rgba(143, 187, 163, 0.14));
+  --canvas: var(--iris-bg, #111513);
+  --surface: var(--iris-surface, #181e1b);
+  --line: var(--iris-border, #2c3631);
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] .hp-page .hp-preferences-card { box-shadow: var(--iris-shadow, 0 1px 2px rgba(0, 0, 0, 0.4)); }
+:root[data-theme="dark"] .hp-page .hp-identity-card { background: var(--iris-surface-2, #1f2723); }
+:root[data-theme="dark"] .hp-page .hp-avatar { border-color: var(--iris-surface-2, #1f2723); background: var(--iris-surface-3, #27302b); }
+:root[data-theme="dark"] .hp-page .hp-identity-detail { border-top-color: var(--iris-border, #2c3631); }
+:root[data-theme="dark"] .hp-page .hp-card-header { background: var(--iris-surface-2, #1f2723); }
+:root[data-theme="dark"] .hp-page .hp-form textarea { border-color: var(--iris-border-strong, #3a4640); background: var(--iris-surface-2, #1f2723); color: var(--iris-text, #e7ece9); }
+:root[data-theme="dark"] .hp-page .hp-form textarea::placeholder { color: var(--iris-text-soft, #7d8b84); }
+:root[data-theme="dark"] .hp-page .hp-form textarea:focus { border-color: var(--iris-accent, #8fbba3); box-shadow: 0 0 0 4px rgba(143, 187, 163, 0.18); }
+:root[data-theme="dark"] .hp-page .hp-save-state.has-changes { color: var(--iris-warn, #e6bf73); }
+:root[data-theme="dark"] .hp-page .hp-save-button { border-color: var(--iris-accent-strong, #4f7d66); background: var(--iris-accent-strong, #4f7d66); color: #fff; }
+:root[data-theme="dark"] .hp-page .hp-save-button:hover:not(:disabled) { background: #5d8f76; }
+:root[data-theme="dark"] .hp-page .hp-load-error { border-color: rgba(232, 139, 139, 0.3); background: var(--iris-danger-soft, rgba(232, 139, 139, 0.14)); color: var(--iris-danger, #e88b8b); }
+:root[data-theme="dark"] .hp-page .hp-secondary-button { border-color: rgba(232, 139, 139, 0.4); background: var(--iris-surface-2, #1f2723); color: var(--iris-danger, #e88b8b); }

@@ -51,3 +51,32 @@ body.archive-workspace-no-nav .app-shell > .app-main { grid-column:1 / -1 !impor
 @keyframes aw-spin { to { transform:rotate(360deg); } }
 @media(max-width:700px) { .aw-page { padding:24px 16px; } .aw-page .workspace-header { flex-direction:column; } .aw-page .workspace-actions { width:100%; } .aw-page .workspace-actions > * { flex:1 1 130px; } .aw-page .ticket-meta { padding:18px; gap:10px; flex-direction:column; align-items:flex-start; } .aw-page .column-header,.aw-page [data-testid="channel-archive-search-panel"] { padding:18px !important; } .aw-page .transcript-scroll { padding:8px 16px 16px; } }
 @media(prefers-reduced-motion:reduce) { .aw-page .spin { animation:none; } .aw-page .transcript-message { transition:none !important; } }
+
+/* ===== Thème sombre (data-theme="dark") — surcharges uniquement ===== */
+:root[data-theme="dark"] .aw-page { --ink:var(--iris-text); --muted:var(--iris-text-muted); --line:var(--iris-border); --canvas:var(--iris-bg); background:var(--iris-bg); color:var(--iris-text); color-scheme:dark; }
+:root[data-theme="dark"] .aw-page a:focus-visible,
+:root[data-theme="dark"] .aw-page button:focus-visible { outline-color:var(--iris-accent); }
+:root[data-theme="dark"] .aw-page .back-link,
+:root[data-theme="dark"] .aw-page .member-title p,
+:root[data-theme="dark"] .aw-page .transcript-message a,
+:root[data-theme="dark"] .aw-page [data-testid="channel-archive-search-results"] .admin-empty { color:var(--iris-accent); }
+:root[data-theme="dark"] .aw-page .workspace-actions button,
+:root[data-theme="dark"] .aw-page .aw-home,
+:root[data-theme="dark"] .aw-page [data-testid="clear-search-button"] { background:var(--iris-surface-2) !important; border-color:var(--iris-border-strong) !important; color:var(--iris-accent); }
+:root[data-theme="dark"] .aw-page .workspace-actions .danger-button { background:var(--iris-danger-soft) !important; border-color:var(--iris-danger-soft) !important; color:var(--iris-danger); }
+:root[data-theme="dark"] .aw-page .ticket-meta { background:var(--iris-surface-2); border-color:var(--iris-border); color:var(--iris-text-muted); }
+:root[data-theme="dark"] .aw-page .transcript-column { background:var(--iris-surface); border-color:var(--iris-border); }
+:root[data-theme="dark"] .aw-page .column-header { background:var(--iris-surface-2); border-bottom-color:var(--iris-border); }
+:root[data-theme="dark"] .aw-page .column-header > span { color:var(--iris-accent); }
+:root[data-theme="dark"] .aw-page .column-header b { color:var(--iris-text-muted); }
+:root[data-theme="dark"] .aw-page [data-testid="channel-archive-search-panel"] { background:var(--iris-surface) !important; border-bottom-color:var(--iris-border) !important; }
+:root[data-theme="dark"] .aw-page [data-testid="channel-archive-search-panel"] label { background:var(--iris-surface-2); border-color:var(--iris-border-strong); color:var(--iris-accent); }
+:root[data-theme="dark"] .aw-page [data-testid="channel-archive-search-panel"] label:focus-within { border-color:var(--iris-accent); box-shadow:0 0 0 3px var(--iris-accent-soft); }
+:root[data-theme="dark"] .aw-page [data-testid="channel-archive-search-panel"] label select option { background:var(--iris-surface-2); color:var(--iris-text); }
+:root[data-theme="dark"] .aw-page [data-testid="channel-archive-search-results"] button { background:var(--iris-surface-2) !important; border-color:var(--iris-border) !important; color:var(--iris-text); }
+:root[data-theme="dark"] .aw-page .transcript-message { border-bottom-color:var(--iris-border); }
+:root[data-theme="dark"] .aw-page .transcript-message > img { background:var(--iris-surface-3); }
+:root[data-theme="dark"] .aw-page .message-line time { color:var(--iris-text-soft); }
+:root[data-theme="dark"] .aw-page .transcript-message p { color:var(--iris-text-muted); }
+:root[data-theme="dark"] .aw-page .transcript-message .transcript-attachment-image { border-color:var(--iris-border); }
+:root[data-theme="dark"] .aw-page .transcript-message a > .admin-empty { color:var(--iris-text-soft); }

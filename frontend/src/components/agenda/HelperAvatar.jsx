@@ -27,7 +27,10 @@ function toneFor(person) {
   const key = String(person?.id || person?.username || helperName(person));
   let hash = 0;
   for (const char of key) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
-  return INITIAL_TONES[hash % INITIAL_TONES.length];
+  const index = hash % INITIAL_TONES.length;
+  const [bg, ink] = INITIAL_TONES[index];
+  // Variables --ag-tone-N-* : redéfinies par le thème sombre (Agenda.css), le clair garde ces valeurs.
+  return [`var(--ag-tone-${index}-bg, ${bg})`, `var(--ag-tone-${index}-ink, ${ink})`];
 }
 
 function safeImageUrl(url) {

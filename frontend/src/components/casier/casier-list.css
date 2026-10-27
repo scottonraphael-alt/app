@@ -746,3 +746,39 @@
     transition: none;
   }
 }
+
+/* Thème sombre (data-theme="dark" sur <html>) */
+
+:root[data-theme="dark"] .cz-searchbar-badge {
+  background: var(--iris-accent-strong, #4f7d66);
+  color: #fff;
+}
+
+:root[data-theme="dark"] .cz-searchbar-dot--banni {
+  background: #e88b8b;
+}
+
+:root[data-theme="dark"] .cz-searchbar-dot--mute {
+  background: #8db4e8;
+}
+
+:root[data-theme="dark"] .cz-list-flag--mute {
+  color: #8db4e8;
+}
+
+:root[data-theme="dark"] .cz-list-row:hover {
+  background: #1f2723;
+}
+
+:root[data-theme="dark"] .cz-list-row[aria-current="true"] {
+  background: rgba(143, 187, 163, 0.14);
+}
+
+:root[data-theme="dark"] .cz-list-flag--prevention,
+:root[data-theme="dark"] .cz-create-results-state {
+  border-color: #3a4640;
+}
+
+:root[data-theme="dark"] .cz-create-member {
+  background: #1f2723;
+}

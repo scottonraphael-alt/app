@@ -6,7 +6,7 @@ from starlette.middleware.cors import CORSMiddleware
 import logging
 from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
-from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications
+from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates
 from services import agenda_indexes, agenda_reminders
 from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
@@ -94,6 +94,10 @@ app.include_router(server_statistics.router, prefix="/api")
 app.include_router(casier.router, prefix="/api")
 app.include_router(channel_archives.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(search.router, prefix="/api")
+app.include_router(agenda_ics.router, prefix="/api")
+app.include_router(handoffs.router, prefix="/api")
+app.include_router(reply_templates.router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,

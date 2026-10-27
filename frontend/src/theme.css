@@ -1,0 +1,46 @@
+/* Thème Iris : variables globales. Clair = charte actuelle ; sombre via data-theme="dark" sur <html>. */
+:root {
+  --iris-bg: #f6f5ef; --iris-surface: #ffffff; --iris-surface-2: #f5f6f2; --iris-surface-3: #e8efea;
+  --iris-border: #e2e8e2; --iris-border-strong: #cfddd3;
+  --iris-text: #1c2622; --iris-text-muted: #64706a; --iris-text-soft: #8a948e;
+  --iris-accent: #3b564b; --iris-accent-strong: #4a675c; --iris-accent-soft: #e8efea;
+  --iris-danger: #a04754; --iris-danger-soft: #f8e9eb; --iris-warn: #9a773c; --iris-warn-soft: #f8f0df;
+  --iris-info: #3d6aa8; --iris-info-soft: #e6eefa; --iris-violet: #6f55a8; --iris-violet-soft: #eee9f8;
+  --iris-shadow: 0 12px 32px rgba(28, 38, 34, .14);
+}
+
+:root[data-theme="dark"] {
+  --iris-bg: #111513; --iris-surface: #181e1b; --iris-surface-2: #1f2723; --iris-surface-3: #27302b;
+  --iris-border: #2c3631; --iris-border-strong: #3a4640;
+  --iris-text: #e7ece9; --iris-text-muted: #a2b0a9; --iris-text-soft: #7d8b84;
+  --iris-accent: #8fbba3; --iris-accent-strong: #4f7d66; --iris-accent-soft: rgba(143, 187, 163, .14);
+  --iris-danger: #e88b8b; --iris-danger-soft: rgba(232, 139, 139, .14);
+  --iris-warn: #e6bf73; --iris-warn-soft: rgba(230, 191, 115, .14);
+  --iris-info: #8db4e8; --iris-info-soft: rgba(141, 180, 232, .14);
+  --iris-violet: #b9a2e6; --iris-violet-soft: rgba(185, 162, 230, .15);
+  --iris-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .35);
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] html,
+:root[data-theme="dark"] body { background: var(--iris-bg); color: var(--iris-text); }
+:root[data-theme="dark"] { background: var(--iris-bg); }
+:root[data-theme="dark"] ::selection { background: var(--iris-accent-strong); color: #fff; }
+:root[data-theme="dark"] * { scrollbar-color: var(--iris-border-strong) transparent; }
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--iris-border-strong); border-radius: 4px; }
+:root[data-theme="dark"] ::-webkit-scrollbar-track { background: transparent; }
+
+/* Bascule douce, uniquement pendant un changement de thème. */
+html.theme-switching, html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after {
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, fill 150ms ease, stroke 150ms ease !important;
+}
+
+:focus-visible { outline: 2px solid var(--iris-accent); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+  }
+  html.theme-switching, html.theme-switching * { transition: none !important; }
+}

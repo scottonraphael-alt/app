@@ -2383,3 +2383,299 @@ body.agenda-no-nav .app-shell > .app-main {
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Thème sombre : :root[data-theme="dark"] (bascule gérée par theme.css).
+   Redéfinit les jetons ag-* puis corrige les couleurs codées en dur.
+   ========================================================================== */
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog-overlay, .ag-popover) {
+  --ag-ink: #e7ece9;
+  --ag-muted: #a2b0a9;
+  --ag-faint: #7d8b84;
+  --ag-sage: #8fbba3;
+  --ag-sage-strong: #43705b;
+  --ag-sage-soft: rgba(143, 187, 163, 0.14);
+  --ag-sage-line: rgba(143, 187, 163, 0.3);
+  --ag-line: #2c3631;
+  --ag-line-strong: #3a4640;
+  --ag-canvas: #111513;
+  --ag-surface: #181e1b;
+  --ag-hover: #1f2723;
+  --ag-chip: #1f2723;
+  --ag-field: #1b221f;
+  --ag-field-line: #3a4640;
+  --ag-field-focus: #6f9a82;
+  --ag-skeleton: #27302b;
+  --ag-danger-bg: rgba(232, 139, 139, 0.14);
+  --ag-danger-line: rgba(232, 139, 139, 0.32);
+  --ag-danger-ink: #f0a3a3;
+  --ag-clay-bg: rgba(217, 154, 126, 0.15);
+  --ag-clay-line: rgba(217, 154, 126, 0.32);
+  --ag-clay-ink: #e8b49b;
+  --ag-amber-bg: rgba(230, 191, 115, 0.14);
+  --ag-amber-line: rgba(230, 191, 115, 0.32);
+  --ag-amber-ink: #ecc98a;
+  --ag-blue-bg: rgba(141, 180, 232, 0.14);
+  --ag-blue-line: rgba(141, 180, 232, 0.32);
+  --ag-blue-ink: #a6c6f0;
+  --ag-shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  --ag-absence-bg: rgba(217, 154, 126, 0.15);
+  --ag-absence-line: rgba(217, 154, 126, 0.32);
+  --ag-absence-ink: #e8b49b;
+  --ag-reunion-bg: rgba(141, 180, 232, 0.14);
+  --ag-reunion-line: rgba(141, 180, 232, 0.32);
+  --ag-reunion-ink: #a6c6f0;
+  --ag-evenement-bg: rgba(185, 162, 230, 0.15);
+  --ag-evenement-line: rgba(185, 162, 230, 0.34);
+  --ag-evenement-ink: #cdbbef;
+  --ag-echeance-bg: rgba(232, 139, 139, 0.14);
+  --ag-echeance-line: rgba(232, 139, 139, 0.32);
+  --ag-echeance-ink: #f0a3a3;
+  --ag-taches-bg: rgba(111, 192, 195, 0.14);
+  --ag-taches-line: rgba(111, 192, 195, 0.32);
+  --ag-taches-ink: #8fd3d5;
+  --ag-rappel-bg: rgba(230, 191, 115, 0.14);
+  --ag-rappel-line: rgba(230, 191, 115, 0.32);
+  --ag-rappel-ink: #ecc98a;
+  --ag-permanence-bg: rgba(143, 187, 163, 0.14);
+  --ag-permanence-line: rgba(143, 187, 163, 0.3);
+  --ag-permanence-ink: #a5ccb7;
+  --ag-autre-bg: rgba(162, 176, 169, 0.12);
+  --ag-autre-line: rgba(162, 176, 169, 0.26);
+  --ag-autre-ink: #a2b0a9;
+
+  /* Initiales des avatars (HelperAvatar). */
+  --ag-tone-0-bg: rgba(143, 187, 163, 0.2);
+  --ag-tone-0-ink: #a5ccb7;
+  --ag-tone-1-bg: rgba(141, 180, 232, 0.2);
+  --ag-tone-1-ink: #a6c6f0;
+  --ag-tone-2-bg: rgba(185, 162, 230, 0.2);
+  --ag-tone-2-ink: #cdbbef;
+  --ag-tone-3-bg: rgba(230, 191, 115, 0.2);
+  --ag-tone-3-ink: #ecc98a;
+  --ag-tone-4-bg: rgba(217, 154, 126, 0.2);
+  --ag-tone-4-ink: #e8b49b;
+  --ag-tone-5-bg: rgba(162, 176, 169, 0.2);
+  --ag-tone-5-ink: #bfcac4;
+
+  color-scheme: dark;
+}
+
+/* Boutons pleins : fond vert profond, texte blanc. */
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button {
+  border-color: #4f7d66;
+  background: #4f7d66;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: #43705b;
+  background: #43705b;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--secondary {
+  border-color: var(--ag-line-strong);
+  background: var(--ag-surface);
+  color: var(--ag-sage);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: var(--ag-line-strong);
+  background: var(--ag-hover);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--danger {
+  border-color: var(--ag-danger-line);
+  background: var(--ag-danger-bg);
+  color: var(--ag-danger-ink);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--danger:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: rgba(232, 139, 139, 0.5);
+  background: rgba(232, 139, 139, 0.24);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--blue {
+  border-color: #3f68a6;
+  background: #3f68a6;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--blue:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: #345a94;
+  background: #345a94;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-button--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ag-sage);
+}
+
+/* Surfaces blanches codées en dur. */
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) :is(
+  .ag-home,
+  .ag-icon-button,
+  .ag-count,
+  .ag-check-pill,
+  .ag-people-chip,
+  .ag-error-retry,
+  .ag-pill--white
+) {
+  background: var(--ag-surface);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-pill--white {
+  --ag-type-bg: var(--ag-surface);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-pill--neutral,
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-date-block--muted {
+  --ag-type-bg: var(--ag-autre-bg);
+  --ag-type-line: var(--ag-autre-line);
+  --ag-type-ink: var(--ag-autre-ink);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog) .ag-panel-header {
+  background: var(--ag-panel-tint, var(--ag-surface));
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog) .ag-panel-header--calendar {
+  --ag-panel-tint: var(--ag-sage-soft);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog) :is(.ag-panel-header--calendar, .ag-panel-header--meetings, .ag-panel-header--actions) .ag-panel-icon {
+  background: var(--ag-surface);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog) :is(.ag-panel-footer, .ag-toolbar) {
+  background: var(--ag-hover);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) :is(.ag-callout, .ag-fieldset, .ag-people-chip.is-missing, .ag-check-pill.is-past, .ag-check-pill.is-disabled, .ag-check-pill.is-disabled:hover) {
+  background: var(--ag-hover);
+}
+
+:root[data-theme="dark"] .ag-dialog .ag-dialog-note,
+:root[data-theme="dark"] .ag-popover .ag-people-hint {
+  background: var(--ag-hover);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-chip:hover {
+  background: var(--ag-line);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-chip-count {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-segmented > button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-segmented > button.is-selected {
+  background: var(--ag-line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-search:focus-within {
+  box-shadow: 0 0 0 3px rgba(143, 187, 163, 0.18);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-link-button {
+  text-decoration-color: rgba(143, 187, 163, 0.45);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-presence--available,
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-callout--success {
+  border-color: rgba(143, 187, 163, 0.3);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-avatar-stack > .ag-avatar-more {
+  box-shadow: 0 0 0 2px var(--ag-surface);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) :is(.ag-avatar-more, .ag-check-input:disabled + .ag-check-mark, .ag-check-pill-note) {
+  background: var(--ag-line);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-people-chip-remove:hover {
+  background: var(--ag-line);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-error-retry {
+  border-color: var(--ag-danger-line);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-error-retry:hover {
+  background: var(--ag-danger-bg);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+}
+
+/* Fenêtres et popovers. */
+:root[data-theme="dark"] .ag-dialog-overlay {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+:root[data-theme="dark"] .ag-dialog {
+  background: var(--ag-surface);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme="dark"] .ag-dialog .ag-dialog-footer,
+:root[data-theme="dark"] .ag-popover {
+  background: var(--ag-surface);
+}
+
+/* Champs de formulaire. */
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) :is(.ag-input, .ag-textarea, .ag-select):disabled {
+  background: var(--ag-hover);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) :is(.ag-input, .ag-textarea, .ag-select)[aria-invalid="true"],
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-people-trigger.is-invalid {
+  border-color: rgba(232, 139, 139, 0.6);
+  background: var(--ag-danger-bg);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) :is(.ag-input, .ag-textarea, .ag-select)::placeholder {
+  color: var(--ag-faint);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-check-mark {
+  border-color: #4a584f;
+  background: var(--ag-field);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-check-input:checked + .ag-check-mark {
+  border-color: #4f7d66;
+  background: #4f7d66;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-check-input:disabled + .ag-check-mark {
+  border-color: var(--ag-line);
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-check-input:disabled:checked + .ag-check-mark {
+  border-color: #3a4f43;
+  background: #3a4f43;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-switch-track {
+  background: #3a4640;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-check-input:checked + .ag-switch-track {
+  background: #4f7d66;
+}
+
+:root[data-theme="dark"] :is(.ag-page, .ag-dialog, .ag-popover) .ag-people-add {
+  border-color: var(--ag-line-strong);
+}
+
+:root[data-theme="dark"] .ag-popover .ag-people-search:focus-within {
+  box-shadow: inset 0 -2px 0 var(--ag-sage);
+}

@@ -270,3 +270,21 @@
     width: 100%;
   }
 }
+
+/* ===== Thème sombre (data-theme="dark") — surcharges uniquement ===== */
+:root[data-theme="dark"] .rca-page { --ink:var(--iris-text); --muted:var(--iris-text-muted); --line:var(--iris-border); --sage:var(--iris-accent); --sage-soft:var(--iris-accent-soft); color-scheme:dark; }
+:root[data-theme="dark"] .rca-create input { background:var(--iris-surface-2); border-color:var(--iris-border-strong); color:var(--iris-text); }
+:root[data-theme="dark"] .rca-create input::placeholder { color:var(--iris-text-soft); }
+:root[data-theme="dark"] .rca-metric,
+:root[data-theme="dark"] .rca-card { background:var(--iris-surface); border-color:var(--iris-border); }
+:root[data-theme="dark"] .rca-metric--amber { background:var(--iris-warn-soft); border-color:var(--iris-warn-soft); }
+:root[data-theme="dark"] .rca-metric--amber strong { color:var(--iris-warn); }
+:root[data-theme="dark"] .rca-card:hover { box-shadow:var(--iris-shadow); }
+:root[data-theme="dark"] .rca-card-icon { background:var(--iris-accent-soft); color:var(--iris-accent); }
+:root[data-theme="dark"] .rca-card-copy small { color:var(--iris-text-soft); }
+:root[data-theme="dark"] .rca-progress-track { background:var(--iris-surface-3); }
+:root[data-theme="dark"] .rca-progress-track span { background:var(--iris-accent); }
+:root[data-theme="dark"] .rca-progress--failed { background:var(--iris-danger-soft); border-color:var(--iris-danger-soft); }
+:root[data-theme="dark"] .rca-progress--failed p { color:var(--iris-danger); }
+:root[data-theme="dark"] .rca-danger { background:var(--iris-surface-2); border-color:var(--iris-danger-soft); color:var(--iris-danger); }
+:root[data-theme="dark"] .rca-danger:hover { background:var(--iris-danger-soft); }

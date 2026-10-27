@@ -544,3 +544,29 @@
     padding-inline: 16px;
   }
 }
+
+/* Thème sombre */
+:root[data-theme="dark"] .ag-page.ag-meeting .ag-meeting-title-input:focus {
+  background: var(--ag-surface);
+  box-shadow: 0 0 0 3px rgba(143, 187, 163, 0.18);
+}
+
+:root[data-theme="dark"] .ag-page.ag-meeting .ag-focus-bar {
+  background: rgba(24, 30, 27, 0.96);
+}
+
+:root[data-theme="dark"] .ag-page.ag-meeting.is-focus {
+  background: var(--ag-canvas);
+}
+
+:root[data-theme="dark"] .ag-page.ag-meeting .ag-save-status.is-saved .ag-save-dot {
+  background: #8fbba3;
+}
+
+:root[data-theme="dark"] .ag-page.ag-meeting .ag-save-status.is-offline .ag-save-dot {
+  background: #e88b8b;
+}
+
+:root[data-theme="dark"] .ag-page.ag-meeting .ag-save-status:is(.is-conflict, .is-locked) .ag-save-dot {
+  background: #e6a284;
+}

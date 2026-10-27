@@ -1444,3 +1444,57 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Thème sombre */
+:root[data-theme="dark"] .ag-page :is(.ag-cal-filterbar, .ag-cal-more, .ag-cal-day, .ag-cal-day-add, .ag-week-item, .ag-list-item) {
+  background: var(--ag-surface);
+}
+
+:root[data-theme="dark"] .ag-dialog .ag-cal-type-body {
+  background: var(--ag-surface);
+}
+
+:root[data-theme="dark"] .ag-page :is(.ag-cal-weekdays, .ag-week-heads, .ag-list-day) {
+  background: var(--ag-hover);
+}
+
+:root[data-theme="dark"] .ag-page .ag-cal-day.is-weekend,
+:root[data-theme="dark"] .ag-page .ag-cal-day.is-outside {
+  background: var(--ag-canvas);
+}
+
+:root[data-theme="dark"] .ag-page :is(.ag-week-band-cell.is-today, .ag-week-column.is-today, .ag-week-day.is-today) {
+  background: var(--ag-sage-soft);
+}
+
+:root[data-theme="dark"] .ag-page .ag-cal-day.is-today {
+  box-shadow: inset 0 0 0 2px #6f9a82;
+}
+
+:root[data-theme="dark"] .ag-page .ag-cal-day.is-outside .ag-cal-day-number {
+  color: var(--ag-faint);
+}
+
+:root[data-theme="dark"] .ag-page .ag-cal-day.is-today .ag-cal-day-number,
+:root[data-theme="dark"] .ag-page .ag-week-head.is-today .ag-week-head-number {
+  background: #4f7d66;
+  color: #fff;
+}
+
+:root[data-theme="dark"] .ag-page .ag-pill.ag-list-day-today {
+  --ag-type-bg: #4f7d66;
+  --ag-type-line: #4f7d66;
+  --ag-type-ink: #fff;
+}
+
+:root[data-theme="dark"] .ag-page .ag-cal-bar.has-tail::after {
+  background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0 4px, transparent 4px 8px);
+}
+
+:root[data-theme="dark"] .ag-page .ag-button.ag-cal-fab {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="dark"] .ag-dialog-overlay.ag-daypop-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}

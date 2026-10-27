@@ -147,3 +147,22 @@
   letter-spacing: 0.1em;
   text-align: center;
 }
+
+/* ===== Thème sombre (data-theme="dark" sur <html>) ===== */
+:root[data-theme="dark"] .lg-page {
+  --lg-ink: var(--iris-text, #e7ece9);
+  --lg-muted: var(--iris-text-muted, #a2b0a9);
+  --lg-sage: var(--iris-accent, #8fbba3);
+  --lg-sage-hover: #5d8f76;
+  --lg-sage-soft: var(--iris-accent-soft, rgba(143, 187, 163, 0.14));
+  --lg-line: var(--iris-border, #2c3631);
+  --lg-danger: var(--iris-danger, #e88b8b);
+  --lg-danger-soft: var(--iris-danger-soft, rgba(232, 139, 139, 0.14));
+  --lg-danger-line: rgba(232, 139, 139, 0.35);
+  background: var(--iris-bg, #111513);
+}
+
+:root[data-theme="dark"] .lg-card { background: var(--iris-surface, #181e1b); box-shadow: var(--iris-shadow, 0 1px 2px rgba(0, 0, 0, 0.4)); }
+:root[data-theme="dark"] .lg-button { border-color: var(--iris-accent-strong, #4f7d66); background: var(--iris-accent-strong, #4f7d66); color: #fff; }
+:root[data-theme="dark"] .lg-button:hover { border-color: #5d8f76; background: #5d8f76; }
+:root[data-theme="dark"] .lg-button:focus-visible { outline-color: var(--iris-accent, #8fbba3); }

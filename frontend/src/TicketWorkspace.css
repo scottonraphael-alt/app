@@ -168,3 +168,76 @@ body.ticket-workspace-no-nav .app-shell > .app-main { margin:0 !important; paddi
 .tw-search-pages { display:flex; gap:8px; justify-content:space-between; margin-top:16px; }
 .tw-message.is-search-hit { background:#edf5e5; border-radius:9px; box-shadow:0 0 0 8px #edf5e5; }
 @media(max-width:760px) { .tw-search-form { display:block; } .tw-search-form > div { flex-wrap:wrap; margin-top:8px; } .tw-search-form > div > button { width:100%; } .tw-panel-heading .tw-button { font-size:10px!important; padding:6px; } }
+
+/* ===== Thème sombre ===== */
+:root[data-theme="dark"] .tw-desk { --tw-ink:var(--iris-text,#e7ece9); --tw-muted:var(--iris-text-muted,#a2b0a9); --tw-line:var(--iris-border,#2c3631); --tw-sage:var(--iris-accent,#8fbba3); --tw-soft:var(--iris-surface-2,#1f2723); --tw-paper:var(--iris-surface,#181e1b); background:var(--iris-bg,#111513); color-scheme:dark; }
+:root[data-theme="dark"] .tw-desk :is(button,a,summary,input,textarea,select,[role="tab"]):focus-visible { outline-color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-button:hover:not(:disabled) { border-color:var(--iris-border-strong,#3a4640); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-button-primary { color:#fff; background:var(--iris-accent-strong,#4f7d66); border-color:var(--iris-accent-strong,#4f7d66); }
+:root[data-theme="dark"] .tw-button-primary:hover:not(:disabled) { color:#fff; background:#5a8c73; }
+:root[data-theme="dark"] .tw-menu[open] > summary { background:var(--iris-surface-3,#27302b); }
+:root[data-theme="dark"] .tw-menu-content { background:var(--iris-surface-2,#1f2723); border-color:var(--iris-border,#2c3631); box-shadow:var(--iris-shadow,0 8px 24px rgba(0,0,0,.35)); }
+:root[data-theme="dark"] .tw-menu-content button { background:transparent; color:var(--iris-text,#e7ece9); }
+:root[data-theme="dark"] .tw-menu-content button:hover { background:var(--iris-surface-3,#27302b); }
+:root[data-theme="dark"] .tw-danger { color:var(--iris-danger,#e88b8b)!important; }
+:root[data-theme="dark"] .tw-contextbar { border-color:var(--iris-border,#2c3631); background:var(--iris-accent-soft,rgba(143,187,163,.14)); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-context-label,:root[data-theme="dark"] .tw-context-date,:root[data-theme="dark"] .tw-select-wrap { color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-context-control select,:root[data-theme="dark"] .tw-context-person { border-color:var(--iris-border-strong,#3a4640); background:var(--iris-surface-2,#1f2723); color:var(--iris-text,#e7ece9); }
+:root[data-theme="dark"] .tw-context-control select:hover { border-color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-context-control select:focus-visible { border-color:var(--iris-accent,#8fbba3); box-shadow:0 0 0 3px rgba(143,187,163,.2); }
+:root[data-theme="dark"] .tw-context-person svg { color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-private .tw-save-state { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .tw-conversation,:root[data-theme="dark"] .tw-dossier { background:var(--iris-surface,#181e1b); border-color:var(--iris-border,#2c3631); }
+:root[data-theme="dark"] .tw-panel-heading,:root[data-theme="dark"] .tw-section-title { border-bottom-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-panel-icon { background:var(--iris-accent-soft,rgba(143,187,163,.14)); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-panel-heading h2 span { color:var(--iris-text-muted,#a2b0a9); background:var(--iris-surface-3,#27302b); }
+:root[data-theme="dark"] .tw-messages { scrollbar-color:var(--iris-border-strong,#3a4640) transparent; }
+:root[data-theme="dark"] .tw-day { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-day::before,:root[data-theme="dark"] .tw-day::after { background:var(--iris-border,#2c3631); }
+:root[data-theme="dark"] .tw-author-avatar { background:var(--iris-surface-3,#27302b); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-message.is-member .tw-author-avatar { color:var(--iris-violet,#b9a2e6); background:var(--iris-violet-soft,rgba(185,162,230,.15)); }
+:root[data-theme="dark"] .tw-message-body strong { color:var(--iris-text,#e7ece9); }
+:root[data-theme="dark"] .tw-message-body time { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-message-text { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .tw-bot-tag { color:var(--iris-text-muted,#a2b0a9); border-color:var(--iris-border-strong,#3a4640); }
+:root[data-theme="dark"] .tw-system-message { color:var(--iris-text-muted,#a2b0a9); border-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-pagination button { border-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-page-select select { color:var(--iris-text,#e7ece9); }
+:root[data-theme="dark"] .tw-tabs { background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-tab > span { background:var(--iris-surface-3,#27302b); }
+:root[data-theme="dark"] .tw-section-title--violet { background:var(--iris-violet-soft,rgba(185,162,230,.15)); border-color:var(--iris-border,#2c3631); }
+:root[data-theme="dark"] .tw-section-title--violet .tw-panel-icon { background:var(--iris-violet-soft,rgba(185,162,230,.15)); color:var(--iris-violet,#b9a2e6); }
+:root[data-theme="dark"] .tw-section-title--clay { background:var(--iris-warn-soft,rgba(230,191,115,.14)); border-color:var(--iris-border,#2c3631); }
+:root[data-theme="dark"] .tw-section-title--clay .tw-panel-icon { background:var(--iris-warn-soft,rgba(230,191,115,.14)); color:var(--iris-warn,#e6bf73); }
+:root[data-theme="dark"] .tw-claude { border-color:var(--iris-border-strong,#3a4640); background:var(--iris-violet-soft,rgba(185,162,230,.15)); color:var(--iris-violet,#b9a2e6); }
+:root[data-theme="dark"] .tw-summary-content h3 { color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-summary-content h3::before { background:var(--iris-accent-strong,#4f7d66); }
+:root[data-theme="dark"] .tw-summary-content p { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .tw-summary-content section:last-child { background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-summary-empty > span { background:var(--iris-violet-soft,rgba(185,162,230,.15)); color:var(--iris-violet,#b9a2e6); }
+:root[data-theme="dark"] .tw-generate { color:var(--iris-violet,#b9a2e6); background:var(--iris-violet-soft,rgba(185,162,230,.15)); border-color:var(--iris-border-strong,#3a4640); }
+:root[data-theme="dark"] .tw-ai-foot { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-trigger-reminder h3 { color:var(--iris-warn,#e6bf73); }
+:root[data-theme="dark"] .tw-trigger-reminder p { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .tw-dossier-footer { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-fields > label,:root[data-theme="dark"] .tw-note-form > label { color:var(--iris-text,#e7ece9); }
+:root[data-theme="dark"] .tw-desk textarea,:root[data-theme="dark"] .tw-desk input { border-color:var(--iris-border-strong,#3a4640); color:var(--iris-text,#e7ece9); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-desk textarea::placeholder,:root[data-theme="dark"] .tw-desk input::placeholder { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-note-form { border-color:var(--iris-border,#2c3631); background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-note p { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .tw-note p.tw-note-byline { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-icon-button:hover { background:var(--iris-danger-soft,rgba(232,139,139,.14)); }
+:root[data-theme="dark"] .tw-empty-notes > svg { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-empty h3 { color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-error { color:var(--iris-danger,#e88b8b); }
+:root[data-theme="dark"] .tw-mobile-nav { background:var(--iris-surface,#181e1b); }
+:root[data-theme="dark"] .tw-mobile-nav span { background:var(--iris-surface-3,#27302b); }
+:root[data-theme="dark"] .tw-sync-status { background:var(--iris-surface-2,#1f2723); color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-sync-status.is-error,:root[data-theme="dark"] .tw-summary-state.is-error { color:var(--iris-danger,#e88b8b); background:var(--iris-danger-soft,rgba(232,139,139,.14)); }
+:root[data-theme="dark"] .tw-summary-state { background:var(--iris-violet-soft,rgba(185,162,230,.15)); color:var(--iris-violet,#b9a2e6); }
+:root[data-theme="dark"] .tw-search-form { background:var(--iris-surface-2,#1f2723); }
+:root[data-theme="dark"] .tw-search-form label { color:var(--iris-text-muted,#a2b0a9); }
+:root[data-theme="dark"] .tw-search-result { background:var(--iris-surface-2,#1f2723); color:var(--iris-text,#e7ece9); border-color:var(--iris-border,#2c3631); }
+:root[data-theme="dark"] .tw-search-result time { color:var(--iris-text-soft,#7d8b84); }
+:root[data-theme="dark"] .tw-search-result > span { color:var(--iris-accent,#8fbba3); }
+:root[data-theme="dark"] .tw-message.is-search-hit { background:var(--iris-accent-soft,rgba(143,187,163,.14)); box-shadow:0 0 0 8px rgba(143,187,163,.14); }

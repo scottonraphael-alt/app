@@ -5,6 +5,7 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from database import db
 
@@ -12,6 +13,60 @@ logger = logging.getLogger(__name__)
 
 MAX_TITLE = 160
 MAX_BODY = 400
+
+
+PURGE_AFTER_DAYS = 60
+QUIET_TZ = ZoneInfo("Europe/Paris")
+# Types internes -> clé de préférence. Un type absent de cette table est toujours créé.
+TYPE_TO_PREF = {
+    "ticket_assigned": "ticket_assigned",
+    "task_assigned": "task_assigned",
+    "action_assigned": "meeting_action",
+    "meeting_action": "meeting_action",
+    "action_due": "due_soon",
+    "task_due": "due_soon",
+    "due_soon": "due_soon",
+    "mention": "mention",
+}
+PREF_KEYS = ("ticket_assigned", "task_assigned", "meeting_action", "due_soon", "mention")
+
+
+def default_preferences() -> dict:
+    return {
+        "types": {key: True for key in PREF_KEYS},
+        "quiet_hours": {"enabled": False, "start": "22:00", "end": "08:00"},
+    }
+
+
+async def get_preferences(user_id: str) -> dict:
+    """Préférences de l'utilisateur, complétées par les valeurs par défaut."""
+    prefs = default_preferences()
+    stored = await db.notification_prefs.find_one({"user_id": str(user_id)}, {"_id": 0})
+    if stored:
+        for key, value in (stored.get("types") or {}).items():
+            if key in prefs["types"] and isinstance(value, bool):
+                prefs["types"][key] = value
+        quiet = stored.get("quiet_hours") or {}
+        for key in ("enabled", "start", "end"):
+            if key in quiet:
+                prefs["quiet_hours"][key] = quiet[key]
+    return prefs
+
+
+def in_quiet_hours(quiet: dict, now: datetime | None = None) -> bool:
+    if not quiet.get("enabled"):
+        return False
+    try:
+        local = (now or datetime.now(timezone.utc)).astimezone(QUIET_TZ)
+        current = local.hour * 60 + local.minute
+        sh, sm = quiet["start"].split(":")
+        eh, em = quiet["end"].split(":")
+        start, end = int(sh) * 60 + int(sm), int(eh) * 60 + int(em)
+    except Exception:  # noqa: BLE001
+        return False
+    if start == end:
+        return False
+    return start <= current < end if start < end else (current >= start or current < end)
 
 
 def _now() -> str:
@@ -27,11 +82,16 @@ async def create_notification(
             return None
         if dedupe_key and await db.notifications.find_one({"user_id": str(user_id), "dedupe_key": dedupe_key}, {"_id": 1}):
             return None
+        prefs = await get_preferences(str(user_id))
+        pref_key = TYPE_TO_PREF.get(type)
+        if pref_key and not prefs["types"].get(pref_key, True):
+            return None
         doc = {
             "id": str(uuid4()), "user_id": str(user_id), "type": type,
             "title": str(title)[:MAX_TITLE], "body": str(body or "")[:MAX_BODY],
             "link": str(link or "")[:300] if str(link or "").startswith("/") else "",
             "created_at": _now(), "read_at": None,
+            "silent": in_quiet_hours(prefs["quiet_hours"]),
         }
         if dedupe_key:
             doc["dedupe_key"] = dedupe_key
@@ -82,3 +142,19 @@ async def run_daily_check(user_id: str) -> None:
             )
     except Exception:  # noqa: BLE001
         logger.warning("Vérification quotidienne des notifications impossible.", exc_info=True)
+
+
+async def purge_old_read(user_id: str) -> None:
+    """Supprime les notifications lues depuis plus de 60 jours, au plus une fois par jour et par utilisateur."""
+    try:
+        today = date.today().isoformat()
+        state = await db.notification_state.find_one({"user_id": user_id}, {"_id": 0})
+        if state and state.get("last_purge_day") == today:
+            return
+        await db.notification_state.update_one({"user_id": user_id}, {"$set": {"last_purge_day": today}}, upsert=True)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=PURGE_AFTER_DAYS)).isoformat()
+        await db.notifications.delete_many(
+            {"user_id": user_id, "read_at": {"$type": "string", "$lt": cutoff}},
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Purge des notifications impossible.", exc_info=True)

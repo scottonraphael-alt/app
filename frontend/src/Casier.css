@@ -1533,3 +1533,178 @@ body.casier-no-nav .app-shell > .app-main {
     background: #eef1ec;
   }
 }
+
+/* ==========================================================================
+   Thème sombre (data-theme="dark" sur <html>) : surcharges uniquement.
+   ========================================================================== */
+
+:root[data-theme="dark"] .cz-page,
+:root[data-theme="dark"] .cz-dialog-root {
+  color-scheme: dark;
+  --cz-ink: var(--iris-text, #e7ece9);
+  --cz-muted: var(--iris-text-muted, #a2b0a9);
+  --cz-sage: var(--iris-accent, #8fbba3);
+  --cz-sage-hover: #b3d3c1;
+  --cz-sage-soft: rgba(143, 187, 163, 0.14);
+  --cz-sage-line: rgba(143, 187, 163, 0.3);
+  --cz-line: var(--iris-border, #2c3631);
+  --cz-surface: var(--iris-surface, #181e1b);
+  --cz-canvas: var(--iris-bg, #111513);
+  --cz-subtle: var(--iris-surface-2, #1f2723);
+  --cz-field-line: var(--iris-border-strong, #3a4640);
+  --cz-field-bg: var(--iris-surface-2, #1f2723);
+  --cz-field-focus: #6f9d86;
+  --cz-placeholder: #8a9892;
+  --cz-red: #e88b8b;
+  --cz-red-soft: rgba(232, 139, 139, 0.14);
+  --cz-red-line: rgba(232, 139, 139, 0.3);
+  --cz-blue: #8db4e8;
+  --cz-blue-soft: rgba(141, 180, 232, 0.14);
+  --cz-blue-line: rgba(141, 180, 232, 0.3);
+  --cz-violet: #b9a2e6;
+  --cz-violet-soft: rgba(185, 162, 230, 0.15);
+  --cz-violet-line: rgba(185, 162, 230, 0.32);
+  --cz-gold: #e6bf73;
+  --cz-gold-ink: #e6bf73;
+  --cz-gold-soft: rgba(230, 191, 115, 0.14);
+  --cz-gold-line: rgba(230, 191, 115, 0.3);
+  --cz-clay: #e0a58e;
+  --cz-clay-soft: rgba(224, 165, 142, 0.14);
+  --cz-danger: #e88b8b;
+  --cz-danger-soft: rgba(232, 139, 139, 0.14);
+  --cz-danger-line: rgba(232, 139, 139, 0.3);
+}
+
+:root[data-theme="dark"] .cz-page,
+:root[data-theme="dark"] .cz-dialog-root,
+:root[data-theme="dark"] .cz-page * {
+  scrollbar-color: #3a4640 transparent;
+}
+
+:root[data-theme="dark"] .cz-button--primary {
+  border-color: var(--iris-accent-strong, #4f7d66);
+  background: var(--iris-accent-strong, #4f7d66);
+  color: #fff;
+}
+
+:root[data-theme="dark"] .cz-button--primary:not(:disabled):hover {
+  border-color: #44705b;
+  background: #44705b;
+}
+
+:root[data-theme="dark"] .cz-button--danger:not(:disabled):hover {
+  background: rgba(232, 139, 139, 0.24);
+}
+
+:root[data-theme="dark"] .cz-button--fiche:not(:disabled):hover {
+  background: rgba(185, 162, 230, 0.25);
+}
+
+:root[data-theme="dark"] .cz-tab.is-selected {
+  border-color: var(--cz-sage-line);
+}
+
+:root[data-theme="dark"] .cz-search:focus-within,
+:root[data-theme="dark"] .cz-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(143, 187, 163, 0.25);
+}
+
+:root[data-theme="dark"] .cz-panel-header {
+  border-bottom-color: #2c3631;
+  background: #1f2723;
+}
+
+:root[data-theme="dark"] .cz-panel-icon {
+  background: rgba(143, 187, 163, 0.18);
+}
+
+:root[data-theme="dark"] .cz-count {
+  border-color: #3a4640;
+  background: #181e1b;
+}
+
+:root[data-theme="dark"] .cz-panel-header--red .cz-panel-icon {
+  background: rgba(232, 139, 139, 0.18);
+}
+
+:root[data-theme="dark"] .cz-panel-header--red .cz-count {
+  background: #181e1b;
+}
+
+:root[data-theme="dark"] .cz-panel-header--blue .cz-panel-icon {
+  background: rgba(141, 180, 232, 0.18);
+}
+
+:root[data-theme="dark"] .cz-panel-header--blue .cz-count {
+  background: #181e1b;
+}
+
+:root[data-theme="dark"] .cz-panel-header--violet .cz-panel-icon {
+  background: rgba(185, 162, 230, 0.2);
+}
+
+:root[data-theme="dark"] .cz-panel-footer,
+:root[data-theme="dark"] .cz-dialog-footer {
+  background: #1f2723;
+}
+
+:root[data-theme="dark"] .cz-pill--ia-3 {
+  background: rgba(232, 139, 139, 0.16);
+  color: #f0a3a3;
+}
+
+:root[data-theme="dark"] .cz-pill--mute {
+  background: rgba(141, 180, 232, 0.16);
+  color: #8db4e8;
+}
+
+:root[data-theme="dark"] .cz-pill--review-faux_positif {
+  border-color: #3a4640;
+  background: #27302b;
+  color: #a2b0a9;
+}
+
+:root[data-theme="dark"] .cz-pill--prevention,
+:root[data-theme="dark"] .cz-detail-placeholder {
+  border-color: #3a4640;
+}
+
+:root[data-theme="dark"] .cz-detail-placeholder {
+  background: rgba(24, 30, 27, 0.6);
+}
+
+:root[data-theme="dark"] .cz-mark {
+  background: rgba(232, 139, 139, 0.22);
+  color: #ffd3d3;
+}
+
+:root[data-theme="dark"] .cz-empty--error {
+  background: rgba(232, 139, 139, 0.08);
+}
+
+:root[data-theme="dark"] .cz-skeleton {
+  background: linear-gradient(90deg, #1f2723 0%, #27302b 50%, #1f2723 100%);
+  background-size: 200% 100%;
+}
+
+:root[data-theme="dark"] .cz-target {
+  box-shadow: 0 0 0 3px rgba(143, 187, 163, 0.4);
+}
+
+:root[data-theme="dark"] .cz-popover {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] .cz-dialog-overlay {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+:root[data-theme="dark"] .cz-dialog {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="dark"] .cz-skeleton {
+    background: #1f2723;
+  }
+}

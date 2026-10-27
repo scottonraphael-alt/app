@@ -699,3 +699,38 @@
     transition: none;
   }
 }
+
+/* Thème sombre (data-theme="dark" sur <html>) */
+
+:root[data-theme="dark"] .cz-fiche-card--closed {
+  border-left-color: #3a4640;
+  background: #1f2723;
+}
+
+:root[data-theme="dark"] .cz-fiche-lock,
+:root[data-theme="dark"] .cz-flag-toggle[aria-disabled="true"] {
+  border-color: #3a4640;
+}
+
+:root[data-theme="dark"] .cz-fiche-lock-tip {
+  background: #27302b;
+  color: #e7ece9;
+}
+
+:root[data-theme="dark"] .cz-fiche-editor .iris-editor:focus-within {
+  box-shadow: 0 0 0 3px rgba(143, 187, 163, 0.25);
+}
+
+:root[data-theme="dark"] .cz-flag-text {
+  border-left-color: rgba(141, 180, 232, 0.45);
+}
+
+:root[data-theme="dark"] .cz-flag-review {
+  background: #1f2723;
+}
+
+:root[data-theme="dark"] .cz-flag-toggle--faux[aria-pressed="true"] {
+  border-color: #3a4640;
+  background: #27302b;
+  color: #e7ece9;
+}

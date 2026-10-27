@@ -1,4 +1,5 @@
 import Topbar from "./topbar/Topbar";
+import CommandPalette from "./command/CommandPalette";
 
 function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isOperateur, isStaff, isHelper }) {
   if (isResponsable) return "Responsable";
@@ -21,6 +22,7 @@ export default function AppShell({
       <main className="app-main">
         <Topbar helper={helper} roleLabel={roleLabel} onLogout={onLogout} />
         {children}
+        <CommandPalette onLogout={onLogout} />
       </main>
     </div>
   );

@@ -1094,3 +1094,49 @@
     opacity: 0.6;
   }
 }
+
+/* Thème sombre (data-theme="dark" sur <html>) */
+
+:root[data-theme="dark"] .cz-pill-button:hover .cz-pill--fiche {
+  background: rgba(185, 162, 230, 0.25);
+}
+
+:root[data-theme="dark"] .cz-timeline-item::before {
+  background: #3a4640;
+}
+
+:root[data-theme="dark"] .cz-sanction-icon--mute {
+  background: rgba(141, 180, 232, 0.16);
+  color: #8db4e8;
+}
+
+:root[data-theme="dark"] .cz-sanction-icon--banni {
+  background: rgba(232, 139, 139, 0.16);
+  color: #f0a3a3;
+}
+
+:root[data-theme="dark"] .cz-sanction-meta li + li::before {
+  color: #7d8b84;
+}
+
+:root[data-theme="dark"] .cz-file,
+:root[data-theme="dark"] .cz-note,
+:root[data-theme="dark"] .cz-dialog-member {
+  background: #1f2723;
+}
+
+:root[data-theme="dark"] .cz-file-visual--too_large {
+  background: rgba(232, 139, 139, 0.08);
+}
+
+:root[data-theme="dark"] .cz-link--danger:hover {
+  color: #f0a3a3;
+}
+
+:root[data-theme="dark"] .cz-progress {
+  background: rgba(141, 180, 232, 0.22);
+}
+
+:root[data-theme="dark"] .cz-flag-quote blockquote {
+  border-left-color: rgba(141, 180, 232, 0.45);
+}
