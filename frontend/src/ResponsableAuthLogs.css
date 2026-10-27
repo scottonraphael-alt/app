@@ -254,6 +254,27 @@
     box-shadow 160ms ease;
 }
 
+/* Centrage vertical des dates, y compris les sous-champs natifs de Safari. */
+.ral-page .ral-field--date input[type="date"] {
+  padding-block: 10px;
+  line-height: 26px;
+}
+
+.ral-page .ral-field--date input[type="date"]::-webkit-datetime-edit {
+  padding: 0;
+  line-height: 26px;
+}
+
+.ral-page .ral-field--date input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.ral-page .ral-field--date input[type="date"]::-webkit-date-and-time-value {
+  margin: 0;
+  line-height: 26px;
+  text-align: left;
+}
+
 /* Chevron SVG intégré, sans dépendance supplémentaire */
 
 .ral-page .ral-field select {
