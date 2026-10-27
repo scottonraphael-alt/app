@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { BookOpenText, ChevronDown, Info } from "lucide-react";
+import { BookOpenText, ChevronDown, Info, BarChart3, Clock, Layers, Users, FileText, HeartHandshake, RefreshCw, Network, Scale, Activity, MessageCircle, Compass } from "lucide-react";
 
 // Les définitions sont communes aux cartes, aux indicateurs et à leur aide de lecture.
 export const reading = {
@@ -59,14 +59,27 @@ export function MetricCollection({items}) {
 export function ExplainedPanel({title,children}) {
   return <section className="ss-panel ss-explained-panel"><header><h2>{title}</h2><MetricGuide title={title} /></header>{children}</section>;
 }
+const analysisThemes = {
+  overview:{tone:"sage",Icon:BarChart3}, population:{tone:"sage",Icon:Users},
+  rhythms:{tone:"blue",Icon:Clock}, regularity:{tone:"blue",Icon:Activity}, trend:{tone:"blue",Icon:Activity},
+  spaces:{tone:"violet",Icon:Layers}, categories:{tone:"violet",Icon:Layers}, retention:{tone:"violet",Icon:HeartHandshake},
+  people:{tone:"teal",Icon:Users}, diversity:{tone:"teal",Icon:Network}, participation:{tone:"teal",Icon:BarChart3},
+  format:{tone:"gold",Icon:FileText}, balance:{tone:"gold",Icon:Scale}, responses:{tone:"gold",Icon:MessageCircle},
+  welcome:{tone:"clay",Icon:HeartHandshake}, returns:{tone:"blue",Icon:RefreshCw}, quiet:{tone:"clay",Icon:Clock},
+};
 export function AnalysisDeck({title,items,children}) {
   const [selected,setSelected]=useState(items[0].id);
   const id=useId();
   const item=items.find(item=>item.id===selected) || items[0];
-  return <section className="ss-analysis-deck" aria-label={title}>
-    <div className="ss-analysis-heading"><div><span className="ss-section-eyebrow">EXPLORER</span><h2>{title}</h2></div><p>Choisissez un sujet. Une seule analyse s’affiche à la fois.</p></div>
-    <div className="ss-analysis-selector" role="tablist" aria-label={title}>{items.map((item,index)=><button type="button" role="tab" key={item.id} id={`${id}-tab-${item.id}`} aria-selected={selected===item.id} aria-controls={`${id}-panel`} tabIndex={selected===item.id ? 0 : -1} onClick={()=>setSelected(item.id)} onKeyDown={event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home' ? 0 : event.key==='End' ? items.length-1 : (index+(event.key==='ArrowRight' ? 1 : -1)+items.length)%items.length;setSelected(items[next].id);event.currentTarget.parentElement.children[next].focus();}}>{item.label}</button>)}</div>
-    <div className="ss-analysis-context"><strong>{item.question}</strong><p>{item.intro}</p></div>
+  const theme=analysisThemes[item.id] || analysisThemes.overview;
+  const ContextIcon=theme.Icon;
+  return <section className="ss-analysis-deck" data-tone={theme.tone} aria-label={title}>
+    <div className="ss-analysis-heading"><div><span className="ss-section-eyebrow"><Compass size={13} aria-hidden="true" /> EXPLORER</span><h2>{title}</h2></div><p>Sélectionnez ce que vous souhaitez comprendre.</p></div>
+    <div className="ss-analysis-selector" role="tablist" aria-label={title}>{items.map((item,index)=>{
+      const {tone,Icon}=analysisThemes[item.id] || analysisThemes.overview;
+      return <button type="button" role="tab" data-tone={tone} key={item.id} id={`${id}-tab-${item.id}`} aria-selected={selected===item.id} aria-controls={`${id}-panel`} tabIndex={selected===item.id ? 0 : -1} onClick={()=>setSelected(item.id)} onKeyDown={event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home' ? 0 : event.key==='End' ? items.length-1 : (index+(event.key==='ArrowRight' ? 1 : -1)+items.length)%items.length;setSelected(items[next].id);event.currentTarget.parentElement.children[next].focus();}}><span className="ss-analysis-tab-icon"><Icon size={17} aria-hidden="true" /></span>{item.label}</button>;
+    })}</div>
+    <div className="ss-analysis-context"><span className="ss-context-icon"><ContextIcon size={23} aria-hidden="true" /></span><div><strong>{item.question}</strong><p>{item.intro}</p></div></div>
     <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${item.id}`}>{children(item.id)}</div>
   </section>;
 }
