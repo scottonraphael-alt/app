@@ -1,6 +1,12 @@
 import { dateLabel, personName, PRIORITY, PROJECT_STATUS, TASK_STATUS } from './projectUtils';
 
 export const PROJECT_AUDIT_LABELS = {
+  'project.templates.viewed':'Modèles de projet consultés',
+  'project.template.created':'Modèle de projet enregistré',
+  'project.template.applied':'Modèle de projet utilisé',
+  'project.template.deleted':'Modèle de projet supprimé',
+  'project.task.checklist.updated':'Étape de checklist mise à jour',
+  'project.review.updated':'Bilan du projet mis à jour',
   'project.action.failed': 'Action sur un projet : échec',
   'project.task.downloaded': 'Rendu téléchargé',
   'project.resource.downloaded': 'Ressource téléchargée',
@@ -17,11 +23,12 @@ export const PROJECT_AUDIT_LABELS = {
   'project.ui.edited': 'Éditeur utilisé',
   'project.ui.shortcut': 'Raccourci utilisé',
 };
-const fields = {title:'Titre',description:'Description',priority:'Priorité',tags:'Étiquettes',start_date:'Date de début',end_date:'Date de fin',status:'État',assignee:'Attribution',blocked_reason:'Blocage',review_note:'Consigne de correction'};
+const fields = {title:'Titre',description:'Description',priority:'Priorité',tags:'Étiquettes',start_date:'Date de début',end_date:'Date de fin',status:'État',assignee:'Attribution',blocked_reason:'Blocage',review_note:'Consigne de correction',checklist:'Checklist',attendance:'Participants',event_date:'Date de l’animation',successes:'Réussites',improvements:'Pistes d’amélioration',next_steps:'Prochaine fois'};
 function formatValue(key,value) {
   if (value == null || value === '') return key === 'blocked_reason' ? 'aucun blocage' : 'non renseigné';
   if (key === 'status') return TASK_STATUS[value] || PROJECT_STATUS[value] || value;
   if (key === 'priority') return PRIORITY[value] || value;
+  if (key === 'checklist') return `${value.filter(item=>item.done).length}/${value.length} étapes cochées : ${value.map(item=>item.title).join(', ')}`;
   if (key === 'assignee') return personName(value);
   if (key.endsWith('_date')) return dateLabel(value);
   return Array.isArray(value) ? value.join(', ') || 'aucune' : String(value);
@@ -31,12 +38,13 @@ export function projectLogSummary(type,d) {
   const target = title ? ` « ${title} »` : '';
   const extras=[];
   if (d.project_title) extras.push(['Projet',d.project_title]);
-  if (type === 'project.task.updated' || type === 'project.settings.updated') {
+  if (['project.task.updated','project.settings.updated','project.review.updated'].includes(type)) {
     for (const key of Object.keys(d.after || {})) {
       if (fields[key] && JSON.stringify(d.before?.[key]) !== JSON.stringify(d.after[key])) extras.push([fields[key],`${formatValue(key,d.before?.[key])} → ${formatValue(key,d.after[key])}`]);
     }
-    return {text:`a modifié ${type === 'project.task.updated' ? 'la tâche' : 'les paramètres du projet'}${target}`,extras};
+    return {text:`a modifié ${type === 'project.task.updated' ? 'la tâche' : type === 'project.review.updated' ? 'le bilan du projet' : 'les paramètres du projet'}${target}`,extras};
   }
+  if (type === 'project.task.checklist.updated') return {text:`a ${d.after_done?'coché':'décoché'} l’étape « ${d.item_title || 'Étape'} » de la tâche${target}`,extras};
   if (type === 'project.member.removed') return {text:`a retiré ${d.member_username || d.member_id || 'un membre'} du projet`,extras};
   if (type === 'project.comment.added') return {text:'a publié une note dans le journal du projet',extras};
   if (type.startsWith('project.ui.')) {

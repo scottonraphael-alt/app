@@ -100,7 +100,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   api.get.mockImplementation(url => Promise.resolve({
-    data: url.endsWith('/workspace/overview') ? {
+    data: url.endsWith('/workspace/templates') ? [] : url.endsWith('/workspace/overview') ? {
       projects: [project],
       my_tasks: tasks
     } : url.endsWith('/tasks') ? tasks : url.endsWith('/resources') ? [] : url.endsWith('/activity') ? [] : url.endsWith('/calendar-events') ? {

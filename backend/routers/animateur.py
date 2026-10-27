@@ -12,10 +12,11 @@ from typing import Literal
 
 from config import DISCORD_ANIMATEUR_ROLE_ID
 from database import db
-from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCreate
+from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCreate, ChecklistItem
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.audit_service import log_auth_event
 from services.project_audit import ProjectAuditRoute
+from services.project_templates import BUILTIN_TEMPLATES, get_template, instantiate_tasks
 from services.auth_service import (
     current_responsable,
     current_helper,
@@ -194,15 +195,17 @@ async def create_project(
         raise HTTPException(status_code=422, detail="Le titre est requis.")
     start_date, end_date = values["start_date"], values["end_date"]
 
+    template = await get_template(payload.template_id) if payload.template_id else None
     now = _now()
     identity = _helper_identity(helper)
     project = {
         "id": str(uuid4()),
         "title": title,
-        "description": payload.description.strip(),
-        "content_markdown": "",
+        "description": payload.description.strip() if "description" in payload.model_fields_set else (template or {}).get("description", ""),
+        "content_markdown": (template or {}).get("content_markdown", ""),
+        "template_id": payload.template_id,
         "priority": payload.priority,
-        "tags": _clean_tags(payload.tags),
+        "tags": _clean_tags(payload.tags if "tags" in payload.model_fields_set else (template or {}).get("tags", [])),
         "status": "en_cours",
         "start_date": start_date.isoformat() if hasattr(start_date, "isoformat") else start_date,
         "end_date": end_date.isoformat() if hasattr(end_date, "isoformat") else end_date,
@@ -212,7 +215,15 @@ async def create_project(
         "updated_at": now,
     }
 
-    await db.projects.insert_one(project)
+    initial_tasks = instantiate_tasks(template, project["id"], identity, start_date, end_date, now) if template else []
+    try:
+        await db.projects.insert_one(project)
+        if initial_tasks:
+            await db.project_tasks.insert_many(initial_tasks)
+    except Exception:
+        await db.project_tasks.delete_many({"project_id": project["id"]})
+        await db.projects.delete_one({"id": project["id"]})
+        raise
 
     await log_auth_event(
         "project.created",
@@ -227,6 +238,11 @@ async def create_project(
         },
     )
 
+    if template:
+        await log_auth_event("project.template.applied", request, helper=helper, status_code=201,
+                             details={"project_id": project["id"], "project_title": project["title"],
+                                      "template_id": template["id"], "title": template["name"],
+                                      "tasks_created": [{"id": task["id"], "title": task["title"]} for task in initial_tasks]})
     return Project(**project)
 
 
@@ -502,6 +518,8 @@ async def create_project_task(
     if not title:
         raise HTTPException(status_code=422, detail="Le titre est requis.")
 
+    checklist = [item.model_dump() for item in payload.checklist]
+    _validate_checklist(checklist)
     now = _now()
     task = {
         "id": str(uuid4()),
@@ -511,6 +529,7 @@ async def create_project_task(
         "due_date": payload.due_date.isoformat(),
         "assignee": assignee,
         "status": "a_faire",
+        "checklist": checklist,
         "priority": payload.priority,
         "blocked_reason": "",
         "review_note": "",
@@ -562,6 +581,8 @@ async def submit_task(
     if existing.get("status") == "valide" or (existing.get("status") == "rendu" and not await is_responsable_helper(helper.id)):
         raise HTTPException(status_code=409, detail="Ce rendu est déjà en attente ou validé.")
 
+    if any(not item.get("done") for item in existing.get("checklist", [])):
+        raise HTTPException(status_code=409, detail="Cochez toutes les étapes de la checklist avant de rendre la tâche.")
     submission_file = existing.get("submission_file")
     if file and file.filename:
         extension = _upload_extension(file.filename)
@@ -846,6 +867,8 @@ class WorkspaceSettings(BaseModel):
 
 
 class WorkspaceTaskPatch(BaseModel):
+    expected_updated_at: str | None = Field(default=None, max_length=80)
+    checklist: list[ChecklistItem] | None = Field(default=None, max_length=50)
     title: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = Field(default=None, max_length=4000)
     assignee_id: str | None = None
@@ -862,7 +885,7 @@ class WorkspaceComment(BaseModel):
 
 @router.get("/workspace/overview")
 async def workspace_overview(helper: AuthenticatedHelper = Depends(current_project_editor)):
-    projects = await db.projects.find({}, {"_id": 0, "content_markdown": 0}).sort("updated_at", -1).to_list(500)
+    projects = await db.projects.find({}, {"_id": 0, "content_markdown": 0, "review": 0}).sort("updated_at", -1).to_list(500)
     ids = [p["id"] for p in projects]
     # Aggregate in MongoDB; no per-project request and no rich-text / file payload.
     summaries = await db.project_tasks.aggregate([
@@ -923,6 +946,9 @@ async def workspace_task_update(task_id: str, payload: WorkspaceTaskPatch, reque
     project = await _get_project(task["project_id"])
     _ensure_active(project)
     updates = payload.model_dump(mode="json", exclude_unset=True)
+    expected = updates.pop("expected_updated_at", None)
+    if expected is not None and expected != task.get("updated_at"):
+        raise HTTPException(status_code=409, detail="La tâche a changé. Rechargez-la avant de la modifier.")
     if any(value is None for value in updates.values()):
         raise HTTPException(status_code=422, detail="Valeur vide non autorisée.")
     manager = project.get("created_by", {}).get("id") == helper.id or await is_responsable_helper(helper.id)
@@ -935,6 +961,8 @@ async def workspace_task_update(task_id: str, payload: WorkspaceTaskPatch, reque
             raise HTTPException(status_code=409, detail="Pour rouvrir, ajoutez une consigne de correction.")
     if "review_note" in updates and not manager:
         raise HTTPException(status_code=403, detail="Validation réservée au pilote.")
+    if "checklist" in updates:
+        _validate_checklist(updates["checklist"])
     if "title" in updates:
         updates["title"] = updates["title"].strip()
         if not updates["title"]:
@@ -1057,3 +1085,130 @@ async def workspace_ui_event(payload: ProjectUiEvent, request: Request,
         details["project_title"] = project.get("title")
     details["source"] = "client"
     await log_auth_event("project.ui." + payload.kind, request, helper=helper, status_code=204, details=details)
+
+
+# A checklist is a bounded list with stable item IDs, never an unrestricted document patch.
+def _validate_checklist(items):
+    if len({item["id"] for item in items}) != len(items):
+        raise HTTPException(status_code=422, detail="Chaque étape doit avoir un identifiant unique.")
+
+
+class ChecklistToggle(BaseModel):
+    done: bool = Field(strict=True)
+    expected_updated_at: str = Field(min_length=1, max_length=80)
+
+
+@tasks_router.patch("/{task_id}/checklist/{item_id}")
+async def toggle_checklist(task_id: str, item_id: str, payload: ChecklistToggle, request: Request,
+                           helper: AuthenticatedHelper = Depends(current_project_editor)):
+    task = await db.project_tasks.find_one({"id": task_id}, {"_id": 0})
+    if not task:
+        raise HTTPException(status_code=404, detail="Tâche introuvable.")
+    project = await _get_project(task["project_id"])
+    _ensure_active(project)
+    if task.get("assignee", {}).get("id") != helper.id:
+        await _ensure_project_manager(project, helper)
+    else:
+        await _ensure_project_member_or_responsable(project, helper)
+    if task.get("status") not in ("a_faire", "en_cours"):
+        raise HTTPException(status_code=409, detail="Rouvrez la tâche avant de modifier sa checklist.")
+    item = next((item for item in task.get("checklist", []) if item["id"] == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Étape introuvable.")
+    if task.get("updated_at") != payload.expected_updated_at:
+        raise HTTPException(status_code=409, detail="La tâche a changé. Rechargez-la avant de cocher cette étape.")
+    checklist = [{**entry, "done": payload.done} if entry["id"] == item_id else entry for entry in task["checklist"]]
+    updates = {"checklist": checklist, "updated_at": _now()}
+    result = await db.project_tasks.update_one({"id": task_id, "updated_at": payload.expected_updated_at}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="La tâche a changé. Rechargez-la.")
+    await log_auth_event("project.task.checklist.updated", request, helper=helper, status_code=200,
+                         details={"project_id": project["id"], "project_title": project["title"], "task_id": task_id,
+                                  "title": task["title"], "item_title": item["title"], "before_done": item.get("done", False), "after_done": payload.done})
+    return {**task, **updates}
+
+
+class TemplateSave(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+@router.get("/workspace/templates")
+async def list_project_templates(helper: AuthenticatedHelper = Depends(current_project_editor)):
+    templates = await db.project_templates.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    global_manager = await is_responsable_helper(helper.id)
+    def entry(template, builtin=False):
+        return {"id": template["id"], "name": template["name"], "description": template.get("description", ""),
+                "tags": template.get("tags", []), "tasks": [{"title": task["title"]} for task in template.get("tasks", [])],
+                "builtin": builtin, "can_delete": not builtin and (global_manager or template.get("created_by", {}).get("id") == helper.id)}
+    return [entry(template, True) for template in BUILTIN_TEMPLATES] + [entry(template) for template in templates]
+
+
+@router.post("/{project_id}/template", status_code=201)
+async def save_project_template(project_id: str, payload: TemplateSave, request: Request,
+                                helper: AuthenticatedHelper = Depends(current_project_editor)):
+    project = await _get_project(project_id)
+    await _ensure_project_manager(project, helper)
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Le nom du modèle est requis.")
+    tasks = await db.project_tasks.find({"project_id": project_id}, {"_id": 0}).sort("due_date", 1).to_list(51)
+    if len(tasks) > 50:
+        raise HTTPException(status_code=422, detail="Un modèle peut contenir au maximum 50 tâches.")
+    anchor = date.fromisoformat(project.get("end_date") or project["start_date"])
+    template = {"id": str(uuid4()), "name": name, "description": project.get("description", ""),
+                "content_markdown": project.get("content_markdown", ""), "tags": project.get("tags", []),
+                "created_by": _helper_identity(helper), "created_at": _now(),
+                "tasks": [{"title": task["title"], "description": task.get("description", ""), "priority": task.get("priority", "normale"),
+                           "offset_days": (date.fromisoformat(task.get("due_date") or anchor.isoformat()) - anchor).days,
+                           "checklist": [item["title"] for item in task.get("checklist", [])]} for task in tasks]}
+    await db.project_templates.insert_one(template)
+    await log_auth_event("project.template.created", request, helper=helper, status_code=201,
+                         details={"project_id": project_id, "project_title": project["title"], "template_id": template["id"], "title": name, "task_count": len(tasks)})
+    template.pop("_id", None)
+    return template
+
+
+@router.delete("/workspace/templates/{template_id}", status_code=204)
+async def delete_project_template(template_id: str, request: Request,
+                                  helper: AuthenticatedHelper = Depends(current_project_editor)):
+    if any(t["id"] == template_id for t in BUILTIN_TEMPLATES):
+        raise HTTPException(status_code=403, detail="Les modèles de base ne peuvent pas être supprimés.")
+    template = await db.project_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Modèle introuvable.")
+    if template.get("created_by", {}).get("id") != helper.id and not await is_responsable_helper(helper.id):
+        raise HTTPException(status_code=403, detail="Seul l'auteur du modèle ou un Responsable peut le supprimer.")
+    await db.project_templates.delete_one({"id": template_id})
+    await log_auth_event("project.template.deleted", request, helper=helper, status_code=204,
+                         details={"template_id": template_id, "title": template["name"]})
+
+
+class ReviewSave(BaseModel):
+    attendance: int | None = Field(default=None, ge=0, le=1000000, strict=True)
+    event_date: date | None = None
+    successes: str = Field(default="", max_length=4000)
+    improvements: str = Field(default="", max_length=4000)
+    next_steps: str = Field(default="", max_length=4000)
+    expected_updated_at: str | None = Field(default=None, max_length=80)
+
+
+@router.put("/{project_id}/review", response_model=Project)
+async def save_project_review(project_id: str, payload: ReviewSave, request: Request,
+                              helper: AuthenticatedHelper = Depends(current_project_editor)):
+    project = await _get_project(project_id)
+    await _ensure_project_manager(project, helper)
+    if project.get("status") == "archive":
+        raise HTTPException(status_code=409, detail="Restaurez le projet avant de modifier son bilan.")
+    previous = project.get("review") or {}
+    if previous.get("updated_at") != payload.expected_updated_at:
+        raise HTTPException(status_code=409, detail="Le bilan a changé. Rechargez le projet avant de le modifier.")
+    review = {**payload.model_dump(mode="json", exclude={"expected_updated_at"}), "updated_at": _now(), "updated_by": _helper_identity(helper)}
+    updates = {"review": review, "updated_at": review["updated_at"]}
+    result = await db.projects.update_one({"id": project_id, "review.updated_at": payload.expected_updated_at}, {"$set": updates})
+    if not result.matched_count:
+        raise HTTPException(status_code=409, detail="Le bilan a changé. Rechargez le projet.")
+    fields = ("attendance", "event_date", "successes", "improvements", "next_steps")
+    await log_auth_event("project.review.updated", request, helper=helper, status_code=200,
+                         details={"project_id": project_id, "project_title": project["title"], "title": project["title"],
+                                  "before": {key: previous.get(key) for key in fields}, "after": {key: review[key] for key in fields}})
+    return Project(**{**project, **updates})

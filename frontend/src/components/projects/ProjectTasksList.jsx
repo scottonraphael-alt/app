@@ -8,7 +8,7 @@ export default function ProjectTasksList({ tasks, onOpen, resetKey }) {
     <div className="pj-task-table-head" aria-hidden="true"><span>Tâche</span><span>Attribuée à</span><span>Échéance</span><span>État</span><span/></div>
     <ul>{items.map(task => <li key={task.id}>
       <button className={`pj-task-row ${task.blocked_reason ? 'is-blocked' : ''}`} onClick={() => onOpen(task.id)}>
-        <span className="pj-task-row-title"><strong title={task.title}>{task.title}</strong><span className="pj-inline">{task.priority && task.priority !== 'normale' && <Priority value={task.priority}/>}{task.blocked_reason && <span className="pj-badge pj-alert">Bloquée</span>}</span></span>
+        <span className="pj-task-row-title"><strong title={task.title}>{task.title}</strong><span className="pj-inline">{task.priority && task.priority !== 'normale' && <Priority value={task.priority}/>}{task.blocked_reason && <span className="pj-badge pj-alert">Bloquée</span>}{!!task.checklist?.length && <span className="pj-checklist-progress">{task.checklist.filter(item=>item.done).length}/{task.checklist.length} étapes</span>}</span></span>
         <span className="pj-task-assignee"><Avatar member={task.assignee}/><span>{personName(task.assignee)}</span></span>
         <span className={`pj-deadline ${isLate(task) ? 'is-late' : ''}`}>{isLate(task) && <Clock3 size={13}/>} {dateLabel(task.due_date)}</span>
         <span className={`pj-badge pj-task-${task.status}`}>{TASK_STATUS[task.status]}</span><ArrowUpRight size={16} aria-hidden="true"/>

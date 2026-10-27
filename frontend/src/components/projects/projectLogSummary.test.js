@@ -20,3 +20,8 @@ it('expose le motif de refus sans afficher un libellé anglais générique', () 
   expect(result.extras).toContainEqual(['Motif','Réservé au créateur.']);
   expect(projectLogSummary('project.viewed',{})).toBeNull();
 });
+it('décrit les cases cochées et les changements du bilan',()=>{
+  expect(projectLogSummary('project.task.checklist.updated',{title:'Préparer',item_title:'Tester',after_done:true}).text).toContain('a coché l’étape « Tester »');
+  const review=projectLogSummary('project.review.updated',{title:'Soirée',before:{attendance:null},after:{attendance:0,successes:'Un bon accueil'}});
+  expect(review.text).toContain('le bilan du projet');expect(review.extras).toContainEqual(['Participants','non renseigné → 0']);
+});

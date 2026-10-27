@@ -18,7 +18,32 @@ class ProjectMember(BaseModel):
     role: Literal["responsable", "membre"] = "membre"
 
 
+class ChecklistItem(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    title: str = Field(min_length=1, max_length=160)
+    done: bool = False
+
+    @field_validator("title")
+    @classmethod
+    def non_blank(cls, value):
+        value = value.strip()
+        if not value:
+            raise ValueError("Le titre de l'étape est requis.")
+        return value
+
+
+class ProjectReview(BaseModel):
+    attendance: int | None = Field(default=None, ge=0, le=1000000)
+    event_date: date | None = None
+    successes: str = Field(default="", max_length=4000)
+    improvements: str = Field(default="", max_length=4000)
+    next_steps: str = Field(default="", max_length=4000)
+    updated_at: str
+    updated_by: ProjectMember
+
+
 class ProjectCreate(BaseModel):
+    template_id: str | None = Field(default=None, max_length=80)
     title: str = Field(min_length=1, max_length=160)
     description: str = Field(default="", max_length=4000)
     priority: Literal["basse", "normale", "haute"] = "normale"
@@ -55,11 +80,14 @@ class Project(BaseModel):
     end_date: date | None = None
     members: list[ProjectMember] = Field(default_factory=list)
     created_by: ProjectMember
+    template_id: str | None = None
+    review: ProjectReview | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class ProjectTaskCreate(BaseModel):
+    checklist: list[ChecklistItem] = Field(default_factory=list, max_length=50)
     project_id: str | None = None
     assignee_id: str
     title: str = Field(min_length=1, max_length=160)
@@ -76,6 +104,7 @@ class ProjectSubmissionFile(BaseModel):
 
 
 class ProjectTask(BaseModel):
+    checklist: list[ChecklistItem] = Field(default_factory=list)
     id: str
     project_id: str
     title: str

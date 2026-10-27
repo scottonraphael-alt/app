@@ -27,6 +27,8 @@ async def project_context(params):
 
 
 def read_event(path):
+    if path.endswith("/workspace/templates"):
+        return "project.templates.viewed"
     if path.endswith("/submission/download"):
         return "project.task.downloaded"
     if path.endswith("/download"):
