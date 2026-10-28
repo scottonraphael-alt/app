@@ -213,3 +213,11 @@ L'utilisateur a précisé le fonctionnement du Purgatoire encore inachevé dans
 BotGhost : substitution temporaire du rôle Membre/Non validé, puis restauration du
 rôle antérieur. Voir [purgatoire.md](purgatoire.md), sans l'assimiler à un ban ou à une
 sanction automatique après silence à une convocation.
+
+## Complément : demandes de soutien
+
+`/panel soutient` a été analysée : voir [panel-soutient.md](panel-soutient.md).
+Le salon est créé après acceptation de la demande et l'acceptant devient son
+interlocuteur initial. Choix utilisateur : acceptation réservée aux Helpers/Helpers+,
+visibilité collective Helpers/Helpers+/Staff, refus motivé par la coordination,
+nouvelle demande autorisée après refus avec protection anti-spam.

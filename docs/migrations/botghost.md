@@ -54,3 +54,7 @@ Le producteur public `/panel contact-staff` est décrit dans
 [panel-contact-staff.md](panel-contact-staff.md). Le fonctionnement métier du
 Purgatoire, expliqué par l'utilisateur mais encore inachevé dans BotGhost, est
 consigné séparément dans [purgatoire.md](purgatoire.md).
+
+Le producteur `/panel soutient` est maintenant décrit dans
+[panel-soutient.md](panel-soutient.md), avec la demande préalable, l'attribution à
+l'acceptant et les corrections de gestion du refus et de sa notification.
