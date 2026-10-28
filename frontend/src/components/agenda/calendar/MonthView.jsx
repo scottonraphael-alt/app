@@ -15,6 +15,7 @@ import {
 import { formatDayMedium, formatMonthTitle, isSameMonthIso, orderDayRange, startOfMonthIso } from "../dateUtils";
 import CalendarBar from "./CalendarBar";
 import { joinClasses } from "./calendarHelpers";
+import { dropTarget } from "./dragDrop";
 import "./agenda-calendar.css";
 
 const WEEKDAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
@@ -29,6 +30,7 @@ export default function MonthView({
   onOpenDay,
   onQuickAdd,
   onNavigateDate,
+  onMoveItem = null,
 }) {
   const weeks = useMemo(() => buildMonthWeeks(anchor), [anchor]);
   const allDays = useMemo(() => weeks.flat(), [weeks]);
@@ -94,6 +96,7 @@ export default function MonthView({
     };
   }, [cancelDrag, drag, finishDrag]);
 
+  const [dropDay, setDropDay] = useState(null);
   const selection = drag ? orderDayRange(drag.start, drag.current) : null;
 
   const handlePointerDown = (event, day) => {
@@ -195,7 +198,9 @@ export default function MonthView({
                     info.isWeekend ? "is-weekend" : "",
                     info.isToday ? "is-today" : "",
                     selected ? "is-selecting" : "",
+                    dropDay === day ? "is-drop-target" : "",
                   )}
+                  {...(onMoveItem && !mobile ? dropTarget(day, onMoveItem, setDropDay) : null)}
                   onFocus={(event) => {
                     if (event.target === event.currentTarget && focusedDay !== day) setFocusedDay(day);
                   }}
@@ -250,6 +255,8 @@ export default function MonthView({
                             today={today}
                             onOpen={onOpenItem}
                             className="ag-cal-bar--month"
+                            fromDay={week[segment.colStart - 1]}
+                            dragEnabled={Boolean(onMoveItem)}
                             style={{ "--ag-span": segment.colSpan, "--ag-lane": segment.lane }}
                           />
                         ))}

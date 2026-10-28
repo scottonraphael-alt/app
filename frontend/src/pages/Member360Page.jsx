@@ -1,7 +1,7 @@
 // Importé en premier : Casier.css fournit les jetons --cz-* (clair et sombre) et l'en-tête de page.
-import "@/Casier.css";
-import "@/components/casier/casier-detail.css";
-import "@/Member360.css";
+import "../Casier.css";
+import "../components/casier/casier-detail.css";
+import "../Member360.css";
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -19,11 +19,11 @@ import {
   Gavel,
 } from "lucide-react";
 
-import MemberAvatar from "@/components/casier/MemberAvatar";
-import StatusPill from "@/components/casier/StatusPill";
-import { errorMessage, errorStatus } from "@/components/casier/casierApi";
-import { formatDate, formatRelative, memberHandle, memberName, plural } from "@/components/casier/formatters";
-import { api } from "@/api/client";
+import MemberAvatar from "../components/casier/MemberAvatar";
+import StatusPill from "../components/casier/StatusPill";
+import { errorMessage, errorStatus } from "../components/casier/casierApi";
+import { formatDate, formatRelative, memberHandle, memberName, plural } from "../components/casier/formatters";
+import { api } from "../api/client";
 
 const SNOWFLAKE = /^\d{17,20}$/;
 const PAGE_SIZE = 30;

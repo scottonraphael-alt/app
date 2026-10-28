@@ -1,4 +1,4 @@
-import { api, getErrorMessage } from "@/api/client";
+import { api, getErrorMessage } from "../../api/client";
 
 export const PRIORITIES = [
   { value: "info", label: "Info" },

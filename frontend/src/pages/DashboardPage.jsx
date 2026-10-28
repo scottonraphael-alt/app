@@ -14,7 +14,10 @@ import useTicketListSignals from "../components/tickets/ai/useTicketListSignals"
 import TicketListSignals from "../components/tickets/ai/TicketListSignals";
 import { CRISIS_RANK } from "../components/tickets/ai/crisis";
 
-import "@/TicketList.css";
+import TagFilter from "../components/tickets/extras/TagFilter";
+import useTicketTags from "../components/tickets/extras/useTicketTags";
+
+import "../TicketList.css";
 
 function displayName(member) {
   return (
@@ -101,6 +104,8 @@ export default function DashboardPage({
   const [statusFilter, setStatusFilter] = useState("all");
   const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [crisisFirst, setCrisisFirst] = useState(false);
+  const [tagFilter, setTagFilter] = useState("");
+  const { tags: ticketTags, assignments: tagAssignments } = useTicketTags();
 
   useEffect(() => {
     document.body.classList.add("ticket-list-no-nav");
@@ -137,6 +142,8 @@ export default function DashboardPage({
       }
 
       if (assignmentFilter === "attention" && !ticket.needs_attention) return false;
+
+      if (tagFilter && !(tagAssignments[ticket.id] || []).includes(tagFilter)) return false;
 
       if (
         assignmentFilter === "unassigned" &&
@@ -176,6 +183,8 @@ export default function DashboardPage({
     statusFilter,
     assignmentFilter,
     helper?.id,
+    tagFilter,
+    tagAssignments,
   ]);
 
   const { crisis: crisisById, presence: presenceById } = useTicketListSignals(filteredTickets.map((ticket) => ticket.id));
@@ -282,6 +291,8 @@ export default function DashboardPage({
               ))}
             </select>
           </div>
+
+          <TagFilter tags={ticketTags} value={tagFilter} onChange={setTagFilter} />
 
           <div className="tl-filters" aria-label="Filtrer les attributions">
             <button type="button" className={assignmentFilter === "attention" ? "is-selected" : ""} aria-pressed={assignmentFilter === "attention"} onClick={() => { setAssignmentFilter("attention"); ticketEvent("list.filter_changed", null, "attention"); }}>À traiter · {attentionCount}</button>

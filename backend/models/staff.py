@@ -260,6 +260,21 @@ class AbsenceReturn(AgendaInput):
     return_date: DateStr | None = None
 
 
+RecurrenceFreq = Literal["weekly", "biweekly", "monthly"]
+
+
+class RecurrenceIn(AgendaInput):
+    """Récurrence d'une entrée : chaque semaine, toutes les 2 semaines ou chaque mois, jusqu'à `until` inclus."""
+
+    freq: RecurrenceFreq
+    until: DateStr
+
+
+class RecurrenceOut(BaseModel):
+    freq: RecurrenceFreq
+    until: str
+
+
 class EntryIn(AgendaInput):
     type: EntryType
     title: Title160
@@ -273,6 +288,7 @@ class EntryIn(AgendaInput):
     location: Text200 = ""
     participant_ids: ParticipantIds = Field(default_factory=list)
     reminders: ReminderConfig = Field(default_factory=ReminderConfig)
+    recurrence: RecurrenceIn | None = None
 
     @field_validator("description", "location", mode="before")
     @classmethod
@@ -298,6 +314,7 @@ class EntryPatch(AgendaInput):
     location: Text200 | None = None
     participant_ids: ParticipantIds | None = None
     reminders: ReminderConfig | None = None
+    recurrence: RecurrenceIn | None = None
 
     @field_validator("description", "location", mode="before")
     @classmethod
@@ -466,6 +483,9 @@ class EntryOut(BaseModel):
     updated_by: HelperIdentity | None = None
     updated_at: str | None = None
     can_edit: bool = False
+    # Récurrence : `series_start_date` = début de la série (la date de l'occurrence est `start_date`).
+    recurrence: RecurrenceOut | None = None
+    series_start_date: str | None = None
 
 
 class AgendaItemOut(BaseModel):

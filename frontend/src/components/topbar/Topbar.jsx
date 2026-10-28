@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Bell, ClipboardList, Check, CheckCheck, LogOut, 
 import { api } from "../../api/client";
 import useTheme from "../../hooks/useTheme";
 import { OPEN_EVENT } from "../command/CommandPalette";
+import StatusPicker from "../team/StatusPicker";
 import "./Topbar.css";
 
 const FAVORITES_KEY = ["profile", "favorites"];
@@ -234,6 +235,7 @@ export default function Topbar({ helper, roleLabel, onLogout }) {
         >
           <Search size={16} />
         </button>
+        <StatusPicker />
         <ThemeToggle />
         <HandoffsButton />
         <NotificationBell />

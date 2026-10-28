@@ -7,8 +7,8 @@ import InteractionStatistics from "../components/statistics/InteractionStatistic
 import MemberStatistics from "../components/statistics/MemberStatistics";
 import StatisticsCharts from "../components/statistics/StatisticsCharts";
 import { coverageLabel, weekdays } from "../components/statistics/chartOptions";
-import "@/Casier.css";
-import "@/ServerStatistics.css";
+import "../Casier.css";
+import "../ServerStatistics.css";
 
 const INTERNAL = ["1081957992896942166", "1321632937502052424", "1499495158469758976"];
 const number = (value) => new Intl.NumberFormat("fr-FR").format(value || 0);

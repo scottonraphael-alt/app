@@ -44,3 +44,13 @@ html.theme-switching, html.theme-switching *, html.theme-switching *::before, ht
   }
   html.theme-switching, html.theme-switching * { transition: none !important; }
 }
+
+/* Préférences d'affichage (data-density / data-text-scale posés sur <html>). */
+:root[data-density="compact"] { --iris-density: .8; }
+:root[data-density="compact"] .hp-extra-card, :root[data-density="compact"] .tb-note,
+:root[data-density="compact"] .cmd-item { padding-top: 5px; padding-bottom: 5px; }
+:root[data-density="compact"] li, :root[data-density="compact"] td, :root[data-density="compact"] th { line-height: 1.3; }
+:root[data-density="compact"] td, :root[data-density="compact"] th { padding-top: 4px; padding-bottom: 4px; }
+
+/* Mode concentration : badges de notification masqués, sauf urgence (crise / transmission urgente). */
+:root[data-focus="on"]:not([data-focus-urgent="1"]) .tb-badge { display: none; }

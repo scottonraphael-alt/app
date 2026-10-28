@@ -1,0 +1,18 @@
+.ux-backdrop { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 14px; background: rgba(20, 28, 24, .42); }
+.ux-dialog { width: min(480px, 100%); max-height: 80vh; overflow: auto; padding: 16px 18px; background: var(--iris-surface); color: var(--iris-text); border: 1px solid var(--iris-border); border-radius: 14px; box-shadow: var(--iris-shadow); }
+.ux-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ux-dialog-head h2 { margin: 0; font-size: 1.1rem; }
+.ux-icon-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--iris-border); border-radius: 8px; background: var(--iris-surface-2); color: var(--iris-text); cursor: pointer; }
+.ux-shortcuts { list-style: none; margin: 12px 0 0; padding: 0; }
+.ux-shortcuts li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--iris-border); }
+.ux-keys em { font-style: normal; color: var(--iris-text-soft); font-size: .8rem; }
+.ux-dialog kbd, .ux-prefs kbd { padding: 1px 7px; border-radius: 6px; border: 1px solid var(--iris-border-strong); background: var(--iris-surface-2); color: var(--iris-text); font: inherit; font-size: .8rem; }
+.ux-note { margin: 8px 0; color: var(--iris-text-muted); font-size: .85rem; }
+.ux-focus { position: fixed; right: 14px; bottom: 14px; z-index: 90; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; background: var(--iris-info-soft); color: var(--iris-info); border: 1px solid var(--iris-info); font-size: .85rem; box-shadow: var(--iris-shadow); }
+.ux-focus button, .ux-btn { padding: 4px 10px; border-radius: 8px; border: 1px solid var(--iris-border-strong); background: var(--iris-surface-2); color: var(--iris-text); cursor: pointer; font: inherit; font-size: .85rem; margin: 2px 6px 2px 0; }
+.ux-prefs-body { display: grid; gap: 12px; padding: 4px 2px; }
+.ux-prefs fieldset { border: 1px solid var(--iris-border); border-radius: 10px; padding: 8px 12px; }
+.ux-prefs label { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }
+.ux-scale { display: flex !important; flex-wrap: wrap; }
+.ux-scale input { flex: 1 1 160px; }
+:root[data-theme="dark"] .ux-backdrop { background: rgba(0, 0, 0, .6); }

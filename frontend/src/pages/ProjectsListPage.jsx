@@ -6,6 +6,7 @@ import { api, getErrorMessage } from '../api/client';
 import { Avatar, Empty, Panel, Priority, ProjectPage, Pagination, usePage } from '../components/projects/ProjectUI';
 import ProjectReminderSettings from '../components/projects/ProjectReminderSettings';
 import ProjectForm from '../components/projects/ProjectForm';
+import ProjectTemplateBuilder from '../components/projects/ProjectTemplateBuilder';
 import { dateLabel, filterProjects, isLate, personName, progress, PROJECT_STATUS, PRIORITY } from '../components/projects/projectUtils';
 export default function ProjectsListPage({
   helper, isResponsableGlobal
@@ -19,6 +20,7 @@ export default function ProjectsListPage({
   const [error, setError] = useState(false);
   const [showReminders,setShowReminders]=useState(false);
   const [creating, setCreating] = useState(false);
+  const [buildingTemplate, setBuildingTemplate] = useState(false);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('actifs');
   const [mine, setMine] = useState(false);
@@ -55,7 +57,7 @@ export default function ProjectsListPage({
   const personalPages = usePage(myTasks, 5, taskFilter);
   const active = data.projects.filter(p => p.status === 'en_cours');
   const projectTitle = id => data.projects.find(p => p.id === id)?.title || 'Projet';
-  return <ProjectPage title="Les idées prennent vie." intro="Préparez vos animations, répartissez les rôles et gardez le prochain rendez-vous en vue." actions={<>{isResponsableGlobal && <button className="pj-btn" onClick={()=>setShowReminders(true)}><Clock3 size={16}/> Rappels Discord</button>}<button className="pj-btn pj-primary" onClick={() => setCreating(true)} data-testid="new-project-button"><Plus size={17} /> Nouveau projet</button></>}>
+  return <ProjectPage title="Les idées prennent vie." intro="Préparez vos animations, répartissez les rôles et gardez le prochain rendez-vous en vue." actions={<><Link className="pj-btn" to="/animateur/projects/chronologie">Chronologie</Link><button className="pj-btn" onClick={()=>setBuildingTemplate(true)}>Nouveau modèle</button>{isResponsableGlobal && <button className="pj-btn" onClick={()=>setShowReminders(true)}><Clock3 size={16}/> Rappels Discord</button>}<button className="pj-btn pj-primary" onClick={() => setCreating(true)} data-testid="new-project-button"><Plus size={17} /> Nouveau projet</button></>}>
     <div className="pj-summary-heading"><p className="pj-kicker">L’ATELIER EN UN REGARD</p></div>
     <div className="pj-summary">
       <div className="pj-summary-stat"><span className="pj-counter-icon"><FolderKanban size={21}/></span><div><strong>{loading ? '—' : active.length}</strong><span>Projets en cours</span></div></div>
@@ -83,7 +85,7 @@ export default function ProjectsListPage({
 
       </div>
       <aside><Panel title="Mon prochain pas" intro="Vos tâches sur les projets en cours, classées par échéance." className="pj-personal"><div className="pj-chips">{[['all', 'Tout'], ['late', 'En retard'], ['review', 'À valider']].map(([v, l]) => <button className={`pj-btn ${taskFilter === v ? 'is-selected' : ''}`} key={v} onClick={() => setTaskFilter(v)} aria-pressed={taskFilter === v}>{l}</button>)}</div>{!loading && !myTasks.length ? <Empty title="Le champ est libre.">Aucune tâche dans cette sélection.</Empty> : <div className="pj-personal-list">{personalPages.items.map(task => <Link key={task.id} to={`/animateur/projects/${task.project_id}?task=${encodeURIComponent(task.id)}`} className={`pj-personal-task ${task.blocked_reason ? 'is-blocked' : ''}`}><span className={isLate(task) ? 'pj-deadline is-late' : 'pj-deadline'}>{task.status === 'rendu' ? <CheckCheck size={15} /> : <Clock3 size={15} />} {dateLabel(task.due_date)}</span><strong title={task.title}>{task.title}</strong><small>{projectTitle(task.project_id)} · {task.status === 'rendu' ? 'En attente de validation' : task.blocked_reason ? 'Bloquée' : personName(task.assignee)}</small></Link>)}</div>}<Pagination page={personalPages.page} pageSize={5} total={myTasks.length} onChange={personalPages.setPage} label="tâches personnelles"/></Panel><div className="pj-tip"><span className="pj-kicker">LE BON RÉFLEXE</span><h3>Une tâche, un point d’arrivée.</h3><p>Un membre, une échéance et un rendu clair. Le tableau du projet vous aide à suivre le chemin jusqu’à la validation.</p><Link to="/staff/calendrier?categorie=taches">Voir les échéances <ArrowUpRight size={16} /></Link></div></aside>
-    </div>{showReminders && <ProjectReminderSettings onClose={()=>setShowReminders(false)}/>} {creating && <ProjectForm onClose={() => setCreating(false)} onSaved={project => {
+    </div>{buildingTemplate && <ProjectTemplateBuilder onClose={()=>setBuildingTemplate(false)}/>}{showReminders && <ProjectReminderSettings onClose={()=>setShowReminders(false)}/>} {creating && <ProjectForm onClose={() => setCreating(false)} onSaved={project => {
       setCreating(false);
       navigate(`/animateur/projects/${project.id}`);
     }} />}</ProjectPage>;

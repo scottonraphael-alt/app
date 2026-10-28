@@ -19,7 +19,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
-import "@/ResourcesLibrary.css";
+import "../ResourcesLibrary.css";
 
 const MAX_SIZE = 250 * 1024 * 1024;
 

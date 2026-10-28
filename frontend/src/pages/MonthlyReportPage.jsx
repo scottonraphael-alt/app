@@ -3,8 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Download, Printer, RefreshCw } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
 import StatisticsChart from "../components/statistics/StatisticsChart";
-import "@/Casier.css";
-import "@/MonthlyReport.css";
+import "../Casier.css";
+import "../MonthlyReport.css";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const number = (value) => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(value || 0);

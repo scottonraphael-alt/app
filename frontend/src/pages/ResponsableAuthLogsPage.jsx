@@ -26,8 +26,8 @@ import {
 } from "../components/casier/casierConstants";
 import { casierLogLink, formatBytes } from "../components/casier/formatters";
 
-import "@/Casier.css";
-import "@/ResponsableAuthLogs.css";
+import "../Casier.css";
+import "../ResponsableAuthLogs.css";
 
 /* ---------------------------------- */
 /* Constantes                         */
@@ -1021,13 +1021,48 @@ export default function ResponsableAuthLogsPage() {
     setDateTo("");
   };
 
-  const exportCsv = () => {
-    if (items.length === 0) return;
+  const [exporting, setExporting] = useState(false);
 
-    downloadCsv(buildCsv(items), `journal-activite-${parisToday()}.csv`);
-    toast.success(
-      `${items.length} ligne${items.length > 1 ? "s" : ""} exportée${items.length > 1 ? "s" : ""}.`,
-    );
+  // Export serveur : tous les événements correspondant aux filtres actuels (10 000 lignes au plus).
+  const exportCsv = async () => {
+    if (exporting || total === 0) return;
+
+    setExporting(true);
+    try {
+      const params = buildParams(filters, 0);
+
+      delete params.skip;
+      delete params.limit;
+      const response = await api.get("/responsable/auth-logs/export", {
+        params,
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `journal-activite-${parisToday()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      toast.success(
+        response.headers?.["x-export-truncated"] === "1"
+          ? "Export limité aux 10 000 événements les plus récents."
+          : `${total} ligne${total > 1 ? "s" : ""} exportée${total > 1 ? "s" : ""}.`,
+      );
+    } catch {
+      // Repli : export des lignes déjà chargées.
+      if (items.length > 0) {
+        downloadCsv(buildCsv(items), `journal-activite-${parisToday()}.csv`);
+        toast.warning("Export serveur indisponible : lignes chargées exportées.");
+      } else {
+        toast.error("L’export a échoué. Réessayez.");
+      }
+    } finally {
+      setExporting(false);
+    }
   };
 
   const todayLabel = new Date(now).toLocaleDateString("fr-FR", {
@@ -1219,11 +1254,11 @@ export default function ResponsableAuthLogsPage() {
                   type="button"
                   className="cz-button"
                   onClick={exportCsv}
-                  disabled={items.length === 0}
-                  title="Exporte les lignes actuellement chargées"
+                  disabled={total === 0 || exporting}
+                  title="Exporte tous les événements correspondant aux filtres actuels"
                 >
                   <Download size={16} aria-hidden="true" />
-                  Exporter en CSV
+                  {exporting ? "Export…" : "Exporter en CSV"}
                 </button>
               </div>
             </div>

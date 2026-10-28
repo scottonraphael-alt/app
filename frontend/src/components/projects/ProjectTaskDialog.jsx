@@ -6,6 +6,7 @@ import SummaryReader from '../SummaryReader';
 import TiptapSummaryEditor from '../TiptapSummaryEditor';
 import TaskComments from './TaskComments';
 import ChecklistEditor from './ChecklistEditor';
+import TaskSubtasks from './TaskSubtasks';
 import { Field, Modal, Priority } from './ProjectUI';
 import { dateLabel, personName, PRIORITY, TASK_STATUS, todayKey } from './projectUtils';
 export function TaskForm({
@@ -87,6 +88,7 @@ export default function ProjectTaskDialog({
   });
   return <Modal title={task.title} onClose={onClose} busy={busy}><div className="pj-task-detail"><div className="pj-inline"><span className={`pj-badge pj-task-${task.status}`}>{TASK_STATUS[task.status]}</span><Priority value={task.priority} /></div><p className="pj-help">{personName(task.assignee)} · échéance le {dateLabel(task.due_date, true)}</p><p className="pj-preline">{task.description || 'Aucune consigne complémentaire.'}</p>{task.blocked_reason && <div className="pj-notice"><strong>Un coup de main est nécessaire</strong><p>{task.blocked_reason}</p></div>}{task.review_note && <div className="pj-review"><strong>Consigne de correction</strong><p>{task.review_note}</p></div>}
     {!!checklist.length && <fieldset className="pj-checklist" disabled={busy || !writable || !working || (!own && !manager)}><legend>Les étapes <span>{checklistDone}/{checklist.length}</span></legend><div>{checklist.map(item=><label key={item.id} className={item.done?'is-done':''}><input type="checkbox" checked={!!item.done} onChange={e=>act(()=>api.patch(`/animateur/tasks/${task.id}/checklist/${item.id}`,{done:e.target.checked,expected_updated_at:task.updated_at}))}/><span>{item.title}</span></label>)}</div></fieldset>}
+    {(!!checklist.length || (writable && working && (own || manager))) && <TaskSubtasks task={task} canEdit={writable && working && (own || manager)} onChanged={onSaved} />}
     {task.submission_note && !submitting && <section className="pj-submission"><h3>Le rendu</h3><SummaryReader key={task.updated_at} content={task.submission_note} /></section>}{task.submission_file && <a className="pj-btn" href={`${api.defaults.baseURL}/animateur/tasks/${task.id}/submission/download`}>Télécharger · {task.submission_file.original_filename}</a>}
     {writable && working && (own || manager) && <><div className="pj-inline">{task.status === 'a_faire' ? <button className="pj-btn pj-primary" disabled={busy} onClick={() => patch({
             status: 'en_cours'

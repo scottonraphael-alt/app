@@ -1,8 +1,11 @@
+import csv
+import io
+import json
 import re
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from database import db
 from models.audit import AuthLogListResponse, AuthLogSummary
@@ -108,18 +111,7 @@ def _search_filter(text: str) -> dict:
     return {"$or": [{field: pattern} for field in fields]}
 
 
-@router.get("/auth-logs", response_model=AuthLogListResponse)
-async def list_auth_logs(
-    _: AuthenticatedHelper = Depends(current_responsable),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-    event_type: str | None = Query(None, max_length=100),
-    helper_id: str | None = Query(None, max_length=64),
-    q: str | None = Query(None, max_length=100),
-    categories: str | None = Query(None, max_length=200),
-    date_from: str | None = Query(None, pattern=DATE_PATTERN),
-    date_to: str | None = Query(None, pattern=DATE_PATTERN),
-):
+def _build_filters(event_type, helper_id, q, categories, date_from, date_to) -> dict:
     filters: dict = {}
     if event_type:
         filters["event_type"] = event_type
@@ -150,6 +142,22 @@ async def list_auth_logs(
 
     if conditions:
         filters["$and"] = conditions
+    return filters
+
+
+@router.get("/auth-logs", response_model=AuthLogListResponse)
+async def list_auth_logs(
+    _: AuthenticatedHelper = Depends(current_responsable),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    event_type: str | None = Query(None, max_length=100),
+    helper_id: str | None = Query(None, max_length=64),
+    q: str | None = Query(None, max_length=100),
+    categories: str | None = Query(None, max_length=200),
+    date_from: str | None = Query(None, pattern=DATE_PATTERN),
+    date_to: str | None = Query(None, pattern=DATE_PATTERN),
+):
+    filters = _build_filters(event_type, helper_id, q, categories, date_from, date_to)
 
     total = await db.auth_logs.count_documents(filters)
     items = (
@@ -162,6 +170,62 @@ async def list_auth_logs(
     )
 
     return {"total": total, "items": items}
+
+
+EXPORT_MAX_ROWS = 10000
+EXPORT_COLUMNS = ("created_at", "username", "helper_id", "event_type", "ip", "method", "path", "status_code", "details")
+
+
+def _csv_safe(value) -> str:
+    """Neutralise l'injection de formule tableur (= + - @ en début de cellule)."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text
+
+
+@router.get("/auth-logs/export")
+async def export_auth_logs(
+    _: AuthenticatedHelper = Depends(current_responsable),
+    event_type: str | None = Query(None, max_length=100),
+    helper_id: str | None = Query(None, max_length=64),
+    q: str | None = Query(None, max_length=100),
+    categories: str | None = Query(None, max_length=200),
+    date_from: str | None = Query(None, pattern=DATE_PATTERN),
+    date_to: str | None = Query(None, pattern=DATE_PATTERN),
+):
+    """CSV de tous les événements correspondant aux filtres de la page (10 000 lignes au plus)."""
+    filters = _build_filters(event_type, helper_id, q, categories, date_from, date_to)
+    rows = (
+        await db.auth_logs
+        .find(filters, {"_id": 0})
+        .sort([("created_at", -1), ("_id", -1)])
+        .limit(EXPORT_MAX_ROWS)
+        .to_list(EXPORT_MAX_ROWS)
+    )
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+    writer.writerow(EXPORT_COLUMNS)
+    for row in rows:
+        created = row.get("created_at")
+        if isinstance(created, datetime):
+            created = (created if created.tzinfo else created.replace(tzinfo=timezone.utc)).isoformat()
+        details = row.get("details") or {}
+        writer.writerow([
+            _csv_safe(created),
+            _csv_safe(row.get("username")),
+            _csv_safe(row.get("helper_id")),
+            _csv_safe(row.get("event_type")),
+            _csv_safe(row.get("ip")),
+            _csv_safe(row.get("method")),
+            _csv_safe(row.get("path")),
+            _csv_safe(row.get("status_code")),
+            _csv_safe(json.dumps(details, ensure_ascii=False, default=str) if details else ""),
+        ])
+    headers = {
+        "Content-Disposition": 'attachment; filename="journal-activite.csv"',
+        "X-Export-Truncated": "1" if len(rows) >= EXPORT_MAX_ROWS else "0",
+        "Cache-Control": "no-store",
+    }
+    return Response("\ufeff" + buffer.getvalue(), media_type="text/csv; charset=utf-8", headers=headers)
 
 
 @router.get("/auth-logs/summary", response_model=AuthLogSummary)

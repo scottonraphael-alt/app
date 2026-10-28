@@ -44,6 +44,7 @@ const FORM_FIELDS = [
   "location",
   "participant_ids",
   "reminders",
+  "recurrence",
 ];
 const PATCH_KEYS = [
   "type",
@@ -58,7 +59,17 @@ const PATCH_KEYS = [
   "location",
   "participant_ids",
   "reminders",
+  "recurrence",
 ];
+
+const RECURRENCE_OPTIONS = [
+  { value: "", label: "Ne se répète pas" },
+  { value: "weekly", label: "Chaque semaine" },
+  { value: "biweekly", label: "Toutes les 2 semaines" },
+  { value: "monthly", label: "Chaque mois" },
+];
+const RECURRENCE_MIN_INTERVAL = { weekly: 7, biweekly: 14, monthly: 28 };
+const RECURRENCE_MAX_DAYS = 731;
 
 const NEW_HEADINGS = {
   evenement: "Nouvel événement",
@@ -80,14 +91,24 @@ function identity(person) {
 // Formulaire de départ : une entrée à modifier ou à dupliquer (`source`), ou des valeurs proposées (`defaults`).
 function initialForm(source, defaults, type, today) {
   if (source) {
+    // Une occurrence d'une série s'ouvre sur le début de la série (la modification vaut pour toute la série).
+    let startDate = isIsoDate(source.start_date) ? source.start_date : today;
+    let endDate = isIsoDate(source.end_date) ? source.end_date : "";
+    if (isIsoDate(source.series_start_date) && source.series_start_date !== startDate) {
+      const length = endDate ? daysBetween(startDate, endDate) : 0;
+      startDate = source.series_start_date;
+      endDate = length ? addDaysIso(startDate, length) : "";
+    }
     return {
+      recurrence_freq: source.recurrence?.freq || "",
+      recurrence_until: source.recurrence?.until || "",
       type: source.type || type,
       custom_label: source.custom_label || "",
       title: source.title || "",
       description: source.description || "",
       all_day: source.all_day !== false,
-      start_date: isIsoDate(source.start_date) ? source.start_date : today,
-      end_date: isIsoDate(source.end_date) ? source.end_date : "",
+      start_date: startDate,
+      end_date: endDate,
       start_time: isTime(source.start_time) ? source.start_time : "",
       end_time: isTime(source.end_time) ? source.end_time : "",
       location: source.location || "",
@@ -99,6 +120,8 @@ function initialForm(source, defaults, type, today) {
   const end = isIsoDate(defaults?.end) && defaults.end > start ? defaults.end : "";
   const allDay = defaults?.allDay !== false;
   return {
+    recurrence_freq: "",
+    recurrence_until: "",
     type,
     custom_label: "",
     title: defaults?.title || "",
@@ -132,6 +155,7 @@ function comparable(form) {
     location: form.location.trim(),
     participant_ids: form.participants.map((person) => String(person.id)),
     reminders: remindersPayload(form.reminders),
+    recurrence: form.recurrence_freq ? { freq: form.recurrence_freq, until: form.recurrence_until } : null,
   };
 }
 
@@ -170,6 +194,18 @@ function validate(form, today, keptDate) {
     if (form.end_date < form.start_date) errors.end_date = "La date de fin doit suivre la date de début.";
     else if (daysBetween(form.start_date, form.end_date) > DATE_LIMITS.entryMaxDays) {
       errors.end_date = "Une entrée ne peut pas dépasser 3 mois.";
+    }
+  }
+  if (form.recurrence_freq) {
+    if (!isIsoDate(form.recurrence_until)) errors.recurrence_until = "Indiquez la fin de la répétition.";
+    else if (isIsoDate(form.start_date)) {
+      if (form.recurrence_until < form.start_date) {
+        errors.recurrence_until = "La fin de la répétition doit suivre le début.";
+      } else if (daysBetween(form.start_date, form.recurrence_until) > RECURRENCE_MAX_DAYS) {
+        errors.recurrence_until = "La répétition ne peut pas dépasser 2 ans.";
+      } else if (hasEndDate && daysBetween(form.start_date, form.end_date) + 1 > RECURRENCE_MIN_INTERVAL[form.recurrence_freq]) {
+        errors.recurrence_until = "La durée de l'entrée dépasse l'intervalle de répétition.";
+      }
     }
   }
   if (!form.all_day) {
@@ -225,7 +261,7 @@ function EntryDialogContent({
 
   const submit = async () => {
     if (saving) return;
-    const found = validate(form, today, editing ? entry.start_date : "");
+    const found = validate(form, today, editing ? entry.series_start_date || entry.start_date : "");
     setErrors(found);
     setBanner("");
     if (Object.keys(found).length) return;
@@ -442,6 +478,58 @@ function EntryDialogContent({
             ) : null}
           </div>
         )}
+
+        <div className="ag-form-row">
+          <div className="ag-field">
+            <label className="ag-label" htmlFor={`${baseId}-recurrence`}>
+              Répétition
+            </label>
+            <select
+              id={`${baseId}-recurrence`}
+              className="ag-input"
+              value={form.recurrence_freq}
+              onChange={(event) => {
+                const freq = event.target.value;
+                setForm((old) => ({
+                  ...old,
+                  recurrence_freq: freq,
+                  recurrence_until:
+                    freq && !old.recurrence_until && isIsoDate(old.start_date)
+                      ? addDaysIso(old.start_date, freq === "monthly" ? 90 : 56)
+                      : old.recurrence_until,
+                }));
+                setErrors((old) => ({ ...old, recurrence_until: undefined }));
+              }}
+            >
+              {RECURRENCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {form.recurrence_freq ? (
+            <div className="ag-field">
+              <label className="ag-label" htmlFor={`${baseId}-until`}>
+                Jusqu'au
+              </label>
+              <input
+                id={`${baseId}-until`}
+                type="date"
+                className="ag-input"
+                value={form.recurrence_until}
+                min={isIsoDate(form.start_date) ? form.start_date : undefined}
+                aria-invalid={errors.recurrence_until ? "true" : undefined}
+                aria-describedby={describe("recurrence_until")}
+                onChange={(event) => set("recurrence_until", event.target.value)}
+              />
+              <FieldError id={`${baseId}-recurrence_until-error`} message={errors.recurrence_until} />
+            </div>
+          ) : null}
+        </div>
+        {form.recurrence_freq ? (
+          <p className="ag-help">Les rappels Discord ne concernent que la première occurrence de la série.</p>
+        ) : null}
 
         <div className="ag-field">
           <label className="ag-label" htmlFor={`${baseId}-location`}>

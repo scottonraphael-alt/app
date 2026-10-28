@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CalendarDays, CircleAlert, Lock, Pencil, RefreshCw, Settings2, Trash2, UserMinus } from "lucide-react";
+import { CalendarDays, CircleAlert, ListChecks, Lock, Pencil, Printer, RefreshCw, Settings2, Trash2, UserMinus } from "lucide-react";
+import { Link } from "react-router-dom";
 
-import AgendaHomeLink from "@/components/agenda/AgendaHomeLink";
-import HelperAvatar from "@/components/agenda/HelperAvatar";
-import ReminderSettingsDialog from "@/components/agenda/ReminderSettingsDialog";
-import useAgendaNoNav from "@/components/agenda/useAgendaNoNav";
+import AgendaHomeLink from "../components/agenda/AgendaHomeLink";
+import HelperAvatar from "../components/agenda/HelperAvatar";
+import ReminderSettingsDialog from "../components/agenda/ReminderSettingsDialog";
+import useAgendaNoNav from "../components/agenda/useAgendaNoNav";
 import {
   agendaQueries,
   deleteAbsence,
@@ -16,12 +17,13 @@ import {
   elementQuery,
   invalidateAfterAbsenceChange,
   invalidateAgenda,
+  moveItem,
   readStoredFilters,
   returnFromAbsence,
   writeStoredFilters,
-} from "@/components/agenda/agendaApi";
-import { LIST_DAYS, TYPE_ORDER } from "@/components/agenda/agendaConstants";
-import { agendaErrorMessage, errorStatus, isNotFound } from "@/components/agenda/agendaErrors";
+} from "../components/agenda/agendaApi";
+import { LIST_DAYS, TYPE_ORDER } from "../components/agenda/agendaConstants";
+import { agendaErrorMessage, errorStatus, isNotFound } from "../components/agenda/agendaErrors";
 import {
   absenceGroups,
   absencePeriodLabel,
@@ -41,23 +43,24 @@ import {
   shiftAnchor,
   toggleFilterType,
   viewFromParam,
-} from "@/components/agenda/calendarModel";
-import { isIsoDate, resolveToday } from "@/components/agenda/dateUtils";
-import AbsenceDialog from "@/components/agenda/calendar/AbsenceDialog";
-import AddMenu from "@/components/agenda/calendar/AddMenu";
-import AgendaListView from "@/components/agenda/calendar/AgendaListView";
-import CalendarFilters from "@/components/agenda/calendar/CalendarFilters";
-import CalendarToolbar from "@/components/agenda/calendar/CalendarToolbar";
-import DayPopover from "@/components/agenda/calendar/DayPopover";
-import EntryDialog from "@/components/agenda/calendar/EntryDialog";
-import ItemDetailDrawer from "@/components/agenda/calendar/ItemDetailDrawer";
-import MonthView from "@/components/agenda/calendar/MonthView";
-import QuickAddPopover from "@/components/agenda/calendar/QuickAddPopover";
-import { NextEventsCard, RemindersCard } from "@/components/agenda/calendar/SideCards";
-import WeekView from "@/components/agenda/calendar/WeekView";
-import { defaultAddDate, restoreFocus, useMediaQuery } from "@/components/agenda/calendar/calendarHelpers";
-import MeetingDialog from "@/components/agenda/meetings/MeetingDialog";
-import "@/components/agenda/calendar/agenda-calendar.css";
+} from "../components/agenda/calendarModel";
+import { addDaysIso, daysBetween, formatDayMedium, isIsoDate, resolveToday } from "../components/agenda/dateUtils";
+import PrintPlanning from "../components/agenda/calendar/PrintPlanning";
+import AbsenceDialog from "../components/agenda/calendar/AbsenceDialog";
+import AddMenu from "../components/agenda/calendar/AddMenu";
+import AgendaListView from "../components/agenda/calendar/AgendaListView";
+import CalendarFilters from "../components/agenda/calendar/CalendarFilters";
+import CalendarToolbar from "../components/agenda/calendar/CalendarToolbar";
+import DayPopover from "../components/agenda/calendar/DayPopover";
+import EntryDialog from "../components/agenda/calendar/EntryDialog";
+import ItemDetailDrawer from "../components/agenda/calendar/ItemDetailDrawer";
+import MonthView from "../components/agenda/calendar/MonthView";
+import QuickAddPopover from "../components/agenda/calendar/QuickAddPopover";
+import { NextEventsCard, RemindersCard } from "../components/agenda/calendar/SideCards";
+import WeekView from "../components/agenda/calendar/WeekView";
+import { defaultAddDate, restoreFocus, useMediaQuery } from "../components/agenda/calendar/calendarHelpers";
+import MeetingDialog from "../components/agenda/meetings/MeetingDialog";
+import "../components/agenda/calendar/agenda-calendar.css";
 
 let quickCounter = 0;
 
@@ -110,6 +113,7 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
   const [dayPop, setDayPop] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busyKey, setBusyKey] = useState("");
+  const pickedKey = useRef(null);
 
   // Données de la page. « Aujourd'hui » vient du serveur (date de Paris), avec un repli calculé à Paris.
   const upcomingQuery = useQuery(agendaQueries.upcoming());
@@ -156,7 +160,7 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
 
   const elementParam = searchParams.get("element");
   const element = useMemo(() => parseElementParam(elementParam), [elementParam]);
-  const feedItem = element ? findItem(allItems, element.key) : null;
+  const feedItem = element ? findItem(allItems, element.key, pickedKey.current) : null;
   const detailQuery = useQuery({
     ...elementQuery(element),
     enabled: Boolean(element) && !feedItem && !feedQuery.isPending,
@@ -198,7 +202,9 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
       }
       triggerRef.current = typeof document !== "undefined" ? document.activeElement : null;
       setDayPop(null);
-      patchParams({ element: item.key });
+      // Une occurrence d'une série s'ouvre par l'identifiant de la série ; on retient laquelle a été cliquée.
+      pickedKey.current = item.key;
+      patchParams({ element: `${item.kind}:${item.id}` });
     },
     [navigate, patchParams],
   );
@@ -359,6 +365,46 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
     [queryClient],
   );
 
+  // ---- Glisser-déposer : changer la date, avec annulation par toast ----
+
+  const handleMove = useCallback(
+    async (item, fromDay, toDay) => {
+      if (!isIsoDate(fromDay) || !isIsoDate(toDay) || busyKey) return;
+      const delta = daysBetween(fromDay, toDay);
+      if (!delta) return;
+      setBusyKey(`move:${item.key}`);
+      try {
+        const moved = await moveItem(item.kind, item.id, delta);
+        await invalidateAgenda(queryClient);
+        const series = item.recurrence ? "Série décalée : " : "";
+        toast.success(`${series}« ${item.title} » déplacé au ${formatDayMedium(moved.start_date || addDaysIso(item.start, delta))}.`, {
+          duration: 8000,
+          action: {
+            label: "Annuler",
+            onClick: async () => {
+              try {
+                await moveItem(item.kind, item.id, -delta);
+                await invalidateAgenda(queryClient);
+                toast.success("Déplacement annulé.");
+              } catch (error) {
+                toast.error(agendaErrorMessage(error));
+              }
+            },
+          },
+        });
+      } catch (error) {
+        toast.error(agendaErrorMessage(error));
+      } finally {
+        setBusyKey("");
+      }
+    },
+    [busyKey, queryClient],
+  );
+
+  const handlePrint = () => {
+    if (typeof window !== "undefined" && typeof window.print === "function") window.print();
+  };
+
   // ---- Panneau latéral ----
 
   const upcoming = upcomingQuery.data;
@@ -429,6 +475,16 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
         </div>
         <div className="ag-header-actions">
           <AgendaHomeLink />
+          {phone ? null : (
+            <button type="button" className="ag-button ag-button--secondary" onClick={handlePrint}>
+              <Printer size={16} aria-hidden="true" />
+              Imprimer le planning
+            </button>
+          )}
+          <Link to="/staff/sondages" className="ag-button ag-button--secondary">
+            <ListChecks size={16} aria-hidden="true" />
+            Sondages de créneaux
+          </Link>
           {phone ? null : <AddMenu canManage={isResponsable} onSelect={handleAddSelect} />}
           {isResponsable ? (
             <button
@@ -477,6 +533,7 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
                   onOpenDay={handleOpenDay}
                   onQuickAdd={handleQuickAdd}
                   onNavigateDate={goTo}
+                  onMoveItem={handleMove}
                 />
               ) : null}
               {view === "semaine" ? (
@@ -488,6 +545,7 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
                   onOpenItem={openItem}
                   onOpenDay={handleOpenDay}
                   onQuickAdd={handleQuickAdd}
+                  onMoveItem={handleMove}
                 />
               ) : null}
               {view === "liste" ? (
@@ -613,6 +671,15 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
           />
         </aside>
       </div>
+
+      <PrintPlanning
+        view={view}
+        anchor={anchor}
+        range={range}
+        today={today}
+        items={visibleItems}
+        title={periodTitle(view, anchor, today)}
+      />
 
       {phone ? <AddMenu canManage={isResponsable} onSelect={handleAddSelect} floating /> : null}
 

@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
-import "@/Notifications.css";
+import "../Notifications.css";
 
 const PAGE_SIZE = 30;
 

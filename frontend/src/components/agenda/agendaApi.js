@@ -127,6 +127,12 @@ export async function deleteEntry(entryId) {
   return null;
 }
 
+// Glisser-déposer : décale une entrée ou une réunion de `deltaDays` jours (l'opposé annule).
+export async function moveItem(kind, id, deltaDays) {
+  const response = await api.post("/agenda/move", { kind, id: String(id), delta_days: deltaDays });
+  return response.data;
+}
+
 export async function fetchMeetings(params = {}, { signal } = {}) {
   const { q, phase, offset, limit } = normalizeMeetingParams(params);
   const query = { limit, offset };

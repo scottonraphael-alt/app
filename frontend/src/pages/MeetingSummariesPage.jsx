@@ -3,20 +3,20 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarPlus } from "lucide-react";
 
-import "@/Agenda.css";
-import "@/components/agenda/meetings/meetings.css";
+import "../Agenda.css";
+import "../components/agenda/meetings/meetings.css";
 
-import AgendaHomeLink from "@/components/agenda/AgendaHomeLink";
-import useAgendaNoNav from "@/components/agenda/useAgendaNoNav";
-import { agendaQueries } from "@/components/agenda/agendaApi";
-import { isForbidden } from "@/components/agenda/agendaErrors";
-import { resolveToday } from "@/components/agenda/dateUtils";
-import MeetingDialog from "@/components/agenda/meetings/MeetingDialog";
-import MeetingsListPanel from "@/components/agenda/meetings/MeetingsListPanel";
-import { MeetingsForbidden } from "@/components/agenda/meetings/MeetingsStates";
-import NextMeetingCard from "@/components/agenda/meetings/NextMeetingCard";
-import OpenActionsPanel from "@/components/agenda/meetings/OpenActionsPanel";
-import ToWriteCard from "@/components/agenda/meetings/ToWriteCard";
+import AgendaHomeLink from "../components/agenda/AgendaHomeLink";
+import useAgendaNoNav from "../components/agenda/useAgendaNoNav";
+import { agendaQueries } from "../components/agenda/agendaApi";
+import { isForbidden } from "../components/agenda/agendaErrors";
+import { resolveToday } from "../components/agenda/dateUtils";
+import MeetingDialog from "../components/agenda/meetings/MeetingDialog";
+import MeetingsListPanel from "../components/agenda/meetings/MeetingsListPanel";
+import { MeetingsForbidden } from "../components/agenda/meetings/MeetingsStates";
+import NextMeetingCard from "../components/agenda/meetings/NextMeetingCard";
+import OpenActionsPanel from "../components/agenda/meetings/OpenActionsPanel";
+import ToWriteCard from "../components/agenda/meetings/ToWriteCard";
 
 export default function MeetingSummariesPage({ isResponsable }) {
   useAgendaNoNav();

@@ -151,6 +151,9 @@ export default function CasierList({
   resultsKey = "",
   onClearFilters,
   onCreate,
+  selectable = false,
+  checkedIds = null,
+  onToggleChecked,
 }) {
   const items = Array.isArray(casiers) ? casiers : [];
   const listRef = useRef(null);
@@ -271,7 +274,17 @@ export default function CasierList({
     <div className={`cz-list-wrap${isUpdating ? " is-updating" : ""}`}>
       <ul ref={listRef} className="cz-list" aria-label="Casiers" aria-busy={isUpdating || undefined}>
         {visible.map((casier) => (
-          <li key={casier.id} className="cz-list-item">
+          <li key={casier.id} className={`cz-list-item${selectable ? " has-check" : ""}`}>
+            {selectable && (
+              <label className="cz-list-check">
+                <input
+                  type="checkbox"
+                  checked={Boolean(checkedIds?.has(casier.id))}
+                  onChange={() => onToggleChecked?.(casier.id)}
+                />
+                <span className="cz-sr-only">Sélectionner {memberName(casier.member)}</span>
+              </label>
+            )}
             <CasierRow
               casier={casier}
               selected={casier.id === selectedId}

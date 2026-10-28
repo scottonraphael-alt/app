@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, Suspense, lazy } from "react";
-import "@/App.css";
-import "@/MentalHealth.css";
+import "./App.css";
+import "./MentalHealth.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -35,6 +35,19 @@ const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const StaffLoadPage = lazy(() => import("./pages/StaffLoadPage"));
 const MonthlyReportPage = lazy(() => import("./pages/MonthlyReportPage"));
 const Member360Page = lazy(() => import("./pages/Member360Page"));
+const TicketsKanbanPage = lazy(() => import("./pages/TicketsKanbanPage"));
+const MeetingPollsPage = lazy(() => import("./pages/MeetingPollsPage"));
+const AiReviewQueuePage = lazy(() => import("./pages/AiReviewQueuePage"));
+const ModerationStatsPage = lazy(() => import("./pages/ModerationStatsPage"));
+const ProjectsTimelinePage = lazy(() => import("./pages/ProjectsTimelinePage"));
+const StaffDirectoryPage = lazy(() => import("./pages/StaffDirectoryPage"));
+const KudosPage = lazy(() => import("./pages/KudosPage"));
+const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
+const TeamWeatherPage = lazy(() => import("./pages/TeamWeatherPage"));
+const ReflexSheetsPage = lazy(() => import("./pages/ReflexSheetsPage"));
+const TrainingsPage = lazy(() => import("./pages/TrainingsPage"));
+const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 function Loading() {
   return <div className="app-loading">Chargement…</div>;
@@ -58,6 +71,7 @@ function AuthenticatedApp({
   const canSeeStaff = isResponsable || isAdmin || isHelper || isStaff || isOperateur;
   const canSeeAnimateur = isAnimateur || isResponsable;
   const canSeeOperateur = isOperateur || isResponsable;
+  const canSeeTeam = canSeeStaff || isAnimateur;
 
   const ticketsQuery = useQuery({
     queryKey: ["tickets"],
@@ -384,6 +398,19 @@ function AuthenticatedApp({
             element={canSeeOperateur ? <Member360Page /> : <Navigate to={defaultRoute} replace />}
           />
 
+          <Route path="/kanban" element={canSeeHelper ? <TicketsKanbanPage isAdmin={isAdmin} helper={helper} tickets={tickets} /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/sondages" element={canSeeStaff ? <MeetingPollsPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/moderation/revue-ia" element={canSeeStaff ? <AiReviewQueuePage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/moderation/statistiques" element={isResponsable ? <ModerationStatsPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/animateur/projects/chronologie" element={(canSeeAnimateur || canSeeStaff) ? <ProjectsTimelinePage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/annuaire" element={canSeeTeam ? <StaffDirectoryPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/kudos" element={canSeeTeam ? <KudosPage isResponsable={isResponsable} currentHelperId={helper?.id} helper={helper} /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/accueil" element={canSeeTeam ? <OnboardingPage isResponsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/meteo-equipe" element={canSeeTeam ? <TeamWeatherPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/fiches-reflexes" element={canSeeTeam ? <ReflexSheetsPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/formations" element={canSeeTeam ? <TrainingsPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/responsable/sante-systeme" element={isResponsable ? <SystemHealthPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/responsable/reglages" element={isResponsable ? <SettingsPage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="*" element={<Navigate to={defaultRoute} replace />} />
         </Routes>
       </Suspense>

@@ -24,7 +24,8 @@ import {
   sendPushTest,
   unsupportedMessage,
 } from "../lib/push";
-import "@/Profile.css";
+import DisplayPrefsSection from "../components/ux/DisplayPrefsSection";
+import "../Profile.css";
 
 const PREF_LABELS = [
   ["ticket_assigned", "Suivi attribué"],
@@ -828,6 +829,7 @@ export default function HelperProfilePage({ helper }) {
       </div>
 
       <div className="hp-extras">
+        <DisplayPrefsSection />
         <NotificationPrefsSection />
         <DevicePushSection />
         <AgendaIcsSection />

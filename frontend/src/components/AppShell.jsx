@@ -1,5 +1,7 @@
 import Topbar from "./topbar/Topbar";
 import CommandPalette from "./command/CommandPalette";
+import AnnouncementBanner from "./responsable/AnnouncementBanner";
+import UxLayer from "./ux/UxLayer";
 
 function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isOperateur, isStaff, isHelper }) {
   if (isResponsable) return "Responsable";
@@ -21,8 +23,10 @@ export default function AppShell({
     <div className="app-shell" data-testid="iris-application">
       <main className="app-main">
         <Topbar helper={helper} roleLabel={roleLabel} onLogout={onLogout} />
+        <AnnouncementBanner />
         {children}
         <CommandPalette onLogout={onLogout} />
+        <UxLayer />
       </main>
     </div>
   );

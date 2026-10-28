@@ -25,7 +25,7 @@ from models.staff import (
     normalize_offsets,
     null_required_message,
 )
-from services import agenda_people, agenda_time
+from services import agenda_people, agenda_recurrence, agenda_time
 from services.agenda_absences import (
     forbidden,
     identity,
@@ -189,6 +189,9 @@ def to_out(doc: dict, viewer: Any, schedule: Any = None) -> dict:
         "updated_by": identity(doc.get("updated_by")),
         "updated_at": iso_or_none(doc.get("updated_at")),
         "can_edit": can_edit(doc, viewer),
+        "recurrence": agenda_recurrence.stored(doc.get("recurrence")),
+        "series_start_date": doc.get("series_start_date")
+        or (doc.get("start_date") if agenda_recurrence.stored(doc.get("recurrence")) else None),
     }
 
 
@@ -198,6 +201,22 @@ def overlap_query(start: str, end: str) -> dict:
         "start_date": {"$lte": end},
         "$or": [{"end_date": {"$gte": start}}, {"end_date": None, "start_date": {"$gte": start}}],
     }
+
+
+def feed_query(start: str, end: str) -> dict:
+    """Entrées du flux : celles qui chevauchent la période, plus les séries récurrentes qui la touchent."""
+    return {"$or": [overlap_query(start, end), agenda_recurrence.recurring_query(start, end)]}
+
+
+def expand_for_feed(docs: list[dict], start: str, end: str) -> list[dict]:
+    """Développe les séries en occurrences de la période (les entrées simples sont gardées telles quelles)."""
+    out: list[dict] = []
+    for doc in docs:
+        if agenda_recurrence.stored(doc.get("recurrence")):
+            out.extend(agenda_recurrence.occurrences(doc, start, end))
+        else:
+            out.append(doc)
+    return out
 
 
 async def get(entry_id: str) -> dict:
@@ -275,7 +294,14 @@ def validate_and_merge(existing: dict | None, patch_fields: dict, today: str | N
     ):
         raise unprocessable(MSG_OUT_OF_BOUNDS)
 
+    raw_recurrence = pick("recurrence")
+    try:
+        recurrence = agenda_recurrence.validate(raw_recurrence, start_date, end_date)
+    except ValueError as exc:
+        raise unprocessable(str(exc)) from exc
+
     return {
+        "recurrence": recurrence,
         "type": entry_type,
         "custom_label": custom_label,
         "title": title.strip(),

@@ -45,6 +45,12 @@ import {
   weekdayShort,
 } from "./dateUtils";
 
+export const RECURRENCE_LABELS = {
+  weekly: "Chaque semaine",
+  biweekly: "Toutes les 2 semaines",
+  monthly: "Chaque mois",
+};
+
 const ELEMENT_KINDS = ["entry", "meeting", "absence"];
 
 function sameId(a, b) {
@@ -172,8 +178,13 @@ export function normalizeEntry(entry, options = {}) {
   const startTime = !entry.all_day && isTime(entry.start_time) ? entry.start_time : null;
   const end = isIsoDate(entry.end_date) && entry.end_date > entry.start_date ? entry.end_date : entry.start_date;
   const people = asArray(entry.participants);
+  const recurrence = isRecord(entry.recurrence) && RECURRENCE_LABELS[entry.recurrence.freq] ? entry.recurrence : null;
+  // Occurrence d'une série autre que la première : clé propre (même identifiant que la série).
+  const isOccurrence = Boolean(recurrence) && isIsoDate(entry.series_start_date) && entry.series_start_date !== entry.start_date;
   return {
-    key: itemKey("entry", entry.id),
+    recurrence,
+    isOccurrence,
+    key: isOccurrence ? `${itemKey("entry", entry.id)}@${entry.start_date}` : itemKey("entry", entry.id),
     kind: "entry",
     type,
     id: String(entry.id),
@@ -377,9 +388,20 @@ export function dotsForDay(items, iso, max = MOBILE_MAX_DOTS) {
   };
 }
 
-// Élément du flux par sa clé (« meeting:<id> »), ou null.
-export function findItem(items, key) {
-  return asArray(items).find((item) => item.key === key) || null;
+// Élément du flux par sa clé (« meeting:<id> »), ou null. `preferredKey` : occurrence précise d'une série
+// (clé « entry:<id>@<date> ») ; à défaut, la première occurrence du flux qui porte cet identifiant.
+export function findItem(items, key, preferredKey = null) {
+  const list = asArray(items);
+  const exact = preferredKey ? list.find((item) => item.key === preferredKey) : null;
+  if (exact) return exact;
+  return list.find((item) => item.key === key) || list.find((item) => itemKey(item.kind, item.id) === key) || null;
+}
+
+// Le glisser-déposer déplace une entrée (auteur ou responsable) ou une réunion (responsable) ; pas les absences ni les tâches.
+export function isMovable(item) {
+  if (!item || !item.canEdit || item.openEnded) return false;
+  if (item.kind === "entry") return true;
+  return item.kind === "meeting" && !item.cancelled && item.phase !== "redige";
 }
 
 // Vue Semaine : barres (journée entière ou plusieurs jours) et éléments horaires d'un seul jour.

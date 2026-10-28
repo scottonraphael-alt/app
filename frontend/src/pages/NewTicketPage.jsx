@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import NewTicketForm from "../components/NewTicketForm";
-import "@/NewTicket.css";
+import "../NewTicket.css";
 
 export default function NewTicketPage({ onCreated }) {
   const navigate = useNavigate();

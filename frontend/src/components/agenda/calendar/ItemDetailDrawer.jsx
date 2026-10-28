@@ -24,8 +24,8 @@ import ReminderSchedule from "../ReminderSchedule";
 import TypeBadge, { PhaseBadge, Pill } from "../TypeBadge";
 import { agendaQueries } from "../agendaApi";
 import { ATTENDANCE, isValidAgendaId } from "../agendaConstants";
-import { helperName, formatItemWhen } from "../calendarModel";
-import { formatInstantRelative } from "../dateUtils";
+import { helperName, formatItemWhen, RECURRENCE_LABELS } from "../calendarModel";
+import { formatDayShort, formatInstantRelative } from "../dateUtils";
 import "./agenda-calendar.css";
 
 const DESCRIPTION_PREVIEW = 280;
@@ -322,7 +322,11 @@ export default function ItemDetailDrawer({
       side="right"
       headerExtra={header}
       title={item.title}
-      description={formatItemWhen(item)}
+      description={
+        item.recurrence
+          ? `${formatItemWhen(item)} · ${RECURRENCE_LABELS[item.recurrence.freq]}, jusqu'au ${formatDayShort(item.recurrence.until, { withYear: true })}`
+          : formatItemWhen(item)
+      }
       footer={footer}
       busy={busy}
       bodyClassName="ag-cal-drawer-body"

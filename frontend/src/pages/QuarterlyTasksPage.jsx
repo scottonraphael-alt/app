@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Archive, ArrowRight, Calendar, Check, ChevronDown, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
-import "@/QuarterlyTasks.css";
+import "../QuarterlyTasks.css";
 
 const ROLES = { tous: "Tous", staff: "Staff", helper: "Helper" };
 const normalize = (v) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();

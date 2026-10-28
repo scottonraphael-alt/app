@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
-import "@/ChannelArchiveWorkspace.css";
+import "../ChannelArchiveWorkspace.css";
 
 
 const formatTime = (timestamp) => new Date(timestamp).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });

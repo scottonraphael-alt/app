@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import "@/TicketArchives.css";
+import "../TicketArchives.css";
 
 function displayName(member) {
   return (

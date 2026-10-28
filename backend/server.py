@@ -6,13 +6,17 @@ from starlette.middleware.cors import CORSMiddleware
 import logging
 from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
-from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report
+from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report, team_presence, ticket_notes, ticket_tags, ticket_followups, agenda_polls, agenda_move, meeting_extras, casier_bulk, moderation_stats, project_extras, staff_directory, staff_status, kudos, onboarding, team_weather, reflex_sheets, trainings, debriefs, staff_announcements, system_health
 from services import agenda_indexes, agenda_reminders
 from services import presence as presence_service, casier_history as casier_history_service
 from services.ticket_crisis import run_ticket_crisis_loop
 from services.ticket_routing import run_sla_loop
 from services.staff_load import run_load_watch_loop
 from services.monthly_report import run_monthly_report_loop
+from services.ticket_followups import run_ticket_followups_loop
+from services.sanction_expiry import run_sanction_expiry_loop
+from services.team_weather import run_team_weather_loop
+from services import debriefs as debriefs_service, team_weather as team_weather_service
 from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
@@ -111,6 +115,26 @@ app.include_router(web_push.router, prefix="/api")
 app.include_router(casier_history.router, prefix="/api")
 app.include_router(member_360.router, prefix="/api")
 app.include_router(monthly_report.router, prefix="/api")
+app.include_router(team_presence.router, prefix="/api")
+app.include_router(ticket_notes.router, prefix="/api")
+app.include_router(ticket_tags.router, prefix="/api")
+app.include_router(ticket_followups.router, prefix="/api")
+app.include_router(agenda_polls.router, prefix="/api")
+app.include_router(agenda_move.router, prefix="/api")
+app.include_router(meeting_extras.router, prefix="/api")
+app.include_router(casier_bulk.router, prefix="/api")
+app.include_router(moderation_stats.router, prefix="/api")
+app.include_router(project_extras.router, prefix="/api")
+app.include_router(staff_directory.router, prefix="/api")
+app.include_router(staff_status.router, prefix="/api")
+app.include_router(kudos.router, prefix="/api")
+app.include_router(onboarding.router, prefix="/api")
+app.include_router(team_weather.router, prefix="/api")
+app.include_router(reflex_sheets.router, prefix="/api")
+app.include_router(trainings.router, prefix="/api")
+app.include_router(debriefs.router, prefix="/api")
+app.include_router(staff_announcements.router, prefix="/api")
+app.include_router(system_health.router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -168,6 +192,8 @@ async def startup() -> None:
     try:
         await presence_service.ensure_indexes()
         await casier_history_service.ensure_indexes()
+        await debriefs_service.ensure_indexes()
+        await team_weather_service.ensure_indexes()
     except Exception:
         logger.exception("Index présence / historique casier impossibles au démarrage")
     _feature_stop_event = asyncio.Event()
@@ -176,6 +202,9 @@ async def startup() -> None:
         asyncio.create_task(run_sla_loop(_feature_stop_event)),
         asyncio.create_task(run_load_watch_loop(_feature_stop_event)),
         asyncio.create_task(run_monthly_report_loop(_feature_stop_event)),
+        asyncio.create_task(run_ticket_followups_loop(_feature_stop_event)),
+        asyncio.create_task(run_sanction_expiry_loop(_feature_stop_event)),
+        asyncio.create_task(run_team_weather_loop(_feature_stop_event)),
     ]
     _bot_task = asyncio.create_task(start_moderation_bot())
     _bot_task.add_done_callback(

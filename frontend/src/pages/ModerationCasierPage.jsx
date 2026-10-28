@@ -1,18 +1,19 @@
 // Importé en premier : les CSS des composants enfants viennent après et peuvent surcharger.
-import "@/Casier.css";
+import "../Casier.css";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import * as Tabs from "@radix-ui/react-tabs";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bot, MousePointerClick, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, Bot, CheckSquare, Keyboard, MousePointerClick, ShieldCheck } from "lucide-react";
 
-import CreateCasierModal from "@/components/CreateCasierModal";
-import AiFlagsView from "@/components/casier/AiFlagsView";
-import CasierDetail from "@/components/casier/CasierDetail";
-import CasierList from "@/components/casier/CasierList";
-import CasierSearchBar from "@/components/casier/CasierSearchBar";
-import { casierKeys, errorMessage, listAiFlags, listCasiers } from "@/components/casier/casierApi";
+import CreateCasierModal from "../components/CreateCasierModal";
+import AiFlagsView from "../components/casier/AiFlagsView";
+import CasierBulkBar from "../components/casier/CasierBulkBar";
+import CasierDetail from "../components/casier/CasierDetail";
+import CasierList from "../components/casier/CasierList";
+import CasierSearchBar from "../components/casier/CasierSearchBar";
+import { casierKeys, errorMessage, listAiFlags, listCasiers } from "../components/casier/casierApi";
 import {
   CASIER_VIEWS,
   DEFAULT_DETAIL_TAB,
@@ -24,8 +25,8 @@ import {
   SEARCH_MAX_LENGTH,
   SEARCH_MAX_TERMS,
   STATUS_ORDER,
-} from "@/components/casier/casierConstants";
-import { plural } from "@/components/casier/formatters";
+} from "../components/casier/casierConstants";
+import { plural } from "../components/casier/formatters";
 
 const VIEWS = Object.values(CASIER_VIEWS);
 const URL_KEYS = ["vue", "casier", "onglet", "sanction", "signalement"];
@@ -139,6 +140,8 @@ export default function ModerationCasierPage() {
 
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [createOpen, setCreateOpen] = useState(false);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [checked, setChecked] = useState(() => new Set());
   const [visited, setVisited] = useState(() => ({ [vue]: true }));
   const seen = visited[vue] ? visited : { ...visited, [vue]: true };
 
@@ -369,6 +372,23 @@ export default function ModerationCasierPage() {
     [effectiveCasierId, writeParams]
   );
 
+  const toggleChecked = useCallback((id) => {
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 100) next.add(id);
+      return next;
+    });
+  }, []);
+  const checkAll = useCallback(
+    () => setChecked(new Set(casiers.slice(0, 100).map((item) => item.id))),
+    [casiers]
+  );
+  const closeBulk = useCallback(() => {
+    setBulkMode(false);
+    setChecked(new Set());
+  }, []);
+
   const openCreate = useCallback(() => setCreateOpen(true), []);
   const closeCreate = useCallback(() => setCreateOpen(false), []);
 
@@ -398,6 +418,16 @@ export default function ModerationCasierPage() {
           <Link to="/" className="cz-home">
             Accueil
             <ArrowRight size={18} aria-hidden="true" />
+          </Link>
+
+          <Link to="/moderation/revue-ia" className="cz-button">
+            <Keyboard size={17} aria-hidden="true" />
+            Revue rapide
+          </Link>
+
+          <Link to="/moderation/statistiques" className="cz-button">
+            <BarChart3 size={17} aria-hidden="true" />
+            Statistiques
           </Link>
 
           <button
@@ -467,6 +497,28 @@ export default function ModerationCasierPage() {
                     />
                   </div>
 
+                  <div className="cz-bulk-toggle">
+                    <button
+                      type="button"
+                      className="cz-button cz-button--compact"
+                      aria-pressed={bulkMode}
+                      onClick={() => (bulkMode ? closeBulk() : setBulkMode(true))}
+                    >
+                      <CheckSquare size={15} aria-hidden="true" />
+                      {bulkMode ? "Quitter la sélection" : "Sélection multiple"}
+                    </button>
+                  </div>
+
+                  {bulkMode && (
+                    <CasierBulkBar
+                      ids={[...checked]}
+                      totalVisible={casiers.length}
+                      onSelectAll={checkAll}
+                      onClear={() => setChecked(new Set())}
+                      onClose={closeBulk}
+                    />
+                  )}
+
                   <div className="cz-panel-scroll">
                     <CasierList
                       casiers={casiers}
@@ -481,6 +533,9 @@ export default function ModerationCasierPage() {
                       resultsKey={resultsKey}
                       onClearFilters={resetFilters}
                       onCreate={openCreate}
+                      selectable={bulkMode}
+                      checkedIds={checked}
+                      onToggleChecked={toggleChecked}
                     />
                   </div>
                 </section>

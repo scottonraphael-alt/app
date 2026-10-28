@@ -1,0 +1,82 @@
+/* Planning imprimable : caché à l'écran, seul élément visible à l'impression. */
+.ag-print-planning {
+  display: none;
+}
+
+@page {
+  size: A4;
+  margin: 14mm;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .ag-print-planning,
+  .ag-print-planning * {
+    visibility: visible !important;
+  }
+
+  .ag-print-planning {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 0;
+    background: #fff !important;
+    color: #000 !important;
+    font: 11pt / 1.35 "IBM Plex Sans", Arial, sans-serif;
+  }
+
+  .ag-print-planning h1 {
+    margin: 0 0 2mm;
+    font-size: 18pt;
+    color: #000 !important;
+  }
+
+  .ag-print-planning .ag-print-sub {
+    margin: 0 0 6mm;
+    font-size: 9pt;
+    color: #444 !important;
+  }
+
+  .ag-print-planning table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .ag-print-planning th,
+  .ag-print-planning td {
+    padding: 2mm 2.5mm;
+    border-bottom: 0.3mm solid #999;
+    text-align: left;
+    vertical-align: top;
+    color: #000 !important;
+    background: transparent !important;
+  }
+
+  .ag-print-planning thead th {
+    border-bottom: 0.5mm solid #000;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .ag-print-planning thead {
+    display: table-header-group;
+  }
+
+  .ag-print-planning tr {
+    break-inside: avoid;
+  }
+
+  .ag-print-planning small {
+    color: #444 !important;
+  }
+
+  .ag-print-planning .is-cancelled {
+    text-decoration: line-through;
+  }
+}

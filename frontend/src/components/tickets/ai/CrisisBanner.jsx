@@ -3,6 +3,8 @@ import { LoaderCircle, Phone, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { api, getErrorMessage } from "../../../api/client";
 import { CRISIS_LABELS, asList, isCrisis } from "./crisis";
+import ReflexLink from "../../wellbeing/ReflexLink";
+import DebriefPrompt from "../../wellbeing/DebriefPrompt";
 import "./ai.css";
 
 const telHref = (phone) => `tel:${String(phone).replace(/[^\d+]/g, "")}`;
@@ -56,6 +58,7 @@ export default function CrisisBanner({ ticketId, refreshKey, helperNames = {} })
             {reasons.length ? reasons.join(" · ") : "Signaux de détresse détectés dans la conversation."}
           </span>
         </div>
+        <ReflexLink reasons={reasons} />
         {acknowledged
           ? <span className="tai-crisis-ack" data-testid="crisis-acknowledged">
               Pris en charge{helperNames[crisis.acknowledged_by] ? ` par ${helperNames[crisis.acknowledged_by]}` : ""} · {formatTime(crisis.acknowledged_at)}
@@ -79,6 +82,7 @@ export default function CrisisBanner({ ticketId, refreshKey, helperNames = {} })
         )}
         {guidance.reminder && <p className="tai-note">{guidance.reminder}</p>}
       </details>
+      <DebriefPrompt ticketId={ticketId} />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { MapPin, Plus } from "lucide-react";
 
 import { WEEK_MAX_LANES } from "../agendaConstants";
@@ -16,9 +16,10 @@ import {
 import { formatDayMedium, formatDayTitle, formatTimeRange } from "../dateUtils";
 import CalendarBar from "./CalendarBar";
 import { joinClasses } from "./calendarHelpers";
+import { dragSource, dropTarget } from "./dragDrop";
 import "./agenda-calendar.css";
 
-function WeekItemCard({ item, today, onOpen }) {
+function WeekItemCard({ item, today, onOpen, dragEnabled = false }) {
   const label = itemAriaLabel(item);
   return (
     <button
@@ -31,6 +32,7 @@ function WeekItemCard({ item, today, onOpen }) {
       )}
       aria-label={label}
       title={label}
+      {...dragSource(item, item.start, dragEnabled)}
       onClick={() => onOpen(item)}
     >
       <strong className="ag-week-item-time">{formatTimeRange(item.startTime, item.endTime) || "Journée"}</strong>
@@ -48,9 +50,9 @@ function WeekItemCard({ item, today, onOpen }) {
   );
 }
 
-function DayHeader({ info, onQuickAdd, stacked }) {
+function DayHeader({ info, onQuickAdd, stacked, drop = null, dropping = false }) {
   return (
-    <div className={joinClasses("ag-week-head", info.isToday ? "is-today" : "")}>
+    <div className={joinClasses("ag-week-head", info.isToday ? "is-today" : "", dropping ? "is-drop-target" : "")} {...drop}>
       <span className="ag-week-head-label">
         {stacked ? (
           formatDayTitle(info.iso)
@@ -76,7 +78,10 @@ function DayHeader({ info, onQuickAdd, stacked }) {
 
 // Vue Semaine : en-tête des jours, bande « Journée » (barres multi-jours) puis cartes des éléments horaires.
 // Sous 900px (`stacked`), les jours sont empilés.
-export default function WeekView({ anchor, today, items, stacked = false, onOpenItem, onOpenDay, onQuickAdd }) {
+export default function WeekView({ anchor, today, items, stacked = false, onOpenItem, onOpenDay, onQuickAdd, onMoveItem = null }) {
+  const [dropDay, setDropDay] = useState(null);
+  const dropFor = (day) => (onMoveItem && !stacked ? dropTarget(day, onMoveItem, setDropDay) : null);
+  const dragEnabled = Boolean(onMoveItem) && !stacked;
   const days = useMemo(() => buildWeek(anchor), [anchor]);
   const { bars } = useMemo(() => splitWeekItems(items), [items]);
   const layout = useMemo(() => layoutLanes(days, bars, WEEK_MAX_LANES), [bars, days]);
@@ -134,7 +139,7 @@ export default function WeekView({ anchor, today, items, stacked = false, onOpen
     <div className="ag-week" style={{ "--ag-lanes": laneCount }}>
       <div className="ag-week-grid ag-week-heads">
         {infos.map((info) => (
-          <DayHeader key={info.iso} info={info} onQuickAdd={onQuickAdd} />
+          <DayHeader key={info.iso} info={info} onQuickAdd={onQuickAdd} drop={dropFor(info.iso)} dropping={dropDay === info.iso} />
         ))}
       </div>
       <div className="ag-week-band">
@@ -153,6 +158,8 @@ export default function WeekView({ anchor, today, items, stacked = false, onOpen
                 today={today}
                 onOpen={onOpenItem}
                 className="ag-cal-bar--week"
+                fromDay={days[segment.colStart - 1]}
+                dragEnabled={dragEnabled}
                 style={{ gridColumn: `${segment.colStart} / span ${segment.colSpan}`, gridRow: segment.lane + 1 }}
               />
             )),
@@ -183,12 +190,18 @@ export default function WeekView({ anchor, today, items, stacked = false, onOpen
           return (
             <div
               key={info.iso}
-              className={joinClasses("ag-week-column", info.isToday ? "is-today" : "", info.isPast ? "is-past" : "")}
+              className={joinClasses(
+                "ag-week-column",
+                info.isToday ? "is-today" : "",
+                info.isPast ? "is-past" : "",
+                dropDay === info.iso ? "is-drop-target" : "",
+              )}
               aria-label={formatDayTitle(info.iso)}
               role="group"
+              {...dropFor(info.iso)}
             >
               {timed.map((item) => (
-                <WeekItemCard key={item.key} item={item} today={today} onOpen={onOpenItem} />
+                <WeekItemCard key={item.key} item={item} today={today} onOpen={onOpenItem} dragEnabled={dragEnabled} />
               ))}
             </div>
           );

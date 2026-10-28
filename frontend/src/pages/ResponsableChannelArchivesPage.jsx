@@ -13,8 +13,8 @@ import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
 
-import "@/Casier.css";
-import "@/ResponsableChannelArchives.css";
+import "../Casier.css";
+import "../ResponsableChannelArchives.css";
 
 const formatTime = (timestamp) =>
   new Date(timestamp).toLocaleString("fr-FR", {

@@ -4,11 +4,12 @@ import HelperAvatar from "../HelperAvatar";
 import { TypeIcon, typeClass } from "../TypeBadge";
 import { barTimeLabel, itemAriaLabel } from "../calendarModel";
 import { joinClasses } from "./calendarHelpers";
+import { dragSource } from "./dragDrop";
 import "./agenda-calendar.css";
 
 // Barre d'un élément dans la vue Mois ou dans la bande « Journée » de la vue Semaine.
 // `segment` vient de layoutLanes : { item, lane, colStart, colSpan, continuesBefore, continuesAfter, tailOffset }.
-export default function CalendarBar({ segment, onOpen, today, className = "", style, tabIndex }) {
+export default function CalendarBar({ segment, onOpen, today, className = "", style, tabIndex, fromDay = null, dragEnabled = false }) {
   const { item, colSpan, continuesBefore, continuesAfter, tailOffset } = segment;
   const time = barTimeLabel(item);
   const hasTail = tailOffset !== null && tailOffset !== undefined;
@@ -35,6 +36,7 @@ export default function CalendarBar({ segment, onOpen, today, className = "", st
       aria-label={label}
       title={label}
       tabIndex={tabIndex}
+      {...dragSource(item, fromDay, dragEnabled && Boolean(fromDay))}
       onClick={(event) => {
         event.stopPropagation();
         onOpen(item);

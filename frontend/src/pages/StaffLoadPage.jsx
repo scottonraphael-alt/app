@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { ArrowRight, HeartHandshake, RefreshCw, User, Users } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
 import StatisticsChart from "../components/statistics/StatisticsChart";
-import "@/Casier.css";
-import "@/StaffLoad.css";
+import "../Casier.css";
+import "../StaffLoad.css";
 
 const WEEK_CHOICES = [4, 8, 12];
 const LEVEL_ORDER = { surcharge: 0, attention: 1, ok: 2 };

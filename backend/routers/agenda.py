@@ -48,6 +48,7 @@ from services import (
     agenda_entries,
     agenda_meetings,
     agenda_people,
+    agenda_recurrence,
     agenda_reminders,
     agenda_settings,
     agenda_time,
@@ -146,7 +147,13 @@ async def _schedules(target_type: str, docs: list[dict]) -> dict[str, list]:
 
 async def _entries_out(docs: list[dict], viewer: Viewer) -> list:
     schedules = await _schedules("entry", docs)
-    return [agenda_entries.to_out(doc, viewer, schedules.get(doc.get("id"), [])) for doc in docs]
+    out = []
+    for doc in docs:
+        series_start = doc.get("series_start_date")
+        # Les rappels ne concernent que la première occurrence d'une série.
+        later = bool(series_start) and doc.get("start_date") != series_start
+        out.append(agenda_entries.to_out(doc, viewer, [] if later else schedules.get(doc.get("id"), [])))
+    return out
 
 
 async def _participants_absent(doc: dict) -> list[str]:
@@ -370,7 +377,8 @@ async def get_feed(
         agenda_meetings.MEETING_SUMMARY_PROJECTION,
     ).to_list(FEED_LIMIT)
     meetings.sort(key=lambda doc: _sort_key(doc.get("meeting_date"), doc.get("start_time")))
-    entries = await db.agenda_entries.find(agenda_entries.overlap_query(start, end), {"_id": 0}).to_list(FEED_LIMIT)
+    entries = await db.agenda_entries.find(agenda_entries.feed_query(start, end), {"_id": 0}).to_list(FEED_LIMIT)
+    entries = agenda_entries.expand_for_feed(entries, start, end)
     entries.sort(key=lambda doc: _sort_key(doc.get("start_date"), _entry_start_time(doc)))
 
     return {
@@ -457,9 +465,20 @@ async def get_upcoming(
     ).sort([("meeting_date", 1), ("start_time", 1)]).to_list(NEXT_EVENTS_SCAN)
     # Entrées qui commencent aujourd'hui ou plus tard, ou en cours (end_date null = même jour).
     entries = await db.agenda_entries.find(
-        {"$or": [{"start_date": {"$gte": today}}, {"end_date": {"$gte": today}}]},
+        {"$or": [
+            {"start_date": {"$gte": today}},
+            {"end_date": {"$gte": today}},
+            {"recurrence.until": {"$gte": today}},
+        ]},
         {"_id": 0, "description": 0, "participants": 0},
     ).sort([("start_date", 1), ("start_time", 1)]).to_list(NEXT_EVENTS_SCAN)
+    # Une série n'apparaît qu'une fois : sa prochaine occurrence (une série finie disparaît).
+    entries = [
+        nxt for nxt in (
+            agenda_recurrence.next_occurrence(doc, today) if agenda_recurrence.stored(doc.get("recurrence")) else doc
+            for doc in entries
+        ) if nxt
+    ]
     refs = [_meeting_ref(doc) for doc in meetings if doc.get("id") and doc.get("meeting_date")]
     refs += [_entry_ref(doc) for doc in entries if doc.get("id") and doc.get("start_date")]
     refs = [ref for ref in refs if not _started_too_long_ago(ref, today, now)]

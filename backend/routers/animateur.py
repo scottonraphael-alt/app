@@ -16,6 +16,7 @@ from models.project import Project, ProjectUpdate, ProjectCreate, ProjectTaskCre
 from models.ticket import AuthenticatedHelper, HelperIdentity
 from services.audit_service import log_auth_event
 from services.project_audit import ProjectAuditRoute
+from services import project_extras
 from services.notifications import create_notification
 from services.project_templates import BUILTIN_TEMPLATES, get_template, instantiate_tasks, project_blueprint
 from services.auth_service import (
@@ -1353,7 +1354,9 @@ async def add_task_comment(task_id: str, payload: TaskCommentCreate, request: Re
     now = _now()
     comment = {"id": str(uuid4()), "project_id": project["id"], "task_id": task_id, "body": payload.body,
                "author": _helper_identity(helper), "created_at": now, "updated_at": now}
-    await db.project_task_comments.insert_one(comment)
+    mentions = await project_extras.notify_mentions(payload.body, project, task, comment["author"])
+    comment["mentions"] = mentions
+    await db.project_task_comments.insert_one(dict(comment))
     await log_auth_event("project.task.comment.created", request, helper=helper, status_code=201,
                          details={"project_id": project["id"], "project_title": project["title"], "task_id": task_id,
                                   "title": task["title"], "comment_id": comment["id"], "after": {"body": payload.body}})
@@ -1377,6 +1380,8 @@ async def edit_task_comment(comment_id: str, payload: TaskCommentUpdate, request
                             helper: AuthenticatedHelper = Depends(current_project_editor)):
     comment, task, project = await _editable_comment(comment_id, helper)
     updates = {"body": payload.body, "updated_at": _now(), "edited_by": _helper_identity(helper)}
+    updates["mentions"] = await project_extras.notify_mentions(
+        payload.body, project, task, comment.get("author") or {}, [m["id"] for m in comment.get("mentions") or []])
     result = await db.project_task_comments.update_one({"id": comment_id, "updated_at": payload.expected_updated_at}, {"$set": updates})
     if not result.matched_count:
         raise HTTPException(status_code=409, detail="Le commentaire a changé. Rechargez la discussion.")

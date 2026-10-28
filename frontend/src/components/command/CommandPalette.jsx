@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bell, Calendar, CalendarRange, ClipboardList, CornerDownLeft, FileText, FolderKanban, Gauge, Home, Inbox,
-  LogOut, Moon, Search, Shield, Star, User, Users,
+  LogOut, Moon, Search, Shield, Star, User, Users, Columns3, ListChecks, Keyboard, BarChart3, GanttChart, Heart,
+  ClipboardCheck, CloudSun, BookOpenCheck, GraduationCap, Activity, Settings,
 } from "lucide-react";
 
 import { api } from "../../api/client";
@@ -33,12 +34,34 @@ const PAGE_ICONS = {
   calendrier: Calendar, reunions: CalendarRange, taches: ClipboardList, casier: Shield, projets: FolderKanban,
   calendrier_projets: Calendar, passation: ClipboardList, notifications: Bell, charge: Gauge,
   rapports: FileText, membres: User, profil: User,
+  kanban: Columns3, sondages: ListChecks, revue_ia: Keyboard, stats_moderation: BarChart3, chronologie: GanttChart,
+  annuaire: Users, kudos: Heart, parcours_accueil: ClipboardCheck, meteo_equipe: CloudSun, fiches_reflexes: BookOpenCheck,
+  formations: GraduationCap, sante_systeme: Activity, reglages: Settings,
 };
 
 const TYPE_LABELS = {
   ticket: "Tickets", casier: "Casiers", projet: "Projets", tache: "Tâches",
   reunion: "Réunions", evenement: "Événements", ressource: "Ressources",
 };
+
+const RECENT_KEY = "iris.cmd.recents";
+const RECENT_MAX = 5;
+
+function readRecents() {
+  try {
+    const list = JSON.parse(window.localStorage.getItem(RECENT_KEY) || "[]");
+    return Array.isArray(list) ? list.filter((r) => r && typeof r.id === "string" && typeof r.label === "string").slice(0, RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushRecent(entry) {
+  try {
+    const next = [entry, ...readRecents().filter((r) => r.id !== entry.id)].slice(0, RECENT_MAX);
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch { /* ignore */ }
+}
 
 const FOCUSABLE = "input, button:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
@@ -121,15 +144,22 @@ export default function CommandPalette({ onLogout }) {
       .map((entry) => entry.item);
     const found = results.filter((r) => r && r.url).map((r) => ({
       id: `res-${r.type}-${r.id}`, label: r.title, hint: r.subtitle || "", group: TYPE_LABELS[r.type] || "Résultats",
-      run: () => navigate(r.url),
+      path: r.url, run: () => navigate(r.url),
     }));
     const groups = [];
     found.forEach((item) => {
       if (!groups.includes(item.group)) groups.push(item.group);
     });
     const ordered = groups.flatMap((group) => found.filter((item) => item.group === group));
-    return [...filter(pages), ...ordered, ...filter(actions)];
-  }, [data, query, results, navigate, cycleTheme, onLogout, themeLabel]);
+    const byId = new Map([...pages, ...actions].map((item) => [item.id, item]));
+    const recents = query.trim() ? [] : readRecents().map((r) => {
+      const known = byId.get(r.id);
+      if (known) return { ...known, id: `recent-${known.id}`, group: "Récents" };
+      if (r.path) return { id: `recent-${r.id}`, label: r.label, hint: "", group: "Récents", icon: Star, run: () => navigate(r.path) };
+      return null;
+    }).filter(Boolean);
+    return [...recents, ...filter(pages), ...ordered, ...filter(actions)];
+  }, [open, data, query, results, navigate, cycleTheme, onLogout, themeLabel]);
 
   useEffect(() => { setActive(0); }, [query]);
 
@@ -139,6 +169,10 @@ export default function CommandPalette({ onLogout }) {
   const choose = (item) => {
     if (!item) return;
     close();
+    if (item.id !== "logout" && !item.id.startsWith("recent-")) {
+      const path = item.id.startsWith("res-") ? item.path : undefined;
+      pushRecent({ id: item.id, label: item.label, path });
+    }
     item.run();
   };
   const onKeyDown = (event) => {

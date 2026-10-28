@@ -1,4 +1,4 @@
-import "@/Handoffs.css";
+import "../Handoffs.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -6,8 +6,8 @@ import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-q
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
 
-import HandoffCard from "@/components/handoffs/HandoffCard";
-import HandoffComposer from "@/components/handoffs/HandoffComposer";
+import HandoffCard from "../components/handoffs/HandoffCard";
+import HandoffComposer from "../components/handoffs/HandoffComposer";
 import {
   PAGE_SIZE,
   STATUS_FILTERS,
@@ -19,7 +19,7 @@ import {
   markHandoffRead,
   resolveHandoff,
   updateHandoff,
-} from "@/components/handoffs/handoffsApi";
+} from "../components/handoffs/handoffsApi";
 
 const LIST_KEY = ["handoffs", "list"];
 

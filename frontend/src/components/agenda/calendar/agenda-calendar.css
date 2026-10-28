@@ -1498,3 +1498,21 @@
 :root[data-theme="dark"] .ag-dialog-overlay.ag-daypop-overlay {
   background: rgba(0, 0, 0, 0.5);
 }
+
+/* Glisser-déposer : éléments déplaçables et jour cible */
+.ag-page .ag-cal-bar[draggable="true"],
+.ag-page .ag-week-item[draggable="true"] {
+  cursor: grab;
+}
+
+.ag-page .ag-cal-bar[draggable="true"]:active,
+.ag-page .ag-week-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.ag-page .ag-cal-day.is-drop-target,
+.ag-page .ag-week-column.is-drop-target,
+.ag-page .ag-week-head.is-drop-target {
+  background: var(--ag-sage-soft);
+  box-shadow: inset 0 0 0 2px var(--ag-sage);
+}

@@ -18,7 +18,7 @@ import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
 import TicketReminderTestPanel from "../components/TicketReminderTestPanel";
-import "@/TicketAssignments.css";
+import "../TicketAssignments.css";
 
 function displayName(member) {
   return (

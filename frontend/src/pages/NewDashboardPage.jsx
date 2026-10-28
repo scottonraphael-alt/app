@@ -10,6 +10,8 @@ import {
   FileText,
   ShieldCheck,
   Users,
+  Gauge,
+  ClipboardList,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -17,8 +19,13 @@ import { api } from "../api/client";
 import QuarterlyDashboardModule from "../components/QuarterlyDashboardModule";
 import HelperDashboardModule from "../components/HelperDashboardModule";
 import AnimateurDashboardModule from "../components/AnimateurDashboardModule";
+import HomeGreeting from "../components/home/HomeGreeting";
+import MyDayWidget from "../components/home/MyDayWidget";
+import TeamOnlineWidget from "../components/home/TeamOnlineWidget";
+import useMyDay from "../components/home/useMyDay";
+import { summaryFor } from "../components/home/homeUtils";
 
-import "@/NewDashboard.css";
+import "../NewDashboard.css";
 
 function localDateKey() {
   const now = new Date();
@@ -65,6 +72,10 @@ export default function NewDashboardPage({
     isAdmin ||
     isHelper ||
     isOperateur;
+
+  const myDay = useMyDay(helper?.id, canSeeStaff);
+  const daySummary =
+    canSeeStaff && !myDay.isLoading && !myDay.isError ? summaryFor(myDay.counts) : "";
 
   const absencesQuery = useQuery({
     queryKey: ["dashboard", "absences", helper?.id],
@@ -178,6 +189,8 @@ const pills = [
 
           <h1>Bienvenue {pseudo}</h1>
 
+          <HomeGreeting pseudo={pseudo} summary={daySummary} />
+
           {pills.length > 0 && (
             <div className="nd-pills" aria-label="Vos accès">
               {pills.map((pill) => (
@@ -225,6 +238,13 @@ const pills = [
           </Link>
         </div>
       </header>
+
+      {canSeeStaff && (
+        <div className="hm-widgets">
+          <MyDayWidget day={myDay} />
+          <TeamOnlineWidget helperId={helper?.id} enabled={canSeeStaff} />
+        </div>
+      )}
 
       {/* Espace réservé aux responsables */}
       {isResponsable && (
@@ -274,6 +294,18 @@ const pills = [
             >
               <FileText size={18} aria-hidden="true" />
               <span>Logs d’authentification</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+
+            <Link to="/responsable/charge" className="nd-responsable-link">
+              <Gauge size={18} aria-hidden="true" />
+              <span>Charge du staff</span>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+
+            <Link to="/responsable/rapports" className="nd-responsable-link">
+              <ClipboardList size={18} aria-hidden="true" />
+              <span>Rapport mensuel</span>
               <ArrowRight size={18} aria-hidden="true" />
             </Link>
 
