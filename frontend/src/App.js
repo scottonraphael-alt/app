@@ -19,6 +19,7 @@ const TicketWorkspacePage = lazy(() => import("./pages/TicketWorkspacePage"));
 const AbsenceCalendarPage = lazy(() => import("./pages/AbsenceCalendarPage"));
 const MeetingSummariesPage = lazy(() => import("./pages/MeetingSummariesPage"));
 const MeetingSummaryEditorPage = lazy(() => import("./pages/MeetingSummaryEditorPage"));
+const DecisionsPage = lazy(() => import("./pages/DecisionsPage"));
 const QuarterlyTasksPage = lazy(() => import("./pages/QuarterlyTasksPage"));
 const ProjectsListPage = lazy(() => import("./pages/ProjectsListPage"));
 const ProjectDetailPage = lazy(() => import("./pages/ProjectDetailPage"));
@@ -256,6 +257,11 @@ function AuthenticatedApp({
                 <Navigate to={defaultRoute} replace />
               )
             }
+          />
+
+          <Route
+            path="/staff/decisions"
+            element={canSeeStaff ? <DecisionsPage /> : <Navigate to={defaultRoute} replace />}
           />
 
           <Route

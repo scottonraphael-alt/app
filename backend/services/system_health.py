@@ -99,6 +99,59 @@ def tracked(name: str):
     return decorator
 
 
+HEARTBEAT_SECONDS = 60
+
+
+def mark_state(name: str, state: str, error=None) -> None:
+    """Enregistre l'état de vie d'une boucle (démarrée, active, arrêtée, plantée). Ne lève jamais."""
+    try:
+        key = _clean_name(name)
+        entry = _registry.setdefault(key, {"runs": 0, "failures": 0, "recent_errors": []})
+        now = _now()
+        entry["state"] = state
+        entry["heartbeat_at"] = now
+        if state == "started":
+            entry["started_at"] = now
+        if state == "crashed":
+            message = _clean_error(error) or "Erreur inconnue"
+            entry["failures"] = int(entry.get("failures", 0)) + 1
+            entry["last_error"] = message
+            entry["last_ok"] = False
+            entry["recent_errors"] = ([{"at": now, "message": message}] + list(entry.get("recent_errors", [])))[:MAX_RECENT_ERRORS]
+        try:
+            asyncio.get_running_loop().create_task(_persist(key, dict(entry)))
+        except RuntimeError:
+            pass
+    except Exception:  # noqa: BLE001
+        logger.warning("Santé système : état impossible à enregistrer.", exc_info=True)
+
+
+async def supervise(name: str, coro, heartbeat_seconds: float | None = None):
+    """Exécute la coroutine d'une boucle de fond telle quelle et enregistre départ, battements, arrêt ou plantage.
+
+    L'annulation et les exceptions se propagent exactement comme sans enveloppe.
+    """
+    interval = HEARTBEAT_SECONDS if heartbeat_seconds is None else heartbeat_seconds
+    mark_state(name, "started")
+    inner = asyncio.ensure_future(coro)
+    try:
+        while True:
+            done, _ = await asyncio.wait({inner}, timeout=interval)
+            if done:
+                break
+            mark_state(name, "running")
+        result = inner.result()
+    except asyncio.CancelledError:
+        inner.cancel()
+        mark_state(name, "stopped")
+        raise
+    except Exception as exc:  # noqa: BLE001
+        mark_state(name, "crashed", exc)
+        raise
+    mark_state(name, "stopped")
+    return result
+
+
 def _iso(value) -> str | None:
     if isinstance(value, datetime):
         return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
@@ -115,6 +168,9 @@ def _public(name: str, entry: dict) -> dict:
         "runs": int(entry.get("runs", 0)),
         "failures": int(entry.get("failures", 0)),
         "last_error": entry.get("last_error"),
+        "state": entry.get("state"),
+        "heartbeat_at": _iso(entry.get("heartbeat_at")),
+        "started_at": _iso(entry.get("started_at")),
         "recent_errors": [
             {"at": _iso(item.get("at")), "message": str(item.get("message", ""))[:MAX_ERROR]}
             for item in entry.get("recent_errors", [])[:MAX_RECENT_ERRORS]

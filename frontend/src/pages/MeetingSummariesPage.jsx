@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, FileStack, Gavel } from "lucide-react";
 
 import "../Agenda.css";
 import "../components/agenda/meetings/meetings.css";
@@ -17,11 +17,13 @@ import { MeetingsForbidden } from "../components/agenda/meetings/MeetingsStates"
 import NextMeetingCard from "../components/agenda/meetings/NextMeetingCard";
 import OpenActionsPanel from "../components/agenda/meetings/OpenActionsPanel";
 import ToWriteCard from "../components/agenda/meetings/ToWriteCard";
+import TemplatesDialog from "../components/meetings-extras/TemplatesDialog";
 
 export default function MeetingSummariesPage({ isResponsable }) {
   useAgendaNoNav();
   const [searchParams, setSearchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [phase, setPhase] = useState("");
   const listRef = useRef(null);
 
@@ -89,6 +91,14 @@ export default function MeetingSummariesPage({ isResponsable }) {
         </div>
         <div className="ag-header-actions">
           <AgendaHomeLink />
+          <Link to="/staff/decisions" className="ag-button ag-button--secondary">
+            <Gavel size={16} aria-hidden="true" />
+            Décisions
+          </Link>
+          <button type="button" className="ag-button ag-button--secondary" onClick={() => setTemplatesOpen(true)}>
+            <FileStack size={16} aria-hidden="true" />
+            Modèles
+          </button>
           {canManage ? (
             <button type="button" className="ag-button" onClick={openDialog}>
               <CalendarPlus size={16} aria-hidden="true" />
@@ -137,6 +147,7 @@ export default function MeetingSummariesPage({ isResponsable }) {
         />
       </div>
 
+      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} />
       {canManage ? <MeetingDialog open={dialogOpen} onOpenChange={setDialogOpen} today={today} /> : null}
     </main>
   );

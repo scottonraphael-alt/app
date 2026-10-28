@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bell, Calendar, CalendarRange, ClipboardList, CornerDownLeft, FileText, FolderKanban, Gauge, Home, Inbox,
   LogOut, Moon, Search, Shield, Star, User, Users, Columns3, ListChecks, Keyboard, BarChart3, GanttChart, Heart,
-  ClipboardCheck, CloudSun, BookOpenCheck, GraduationCap, Activity, Settings,
+  ClipboardCheck, CloudSun, BookOpenCheck, GraduationCap, Activity, Settings, Gavel,
 } from "lucide-react";
 
 import { api } from "../../api/client";
@@ -36,7 +36,7 @@ const PAGE_ICONS = {
   rapports: FileText, membres: User, profil: User,
   kanban: Columns3, sondages: ListChecks, revue_ia: Keyboard, stats_moderation: BarChart3, chronologie: GanttChart,
   annuaire: Users, kudos: Heart, parcours_accueil: ClipboardCheck, meteo_equipe: CloudSun, fiches_reflexes: BookOpenCheck,
-  formations: GraduationCap, sante_systeme: Activity, reglages: Settings,
+  formations: GraduationCap, sante_systeme: Activity, reglages: Settings, decisions: Gavel,
 };
 
 const TYPE_LABELS = {

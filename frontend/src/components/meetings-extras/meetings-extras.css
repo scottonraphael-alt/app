@@ -1,0 +1,259 @@
+/* Compléments des réunions : propositions, minuteur, modèles, décisions. Couleurs de la charte (--ag-*),
+   redéfinies en thème sombre par Agenda.css. */
+
+.ag-mx {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ag-mx-hint {
+  margin: 0;
+  color: var(--ag-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ag-mx-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ag-mx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ag-line);
+  border-radius: var(--ag-radius-control, 12px);
+  background: var(--ag-surface);
+}
+
+.ag-mx-row[data-state="current"] {
+  border-color: var(--ag-sage);
+  background: var(--ag-sage-soft);
+}
+
+.ag-mx-row[data-state="done"] .ag-mx-row-title {
+  color: var(--ag-faint);
+}
+
+.ag-mx-rank {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--ag-chip);
+  color: var(--ag-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ag-mx-row-main {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ag-mx-row-title {
+  color: var(--ag-ink);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ag-mx-row-meta {
+  color: var(--ag-muted);
+  font-size: 12px;
+}
+
+.ag-mx-chip {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--ag-chip);
+  color: var(--ag-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ag-mx-duration {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ag-muted);
+  font-size: 12px;
+}
+
+.ag-mx-minutes {
+  width: 72px;
+}
+
+.ag-mx-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ag-mx-add > .ag-input:first-child {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.ag-mx-import {
+  justify-self: start;
+}
+
+.ag-mx-link {
+  color: var(--ag-sage-strong);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ag-mx-link:focus-visible {
+  outline: 2px solid var(--ag-field-focus);
+  outline-offset: 2px;
+}
+
+/* Modèles */
+
+.ag-mx-chooser {
+  align-items: flex-start;
+}
+
+.ag-mx-chooser-body {
+  display: grid;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ag-mx-chooser-body p {
+  margin: 0;
+}
+
+.ag-mx-chooser-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ag-mx-select {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+/* Minuteur */
+
+.ag-mx-timer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--ag-sage-line);
+  border-radius: var(--ag-radius-control, 12px);
+  background: var(--ag-sage-soft);
+}
+
+.ag-mx-timer[data-over="true"] {
+  border-color: var(--ag-amber-line);
+  background: var(--ag-amber-bg);
+}
+
+.ag-mx-timer-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ag-mx-timer-label {
+  margin: 0;
+  color: var(--ag-muted);
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ag-mx-timer-clock {
+  margin: 0;
+  color: var(--ag-ink);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.ag-mx-timer-planned {
+  color: var(--ag-muted);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ag-mx-timer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ag-mx-over {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+/* Registre des décisions */
+
+.ag-mx-search {
+  position: relative;
+  max-width: 460px;
+}
+
+.ag-mx-search .ag-input {
+  width: 100%;
+}
+
+.ag-mx-decision {
+  align-items: flex-start;
+}
+
+.ag-mx-decision-text {
+  margin: 0;
+  color: var(--ag-ink);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .ag-mx-row {
+    flex-wrap: wrap;
+  }
+
+  .ag-mx-timer-clock {
+    font-size: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ag-mx * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

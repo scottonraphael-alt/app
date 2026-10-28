@@ -4,7 +4,7 @@ import { Pin, Send, X } from "lucide-react";
 import { MAX_BODY, MAX_TAG, MAX_TAGS, PRIORITIES } from "./handoffsApi";
 
 /** Formulaire de création ou de modification d'une transmission. */
-export default function HandoffComposer({ initial, submitLabel = "Transmettre", busy, error, onSubmit, onCancel }) {
+export default function HandoffComposer({ initial, textareaRef, submitLabel = "Transmettre", busy, error, onSubmit, onCancel }) {
   const uid = useId();
   const [body, setBody] = useState(initial?.body || "");
   const [priority, setPriority] = useState(initial?.priority || "info");
@@ -49,6 +49,7 @@ export default function HandoffComposer({ initial, submitLabel = "Transmettre", 
       <label className="ho-label" htmlFor={`${uid}-body`}>Message</label>
       <textarea
         id={`${uid}-body`}
+        ref={textareaRef}
         className="ho-textarea"
         value={body}
         maxLength={MAX_BODY}

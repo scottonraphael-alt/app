@@ -8,6 +8,7 @@ from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
 from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report, team_presence, ticket_notes, ticket_tags, ticket_followups, agenda_polls, agenda_move, meeting_extras, casier_bulk, moderation_stats, project_extras, staff_directory, staff_status, kudos, onboarding, team_weather, reflex_sheets, trainings, debriefs, staff_announcements, system_health
 from services import agenda_indexes, agenda_reminders
+from services.system_health import supervise
 from services import presence as presence_service, casier_history as casier_history_service
 from services.ticket_crisis import run_ticket_crisis_loop
 from services.ticket_routing import run_sla_loop
@@ -182,13 +183,13 @@ async def startup() -> None:
         logger.exception("Agenda : index ou migration impossibles au démarrage")
     agenda_reminders.start_scheduler()
 
-    _ticket_avatars_task = asyncio.create_task(run_ticket_avatar_cache())
-    _ticket_reminders_task = asyncio.create_task(run_ticket_reminders())
-    _project_reminders_task = asyncio.create_task(run_project_reminders())
-    _announcements_task = asyncio.create_task(run_announcements())
-    _sanction_maintenance_task = asyncio.create_task(run_sanction_maintenance(moderation_client))
-    _ticket_import_task = asyncio.create_task(run_ticket_import())
-    _ticket_refresh_task = asyncio.create_task(run_ticket_refresh())
+    _ticket_avatars_task = asyncio.create_task(supervise("ticket_avatars", run_ticket_avatar_cache()))
+    _ticket_reminders_task = asyncio.create_task(supervise("ticket_reminders", run_ticket_reminders()))
+    _project_reminders_task = asyncio.create_task(supervise("project_reminders", run_project_reminders()))
+    _announcements_task = asyncio.create_task(supervise("announcements", run_announcements()))
+    _sanction_maintenance_task = asyncio.create_task(supervise("sanction_maintenance", run_sanction_maintenance(moderation_client)))
+    _ticket_import_task = asyncio.create_task(supervise("ticket_import", run_ticket_import()))
+    _ticket_refresh_task = asyncio.create_task(supervise("ticket_refresh", run_ticket_refresh()))
     try:
         await presence_service.ensure_indexes()
         await casier_history_service.ensure_indexes()
@@ -198,15 +199,15 @@ async def startup() -> None:
         logger.exception("Index présence / historique casier impossibles au démarrage")
     _feature_stop_event = asyncio.Event()
     _feature_tasks[:] = [
-        asyncio.create_task(run_ticket_crisis_loop(_feature_stop_event)),
-        asyncio.create_task(run_sla_loop(_feature_stop_event)),
-        asyncio.create_task(run_load_watch_loop(_feature_stop_event)),
-        asyncio.create_task(run_monthly_report_loop(_feature_stop_event)),
-        asyncio.create_task(run_ticket_followups_loop(_feature_stop_event)),
-        asyncio.create_task(run_sanction_expiry_loop(_feature_stop_event)),
-        asyncio.create_task(run_team_weather_loop(_feature_stop_event)),
+        asyncio.create_task(supervise("ticket_crisis", run_ticket_crisis_loop(_feature_stop_event))),
+        asyncio.create_task(supervise("sla", run_sla_loop(_feature_stop_event))),
+        asyncio.create_task(supervise("load_watch", run_load_watch_loop(_feature_stop_event))),
+        asyncio.create_task(supervise("monthly_report", run_monthly_report_loop(_feature_stop_event))),
+        asyncio.create_task(supervise("ticket_followups", run_ticket_followups_loop(_feature_stop_event))),
+        asyncio.create_task(supervise("sanction_expiry", run_sanction_expiry_loop(_feature_stop_event))),
+        asyncio.create_task(supervise("team_weather", run_team_weather_loop(_feature_stop_event))),
     ]
-    _bot_task = asyncio.create_task(start_moderation_bot())
+    _bot_task = asyncio.create_task(supervise("moderation_bot", start_moderation_bot()))
     _bot_task.add_done_callback(
         lambda t: logger.error("Bot de modération arrêté : %s", t.exception())
         if t.exception()

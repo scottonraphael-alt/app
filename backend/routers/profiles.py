@@ -49,6 +49,7 @@ FAVORITE_PAGES = {
     "coordination": ("Coordination", "/admin", {"admin", "responsable"}),
     "calendrier": ("Calendrier", "/staff/calendrier", {"helper", "staff", "operateur"}),
     "reunions": ("Réunions", "/staff/meetings", {"helper", "staff", "operateur"}),
+    "decisions": ("Registre des décisions", "/staff/decisions", {"helper", "staff", "operateur"}),
     "taches": ("Tâches", "/staff/taches", {"helper", "staff", "operateur"}),
     "casier": ("Casier", "/moderation/casiers", {"operateur", "responsable"}),
     "projets": ("Projets", "/animateur/projects", {"animateur", "responsable"}),

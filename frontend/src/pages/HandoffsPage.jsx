@@ -1,7 +1,7 @@
 import "../Handoffs.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
@@ -35,6 +35,17 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
   const [createError, setCreateError] = useState("");
   const [editError, setEditError] = useState("");
   const readSent = useRef(new Set());
+  const composerRef = useRef(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Raccourci « n » : /staff/passation?nouveau=1 met le focus dans la saisie puis retire le paramètre.
+  useEffect(() => {
+    if (searchParams.get("nouveau") !== "1") return;
+    composerRef.current?.focus();
+    const next = new URLSearchParams(searchParams);
+    next.delete("nouveau");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Page sans barre latérale, comme le casier.
   useEffect(() => {
@@ -161,6 +172,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
         <aside className="ho-panel ho-compose-panel">
           <h2>Nouvelle transmission</h2>
           <HandoffComposer
+            textareaRef={composerRef}
             busy={create.isPending}
             error={createError}
             onSubmit={(payload) => { setCreateError(""); create.mutate(payload); }}

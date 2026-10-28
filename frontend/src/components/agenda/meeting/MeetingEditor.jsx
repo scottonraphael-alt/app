@@ -16,7 +16,9 @@ import {
   LockOpen,
   MapPin,
   PenLine,
+  Timer,
   Users,
+  UsersRound,
 } from "lucide-react";
 
 import "../../../Agenda.css";
@@ -68,6 +70,12 @@ import ParticipantsPanel from "./ParticipantsPanel";
 import SaveStatus from "./SaveStatus";
 import { docFromDetail, participantsWithAttendance } from "./meetingModel";
 import useMeetingAutosave from "./useMeetingAutosave";
+import DecisionMarker from "../../meetings-extras/DecisionMarker";
+import MeetingTimer from "../../meetings-extras/MeetingTimer";
+import ProposalsPanel from "../../meetings-extras/ProposalsPanel";
+import TemplateChooser from "../../meetings-extras/TemplateChooser";
+import TemplatesDialog from "../../meetings-extras/TemplatesDialog";
+import { applyTemplate, proposalsToAgenda } from "../../meetings-extras/meetingExtrasApi";
 
 const UNSAVED_MESSAGE = "Enregistrez d'abord vos modifications : l'état de l'enregistrement est indiqué dans le compte-rendu.";
 const SUMMARY_PLACEHOLDER = "Rédigez le compte-rendu… Tapez « / » pour un titre, une liste, un tableau ou une image.";
@@ -187,6 +195,7 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
   const [infoOpen, setInfoOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [busyActions, setBusyActions] = useState(() => new Set());
   const [agendaOpen, setAgendaOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 1100);
   const editorRef = useRef(null);
@@ -314,18 +323,22 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
     setDraft(null);
   };
 
+  // Remplace l'état local par la version du serveur (conflit, modèle appliqué, points importés).
+  const adoptDetail = (fresh) => {
+    const next = docFromDetail(fresh);
+    lastTitleRef.current = next.title;
+    docRef.current = next;
+    setDocState(next);
+    setResetKey((key) => key + 1);
+    setStats(statsOf(next.content));
+    setForcedLocked(false);
+    invalidateAgendaLists(queryClient);
+  };
+
   const reloadTheirs = async () => {
     setConflictBusy(true);
     try {
-      const fresh = await autosave.reloadTheirs();
-      const next = docFromDetail(fresh);
-      lastTitleRef.current = next.title;
-      docRef.current = next;
-      setDocState(next);
-      setResetKey((key) => key + 1);
-      setStats(statsOf(next.content));
-      setForcedLocked(false);
-      invalidateAgendaLists(queryClient);
+      adoptDetail(await autosave.reloadTheirs());
     } catch (error) {
       toast.error(agendaErrorMessage(error));
     } finally {
@@ -348,6 +361,41 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
     const result = await autosave.flush();
     if (!result.ok) throw blockedError(UNSAVED_MESSAGE);
     return result.revision;
+  };
+
+  // Modèle de compte-rendu / points proposés : on enregistre d'abord, le serveur modifie le compte-rendu, puis on recharge.
+  const applyChosenTemplate = async (templateId) => {
+    const revision = await flushOrFail();
+    await applyTemplate(meetingId, templateId, revision);
+    adoptDetail(await autosave.reloadTheirs());
+  };
+  const importProposals = async () => {
+    const revision = await flushOrFail();
+    await proposalsToAgenda(meetingId, revision);
+    adoptDetail(await autosave.reloadTheirs());
+    toast.success("Points ajoutés à l'ordre du jour.");
+  };
+  const openTemplates = async () => {
+    try {
+      await flushOrFail();
+      setTemplatesOpen(true);
+    } catch (error) {
+      toast.error(agendaErrorMessage(error));
+    }
+  };
+  // Passage sélectionné dans l'éditeur (BlockNote) pour le registre des décisions.
+  const getSelection = () => {
+    const editor = editorRef.current;
+    if (!editor || typeof editor.getSelectedText !== "function") return null;
+    const text = editor.getSelectedText();
+    if (!text || !text.trim()) return null;
+    let blockId = null;
+    try {
+      blockId = editor.getTextCursorPosition?.().block?.id || null;
+    } catch (error) {
+      blockId = null;
+    }
+    return { text, blockId };
   };
 
   const toggleLock = async () => {
@@ -666,6 +714,38 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
             </section>
           ) : null}
 
+          {!cancelled ? (
+            <section className="ag-panel ag-meeting-secondary" aria-labelledby="ag-meeting-proposals-title">
+              <div className="ag-panel-header">
+                <span className="ag-panel-icon">
+                  <UsersRound size={20} aria-hidden="true" />
+                </span>
+                <div className="ag-panel-heading">
+                  <h2 id="ag-meeting-proposals-title">Points proposés par l'équipe</h2>
+                </div>
+              </div>
+              <div className="ag-panel-body">
+                <ProposalsPanel meetingId={meetingId} onImport={locked ? null : importProposals} />
+              </div>
+            </section>
+          ) : null}
+
+          {!cancelled ? (
+            <section className="ag-panel ag-meeting-secondary" aria-labelledby="ag-meeting-timer-title">
+              <div className="ag-panel-header">
+                <span className="ag-panel-icon">
+                  <Timer size={20} aria-hidden="true" />
+                </span>
+                <div className="ag-panel-heading">
+                  <h2 id="ag-meeting-timer-title">Minuteur</h2>
+                </div>
+              </div>
+              <div className="ag-panel-body">
+                <MeetingTimer meetingId={meetingId} />
+              </div>
+            </section>
+          ) : null}
+
           <section className="ag-panel ag-meeting-summary" aria-labelledby="ag-meeting-summary-title">
             <div className="ag-panel-header ag-meeting-summary-header">
               <span className="ag-panel-icon">
@@ -675,6 +755,7 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
                 <h2 id="ag-meeting-summary-title">Compte-rendu</h2>
               </div>
             </div>
+            {canEdit && words === 0 ? <TemplateChooser meetingId={meetingId} onApply={applyChosenTemplate} /> : null}
             <div className="ag-meeting-summary-body">
               {canEdit ? (
                 <TiptapSummaryEditor
@@ -701,6 +782,11 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
             </div>
             <div className="ag-panel-footer ag-meeting-summary-footer">
               {canEdit ? <SaveStatus {...saveProps} /> : <span>{locked ? "Verrouillé" : "Lecture seule"}</span>}
+              {words > 0 ? (
+                <button type="button" className="ag-button ag-button--secondary ag-button--small" onClick={openTemplates}>
+                  Enregistrer comme modèle
+                </button>
+              ) : null}
               <span className="ag-meeting-words">
                 {words} mot{words > 1 ? "s" : ""} · ~{minutes} min de lecture
               </span>
@@ -719,6 +805,7 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
             </div>
             <div className="ag-panel-body">
               <DecisionsEditor items={doc.decisions} onChange={setDecisions} readOnly={!canEdit} />
+              <DecisionMarker meetingId={meetingId} getSelection={canEdit ? getSelection : null} canMark={!cancelled} />
             </div>
           </section>
 
@@ -818,6 +905,7 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
           onSaved={onInfoSaved}
         />
       ) : null}
+      <TemplatesDialog open={templatesOpen} onOpenChange={setTemplatesOpen} fromMeetingId={meetingId} />
       <CancelMeetingDialog open={cancelOpen} onOpenChange={setCancelOpen} onConfirm={cancelMeeting} />
       <DeleteMeetingDialog open={deleteOpen} onOpenChange={setDeleteOpen} title={title} onConfirm={removeMeeting} />
     </main>
