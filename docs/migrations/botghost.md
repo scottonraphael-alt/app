@@ -58,3 +58,8 @@ consigné séparément dans [purgatoire.md](purgatoire.md).
 Le producteur `/panel soutient` est maintenant décrit dans
 [panel-soutient.md](panel-soutient.md), avec la demande préalable, l'attribution à
 l'acceptant et les corrections de gestion du refus et de sa notification.
+
+Une pré-génération des quatre espaces de suivi Iris est disponible : moteur
+`services/casework`, API et pages dédiées, désactivés et non raccordés à l'application.
+Voir [casework-integration.md](casework-integration.md). Les commandes publiques et
+les fonctions métier restantes ne sont pas déclarées migrées par cette préparation.

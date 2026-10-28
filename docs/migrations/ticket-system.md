@@ -221,3 +221,14 @@ Le salon est créé après acceptation de la demande et l'acceptant devient son
 interlocuteur initial. Choix utilisateur : acceptation réservée aux Helpers/Helpers+,
 visibilité collective Helpers/Helpers+/Staff, refus motivé par la coordination,
 nouvelle demande autorisée après refus avec protection anti-spam.
+
+## Code préparé des quatre espaces de suivi Iris
+
+La préparation comprend maintenant le moteur de dossiers, l'API, la découverte et
+synchronisation, les fichiers privés, la clôture avec archive vérifiée, la source
+360° et quatre pages dédiées. Voir [casework-integration.md](casework-integration.md)
+pour le périmètre exact, les garanties, les tests et les raccordements restants.
+Le bot, les commandes BotGhost et la branche du site ne sont pas modifiés par ce lot.
+
+Précisions de périmètre utilisateur : `/panel support` est obsolète et exclu ;
+`/panel salon-aide` existe mais n'a pas de lien avec les tickets et reste hors migration.
