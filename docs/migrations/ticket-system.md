@@ -191,3 +191,13 @@ règles précises de restriction et attribution des rôles de supervision.
 Aucun nouveau code de tickets n'est produit avant restitution et clarification de ces
 parcours. Les documents et la préparation de la vérification restent sur la branche
 isolée `codex/botghost-migration` ; la branche du site demeure indépendante.
+
+
+## Complément : producteur convocation / bulle
+
+`/panel moderation` a été analysée après cet événement. Voir
+[panel-moderation.md](panel-moderation.md). La portée par salon de `ticketv3_auth`
+est confirmée dans ses blocs d'écriture. Deux nouveaux choix utilisateur : protéger
+toutes les cibles Staff (convocation par Administrateur seulement), et remplacer
+l'annonce de sanction automatique à trois jours par une alerte au Staff suivie
+d'une décision humaine.

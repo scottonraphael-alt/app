@@ -44,3 +44,8 @@ cartographie en lecture seule (118 blocs / 134 liaisons rendus). Voir
 [ticket-system.md](ticket-system.md) pour les cinq familles, les droits, les archives,
 les limites constatées et les décisions utilisateur. Les commandes productrices
 restent à examiner avant d'écrire le nouveau moteur de tickets.
+
+
+Le producteur convocation/bulle `/panel moderation` est maintenant décrit dans
+[panel-moderation.md](panel-moderation.md), avec ses contrôles, sa consultation du
+casier, sa notification distincte de la création et les choix utilisateur à appliquer.
