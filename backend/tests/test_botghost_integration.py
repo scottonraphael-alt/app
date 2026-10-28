@@ -69,6 +69,39 @@ def test_message_hook_supports_raw_events_messages_and_dms(monkeypatch):
     assert [call.args[0] for call in mark.call_args_list]==['22','23']
 
 
+@pytest.mark.parametrize('enabled',[True,False])
+def test_verification_delivery_does_not_depend_on_ticket_discovery(monkeypatch,enabled):
+    from services import workflow_settings, verification_history
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED',str(enabled).lower())
+    monkeypatch.setattr(workflow_settings,'apply',AsyncMock())
+    delivery=AsyncMock();discovery=AsyncMock(side_effect=RuntimeError('Discord ticket discovery unavailable'))
+    history=AsyncMock()
+    monkeypatch.setattr(transport,'tick',delivery)
+    monkeypatch.setattr(runtime.sync,'cycle',discovery)
+    monkeypatch.setattr(verification_history,'tick',history)
+    class Stop:
+        done=False
+        def is_set(self):return self.done
+        async def wait(self):self.done=True
+    h.run(runtime.run_verifications(SimpleNamespace(is_ready=lambda:True),Stop()))
+    assert delivery.await_count==int(enabled)
+    discovery.assert_not_awaited();history.assert_not_awaited()
+
+
+def test_verification_delivery_retries_after_worker_failure(monkeypatch):
+    from services import workflow_settings
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    monkeypatch.setattr(workflow_settings,'apply',AsyncMock())
+    delivery=AsyncMock(side_effect=[RuntimeError('temporary failure'),None])
+    monkeypatch.setattr(transport,'tick',delivery)
+    class Stop:
+        passes=0
+        def is_set(self):return self.passes>=2
+        async def wait(self):self.passes+=1
+    h.run(runtime.run_verifications(SimpleNamespace(is_ready=lambda:True),Stop()))
+    assert delivery.await_count==2
+
+
 def test_staff_panel_has_answers_but_no_forbidden_action_buttons():
     from services.verification_discord import StaffPanel
     row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:live'))

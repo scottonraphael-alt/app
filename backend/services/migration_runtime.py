@@ -82,10 +82,8 @@ async def run(client, stop):
                     await sync.cycle(gateway,settings)
                     discovery_done=True
                 if discord_actions_enabled():
-                    from services import verification_runtime
                     from services.casework import native
                     await native.tick(client)
-                    await verification_runtime.tick(client)
                     await worker.tick(gateway, settings)
                 else:
                     await sync.cycle(gateway, settings)
@@ -97,5 +95,27 @@ async def run(client, stop):
                 logger.exception('Cycle des dossiers interrompu ; reprise au prochain passage.')
         try:
             await asyncio.wait_for(stop.wait(), timeout=60)
+        except asyncio.TimeoutError:
+            pass
+
+
+async def run_verifications(client, stop):
+    """Deliver admissions independently of ticket discovery and archive imports.
+
+    A failed/slow case synchronization must never starve new Staff forms.
+    Durable delivery receipts in verification_runtime handle retries.
+    """
+    from services import verification_service, verification_runtime, workflow_settings
+    await verification_service.indexes()
+    while not stop.is_set():
+        if client.is_ready():
+            try:
+                await workflow_settings.apply()
+                if policy.Settings().enabled and discord_actions_enabled():
+                    await verification_runtime.tick(client)
+            except Exception:
+                logger.exception('Traitement autonome des formulaires interrompu ; reprise au prochain passage.')
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=10)
         except asyncio.TimeoutError:
             pass
