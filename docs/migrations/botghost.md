@@ -36,3 +36,11 @@ Les choix d'intégration encore inconnus seront explicités dans la fiche de la 
 Les modules préparés ne seront pas branchés sur le démarrage du bot pendant cette
 phase. La logique sera testée hors ligne avant intégration ; aucun test ne devra
 déclencher la commande en production ni modifier sa version BotGhost.
+
+## Système de tickets
+
+L'événement central `When a channel is created` a fait l'objet d'une première
+cartographie en lecture seule (118 blocs / 134 liaisons rendus). Voir
+[ticket-system.md](ticket-system.md) pour les cinq familles, les droits, les archives,
+les limites constatées et les décisions utilisateur. Les commandes productrices
+restent à examiner avant d'écrire le nouveau moteur de tickets.
