@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, HeartHandshake, RefreshCw, User, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, HeartHandshake, RefreshCw, User, Users } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
 import StatisticsChart from "../components/statistics/StatisticsChart";
 import "../Casier.css";
@@ -13,6 +13,7 @@ const LEVELS = {
   attention: { label: "À surveiller", hint: "Charge soutenue" },
   surcharge: { label: "Prendre des nouvelles", hint: "Charge très élevée" },
 };
+const PILL = { ok: "vierge", attention: "averti", surcharge: "kick" };
 const number = (value) => new Intl.NumberFormat("fr-FR").format(value || 0);
 const weekLabel = (iso) => (iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) : "");
 const sum = (values) => (values || []).reduce((total, value) => total + (value || 0), 0);
@@ -89,7 +90,7 @@ function PersonCard({ person, weeks }) {
             <h3>{person.name}</h3>
             {person.roles?.length > 0 && <p>{person.roles.join(" · ")}</p>}
           </div>
-          <span className={"sl-pill sl-pill--" + level}>{level === "surcharge" && <HeartHandshake size={14} aria-hidden="true" />}{info.label}</span>
+          <span className={"cz-pill cz-pill--" + PILL[level]}>{level === "surcharge" && <HeartHandshake size={14} aria-hidden="true" />}{info.label}</span>
         </header>
         <div className="sl-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={score} aria-label={"Indice de charge de " + person.name + " : " + score + " sur 100, " + info.hint.toLowerCase()}>
           <span style={{ width: score + "%" }} />
@@ -166,72 +167,112 @@ export default function StaffLoadPage() {
         </div>
       </header>
 
-      <div className="sl-toolbar">
-        <div className="sl-group" role="group" aria-label="Période analysée">
-          {WEEK_CHOICES.map((choice) => (
-            <button key={choice} type="button" className="sl-chip" aria-pressed={weeks === choice} onClick={() => setWeeks(choice)}>{choice} semaines</button>
-          ))}
-        </div>
-        <div className="sl-group" role="group" aria-label="Vue">
-          <button type="button" className="sl-chip" aria-pressed={view === "people"} onClick={() => setView("people")}><User size={15} aria-hidden="true" /> Personnes</button>
-          <button type="button" className="sl-chip" aria-pressed={view === "team"} onClick={() => setView("team")}><Users size={15} aria-hidden="true" /> Équipe</button>
-        </div>
-        {view === "people" && (
-          <label className="sl-sort">Trier par
-            <select value={sort} onChange={(event) => setSort(event.target.value)}>
-              <option value="score">Indice de charge (du plus élevé)</option>
-              <option value="name">Nom</option>
-            </select>
-          </label>
-        )}
-        <button type="button" className="cz-button" onClick={refresh} disabled={loading}><RefreshCw size={16} aria-hidden="true" /> Actualiser</button>
-      </div>
-
-      {error && <p className="sl-notice sl-notice--error" role="alert">{error}</p>}
-      {loading && <p className="sl-notice" role="status">Chargement…</p>}
-
-      {data && !error && (
-        <div aria-busy={loading} className={loading ? "sl-results is-stale" : "sl-results"}>
-          {toCheck > 0 && (
-            <p className="sl-care" role="status">
-              <HeartHandshake size={18} aria-hidden="true" />
-              <span>{toCheck === 1 ? "1 personne porte une charge très élevée" : toCheck + " personnes portent une charge très élevée"} en ce moment. Un petit message pour prendre des nouvelles peut faire du bien.</span>
-            </p>
+      <section className="cz-panel sl-panel-main" aria-labelledby="sl-panel-title">
+        <header className="cz-panel-header">
+          <span className="cz-panel-icon" aria-hidden="true"><HeartHandshake size={23} /></span>
+          <div className="cz-panel-heading">
+            <h2 id="sl-panel-title">{view === "people" ? "Charge par personne" : "Charge de l’équipe"}</h2>
+            <p>Sur les {weeks} dernières semaines. Des repères pour prendre des nouvelles, jamais un jugement.</p>
+          </div>
+          {data && !error && (
+            <span className="cz-count-live">
+              <span className="cz-count">{number(team?.people_count ?? people.length)} {(team?.people_count ?? people.length) > 1 ? "personnes" : "personne"}</span>
+            </span>
           )}
+        </header>
 
+        <div className="cz-panel-toolbar sl-toolbar">
+          <div className="cz-chips" role="group" aria-label="Période analysée">
+            {WEEK_CHOICES.map((choice) => (
+              <button key={choice} type="button" className="cz-chip" aria-pressed={weeks === choice} onClick={() => setWeeks(choice)}>{choice} semaines</button>
+            ))}
+          </div>
+          <div className="cz-tabs cz-tabs--view sl-views" role="group" aria-label="Vue">
+            <button type="button" className={"cz-tab" + (view === "people" ? " is-selected" : "")} aria-pressed={view === "people"} onClick={() => setView("people")}><User size={16} aria-hidden="true" /> Personnes</button>
+            <button type="button" className={"cz-tab" + (view === "team" ? " is-selected" : "")} aria-pressed={view === "team"} onClick={() => setView("team")}><Users size={16} aria-hidden="true" /> Équipe</button>
+          </div>
           {view === "people" && (
-            people.length === 0 ? <p className="sl-empty">Aucune personne à afficher pour cette période.</p> : (
-              <ul className="sl-grid" aria-label="Charge par personne">
-                {people.map((person) => <PersonCard key={person.user_id} person={person} weeks={weekList} />)}
-              </ul>
-            )
+            <label className="sl-sort">Trier par
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                <option value="score">Indice de charge (du plus élevé)</option>
+                <option value="name">Nom</option>
+              </select>
+            </label>
           )}
+          <button type="button" className="cz-button sl-refresh" onClick={refresh} disabled={loading}><RefreshCw size={16} className={loading ? "cz-spin" : undefined} aria-hidden="true" /> Actualiser</button>
+        </div>
 
-          {view === "team" && team && (
-            <>
-              <ul className="sl-kpis" aria-label="Chiffres de l’équipe">
-                <li><span>Personnes suivies</span><strong>{number(team.people_count)}</strong></li>
-                <li><span>Indice moyen</span><strong>{number(team.average_load_score)} / 100</strong></li>
-                <li><span>Tout va bien</span><strong>{number(team.levels?.ok)}</strong></li>
-                <li><span>À surveiller</span><strong>{number(team.levels?.attention)}</strong></li>
-                <li><span>À soutenir</span><strong>{number(team.levels?.surcharge)}</strong></li>
-                <li><span>Tâches ouvertes</span><strong>{number(team.tasks_open)}</strong><small>{number(team.tasks_overdue)} en retard</small></li>
-                <li><span>Jours d’absence</span><strong>{number(team.absent_days)}</strong></li>
+        <div className="cz-panel-body">
+          {error && (
+            <div className="cz-empty cz-empty--error cz-empty--compact" role="alert">
+              <AlertCircle size={26} aria-hidden="true" />
+              <p>{error}</p>
+            </div>
+          )}
+          {loading && !data && !error && (
+            <div role="status">
+              <span className="cz-sr-only">Chargement…</span>
+              <ul className="sl-grid" aria-hidden="true">
+                {[0, 1, 2].map((key) => (
+                  <li key={key} className="sl-card cz-skeleton-card">
+                    <div className="cz-skeleton-row cz-skeleton-row--flush"><span className="cz-skeleton cz-skeleton--circle" /><div className="cz-skeleton-stack"><span className="cz-skeleton cz-skeleton--title" /><span className="cz-skeleton cz-skeleton--short" /></div></div>
+                    <span className="cz-skeleton cz-skeleton--block" />
+                  </li>
+                ))}
               </ul>
-              <div className="sl-charts">
-                <section className="sl-panel" aria-labelledby="sl-chart-1">
-                  <h2 id="sl-chart-1">Suivis, situations lourdes et réunions</h2>
-                  <StatisticsChart option={teamOption(weekList, team)} label="Suivis de tickets, situations lourdes et réunions de l’équipe par semaine" height={280} />
-                </section>
-                <section className="sl-panel" aria-labelledby="sl-chart-2">
-                  <h2 id="sl-chart-2">Messages envoyés</h2>
-                  <StatisticsChart option={messagesOption(weekList, team)} label="Messages envoyés par l’équipe, par semaine" height={280} />
-                </section>
-              </div>
-            </>
+            </div>
+          )}
+          {loading && data && !error && <p className="cz-sr-only" role="status">Chargement…</p>}
+
+          {data && !error && (
+            <div aria-busy={loading} className={loading ? "sl-results is-stale" : "sl-results"}>
+              {toCheck > 0 && (
+                <p className="sl-care" role="status">
+                  <HeartHandshake size={18} aria-hidden="true" />
+                  <span>{toCheck === 1 ? "1 personne porte une charge très élevée" : toCheck + " personnes portent une charge très élevée"} en ce moment. Un petit message pour prendre des nouvelles peut faire du bien.</span>
+                </p>
+              )}
+
+              {view === "people" && (
+                people.length === 0 ? (
+                  <div className="cz-empty">
+                    <Users size={28} aria-hidden="true" />
+                    <p className="sl-empty">Aucune personne à afficher pour cette période.</p>
+                  </div>
+                ) : (
+                  <ul className="sl-grid" aria-label="Charge par personne">
+                    {people.map((person) => <PersonCard key={person.user_id} person={person} weeks={weekList} />)}
+                  </ul>
+                )
+              )}
+
+              {view === "team" && team && (
+                <>
+                  <ul className="sl-kpis" aria-label="Chiffres de l’équipe">
+                    <li><span>Personnes suivies</span><strong>{number(team.people_count)}</strong></li>
+                    <li><span>Indice moyen</span><strong>{number(team.average_load_score)} / 100</strong></li>
+                    <li><span>Tout va bien</span><strong>{number(team.levels?.ok)}</strong></li>
+                    <li><span>À surveiller</span><strong>{number(team.levels?.attention)}</strong></li>
+                    <li><span>À soutenir</span><strong>{number(team.levels?.surcharge)}</strong></li>
+                    <li><span>Tâches ouvertes</span><strong>{number(team.tasks_open)}</strong><small>{number(team.tasks_overdue)} en retard</small></li>
+                    <li><span>Jours d’absence</span><strong>{number(team.absent_days)}</strong></li>
+                  </ul>
+                  <div className="sl-charts">
+                    <section className="sl-panel" aria-labelledby="sl-chart-1">
+                      <h2 id="sl-chart-1">Suivis, situations lourdes et réunions</h2>
+                      <StatisticsChart option={teamOption(weekList, team)} label="Suivis de tickets, situations lourdes et réunions de l’équipe par semaine" height={280} />
+                    </section>
+                    <section className="sl-panel" aria-labelledby="sl-chart-2">
+                      <h2 id="sl-chart-2">Messages envoyés</h2>
+                      <StatisticsChart option={messagesOption(weekList, team)} label="Messages envoyés par l’équipe, par semaine" height={280} />
+                    </section>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </section>
     </section>
   );
 }

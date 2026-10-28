@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Download, Printer, RefreshCw } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CalendarDays, Download, HeartHandshake, Printer, RefreshCw, ShieldCheck, Sparkles, Ticket } from "lucide-react";
 import { api, getErrorMessage } from "../api/client";
 import StatisticsChart from "../components/statistics/StatisticsChart";
 import "../Casier.css";
@@ -52,6 +52,21 @@ function columnsOption(entries, color) {
     yAxis: { ...AXIS, type: "value", minInterval: 1 },
     series: [{ type: "bar", barMaxWidth: 40, itemStyle: { color, borderRadius: [4, 4, 0, 0] }, label: { show: true, position: "top", color: "#617a67", fontSize: 11 }, data: entries.map(([, value]) => value) }],
   };
+}
+
+function Panel({ id, icon: Icon, tone, title, sub, wide, children }) {
+  return (
+    <section className={"cz-panel mr-panel" + (wide ? " mr-wide" : "")} aria-labelledby={id}>
+      <header className={"cz-panel-header mr-panel-header" + (tone ? " cz-panel-header--" + tone : "")}>
+        <span className="cz-panel-icon" aria-hidden="true"><Icon size={21} /></span>
+        <div className="cz-panel-heading">
+          <h2 id={id}>{title}</h2>
+          {sub && <p className="mr-sub">{sub}</p>}
+        </div>
+      </header>
+      <div className="cz-panel-body mr-panel-body">{children}</div>
+    </section>
+  );
 }
 
 function Trend({ value, lowerIsBetter }) {
@@ -159,7 +174,7 @@ export default function MonthlyReportPage() {
         </div>
       </header>
 
-      <div className="mr-toolbar mr-noprint">
+      <div className="mr-toolbar cz-panel mr-noprint">
         <label className="mr-month">Mois
           <select value={shownMonth} onChange={(event) => setParams(event.target.value ? { month: event.target.value } : {})} disabled={options.length === 0}>
             {options.length === 0 && <option value="">Mois précédent</option>}
@@ -167,20 +182,27 @@ export default function MonthlyReportPage() {
           </select>
         </label>
         <div className="mr-actions">
-          <button type="button" className="cz-button" onClick={() => { setRefresh(true); setVersion((v) => v + 1); }} disabled={loading}><RefreshCw size={16} aria-hidden="true" /> Recalculer</button>
+          <button type="button" className="cz-button" onClick={() => { setRefresh(true); setVersion((v) => v + 1); }} disabled={loading}><RefreshCw size={16} className={loading ? "cz-spin" : undefined} aria-hidden="true" /> Recalculer</button>
           <button type="button" className="cz-button" onClick={exportCsv} disabled={!report}><Download size={16} aria-hidden="true" /> Exporter CSV</button>
           <button type="button" className="cz-button cz-button--primary" onClick={() => window.print()} disabled={!report}><Printer size={16} aria-hidden="true" /> Imprimer / PDF</button>
         </div>
       </div>
 
-      {exportError && <p className="mr-notice mr-notice--error mr-noprint" role="alert">{exportError}</p>}
-      {error && <p className="mr-notice mr-notice--error" role="alert">{error}</p>}
-      {loading && <p className="mr-notice mr-noprint" role="status">Chargement du rapport…</p>}
+      {exportError && <div className="cz-empty cz-empty--error cz-empty--compact cz-panel mr-noprint mr-notice" role="alert"><AlertCircle size={22} aria-hidden="true" /><p>{exportError}</p></div>}
+      {error && <div className="cz-empty cz-empty--error cz-empty--compact cz-panel mr-notice" role="alert"><AlertCircle size={26} aria-hidden="true" /><p>{error}</p></div>}
+      {loading && !report && !error && (
+        <div className="mr-noprint" role="status">
+          <span className="cz-sr-only">Chargement du rapport…</span>
+          <ul className="mr-kpis" aria-hidden="true">
+            {[0, 1, 2, 3].map((key) => <li key={key} className="mr-kpi"><span className="cz-skeleton cz-skeleton--short" /><span className="cz-skeleton cz-skeleton--title" /></li>)}
+          </ul>
+        </div>
+      )}
+      {loading && report && !error && <p className="cz-sr-only" role="status">Chargement du rapport…</p>}
 
       {report && !error && (
         <div aria-busy={loading} className={loading ? "mr-body is-stale" : "mr-body"}>
-          <section aria-labelledby="mr-h-kpi" className="mr-block">
-            <h2 id="mr-h-kpi">Chiffres clés</h2>
+          <Panel id="mr-h-kpi" icon={BarChart3} title="Chiffres clés" sub={shownMonth ? monthLabel(shownMonth) + ", comparé au mois précédent." : undefined} wide>
             <ul className="mr-kpis">
               <Kpi label="Tickets ouverts" value={t.opened} trend={trends.tickets_opened} />
               <Kpi label="Tickets clôturés" value={t.closed} trend={trends.tickets_closed} />
@@ -191,35 +213,28 @@ export default function MonthlyReportPage() {
               <Kpi label="Tâches terminées" value={s.tasks_done} trend={trends.tasks_done} />
               <Kpi label="Réunions" value={s.meetings} trend={trends.meetings} />
             </ul>
-          </section>
+          </Panel>
 
           {report.highlights?.length > 0 && (
-            <section aria-labelledby="mr-h-high" className="mr-block">
-              <h2 id="mr-h-high">Faits marquants</h2>
+            <Panel id="mr-h-high" icon={Sparkles} tone="blue" title="Faits marquants" wide>
               <ul className="mr-highlights">{report.highlights.map((line, index) => <li key={index}>{line}</li>)}</ul>
-            </section>
+            </Panel>
           )}
 
           <div className="mr-charts">
-            <section className="mr-panel mr-wide" aria-labelledby="mr-h-weeks">
-              <h2 id="mr-h-weeks">Tickets par semaine</h2>
+            <Panel id="mr-h-weeks" icon={Ticket} title="Tickets par semaine" wide>
               <StatisticsChart option={weeksOption(t.by_week || [])} label="Tickets ouverts et clôturés par semaine" height={270} />
-            </section>
-            <section className="mr-panel" aria-labelledby="mr-h-crisis">
-              <h2 id="mr-h-crisis">Situations de crise</h2>
-              <p className="mr-sub">Niveau relevé sur les tickets ouverts dans le mois.</p>
+            </Panel>
+            <Panel id="mr-h-crisis" icon={HeartHandshake} tone="red" title="Situations de crise" sub="Niveau relevé sur les tickets ouverts dans le mois.">
               <StatisticsChart option={columnsOption(crisisEntries, COLORS[1])} label={"Situations de crise : " + crisisEntries.map(([k, v]) => k + " " + v).join(", ")} height={240} />
-            </section>
-            <section className="mr-panel" aria-labelledby="mr-h-sanctions">
-              <h2 id="mr-h-sanctions">Sanctions par type</h2>
-              <p className="mr-sub">{sanctionsTotal} sanction(s) ; {m.false_positives} faux positif(s) parmi les {m.ai_flags} signalement(s) IA.</p>
+            </Panel>
+            <Panel id="mr-h-sanctions" icon={ShieldCheck} tone="red" title="Sanctions par type" sub={sanctionsTotal + " sanction(s) ; " + m.false_positives + " faux positif(s) parmi les " + m.ai_flags + " signalement(s) IA."}>
               <StatisticsChart option={columnsOption(sanctionEntries, COLORS[0])} label={"Sanctions par type : " + sanctionEntries.map(([k, v]) => k + " " + v).join(", ")} height={240} />
-            </section>
+            </Panel>
           </div>
 
           <div className="mr-charts">
-            <section className="mr-panel" aria-labelledby="mr-h-staff">
-              <h2 id="mr-h-staff">Vie de l’équipe</h2>
+            <Panel id="mr-h-staff" icon={CalendarDays} title="Vie de l’équipe">
               <dl className="mr-dl">
                 <div><dt>Helpers actifs</dt><dd>{number(s.active_helpers)}</dd></div>
                 <div><dt>Réunions tenues</dt><dd>{number(s.meetings)}</dd></div>
@@ -227,24 +242,22 @@ export default function MonthlyReportPage() {
                 <div><dt>Tâches en retard</dt><dd>{number(s.tasks_overdue)}</dd></div>
                 <div><dt>Jours d’absence</dt><dd>{number(s.absences_days)}</dd></div>
               </dl>
-            </section>
-            <section className="mr-panel" aria-labelledby="mr-h-proj">
-              <h2 id="mr-h-proj">Projets</h2>
+            </Panel>
+            <Panel id="mr-h-proj" icon={CalendarDays} tone="violet" title="Projets">
               <dl className="mr-dl">
                 <div><dt>Créés</dt><dd>{number(p.created)}</dd></div>
                 <div><dt>En cours</dt><dd>{number(p.active)}</dd></div>
                 <div><dt>Terminés</dt><dd>{number(p.completed)}</dd></div>
                 <div><dt>Tâches créées</dt><dd>{number(p.tasks_created)}</dd></div>
               </dl>
-            </section>
-            <section className="mr-panel" aria-labelledby="mr-h-sla">
-              <h2 id="mr-h-sla">Délais de premier retour</h2>
+            </Panel>
+            <Panel id="mr-h-sla" icon={Ticket} tone="blue" title="Délais de premier retour">
               <dl className="mr-dl">
                 <div><dt>Médiane</dt><dd>{t.median_first_response_min == null ? "—" : number(t.median_first_response_min) + " min"}</dd></div>
                 <div><dt>90e percentile</dt><dd>{t.p90_first_response_min == null ? "—" : number(t.p90_first_response_min) + " min"}</dd></div>
                 <div><dt>Hors délai (60 min)</dt><dd>{number(t.sla_breaches)}</dd></div>
               </dl>
-            </section>
+            </Panel>
           </div>
         </div>
       )}
