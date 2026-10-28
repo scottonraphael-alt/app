@@ -6,9 +6,11 @@ L'intégration dans la branche du site est prévue après stabilisation de ses m
 
 ## État de l'analyse
 
-L'accès au tableau de bord demande une connexion utilisateur. Aucune commande privée
-BotGhost n'a encore été examinée et aucun comportement ne doit être déduit des
-exemples publics du site. Le bot et la première commande restent à identifier.
+La commande `/panel verification` d'OasisBot a été examinée dans le tableau de bord
+connecté, par lecture des blocs, connexions, messages et paramètres. Le compte rendu
+et les choix validés pour sa migration figurent dans `panel-verification.md`.
+La préparation comprend désormais l'archivage Iris et son raccordement futur à la
+vue membre 360°. Aucune commande migrée n'est encore branchée sur le bot.
 
 Pour chaque commande accessible, relever ses options, conditions, branches,
 variables persistantes, messages, boutons, formulaires, délais et effets Discord.
@@ -26,6 +28,8 @@ Les choix d'intégration encore inconnus seront explicités dans la fiche de la 
 - Historique Iris : `backend/services/audit_service.py` ; audit des tickets :
   `backend/services/ticket_audit.py`.
 - Import des dossiers Discord : `backend/services/ticket_import.py`.
+- Vue membre 360° : `backend/services/member_360.py`,
+  `backend/routers/member_360.py`, `frontend/src/pages/Member360Page.jsx`.
 - Envois et rappels de l'agenda : `backend/services/agenda_discord.py` et
   `backend/services/agenda_reminders.py`.
 
