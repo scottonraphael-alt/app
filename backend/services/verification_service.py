@@ -18,7 +18,7 @@ from services.discord_service import DiscordService
 
 ACTIVE={'waiting','claimed','clarification','second_opinion','processing','action_required'}
 DISCORD_ACTIONS={'claim','approve','ticket','close'}
-JUSTIFIED={'clarify','refuse','kick','ban','second_opinion'}
+JUSTIFIED={'assign','clarify','refuse','kick','ban','second_opinion'}
 FINAL={'approved','refused','closed'}
 PLANS={
     'approve':['member_access','welcome','archive'],
@@ -104,6 +104,9 @@ async def submit(member,answers,source,*,imported=False,submitted_at=None,import
         form={'id':form_id,'source':source,'submitted_at':submitted_at if imported else stamp(),'received_at':stamp(),
             'answers':copy.deepcopy(answers),'status':status,'imported':imported,'completeness':'partial' if imported else 'complete',
             'decision':None,'ai':None,'reference':False}
+        if imported:
+            try:Answers.model_validate(answers);form['completeness']='complete'
+            except ValueError:pass
         if imported and any(not existing['imported'] for existing in row['forms']):
             changed['forms'].insert(0,form)  # Historical imports cannot replace the live decision target.
         else:changed['forms'].append(form)
@@ -133,6 +136,11 @@ async def act(member_id,actor_id,payload,*,origin):
     if origin not in ('iris','discord'):raise HTTPException(403,'Origine non autorisée.')
     if origin=='discord' and payload.action not in DISCORD_ACTIONS:raise HTTPException(403,'Cette action nécessite une justification depuis Iris.')
     if payload.action=='training':await authority(actor_id,responsable=True)
+    if payload.action=='assign':
+        from services.casework.policy import leadership
+        if not leadership(roles):raise HTTPException(403,'Réattribution réservée à la direction.')
+        if not payload.assignee_id:raise HTTPException(422,'Sélectionne le nouvel intervenant.')
+        await authority(payload.assignee_id)
     if payload.action=='ban' and str(config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID) not in roles:
         raise HTTPException(403,'Le bannissement définitif requiert le rôle administrateur de sanction.')
     row=await load(member_id)
@@ -149,13 +157,17 @@ async def act(member_id,actor_id,payload,*,origin):
     if payload.action in ('refuse','kick','ban','clarify') and len(payload.reason)<10:raise HTTPException(422,'Un motif destiné au membre est obligatoire.')
     if payload.action=='clarify' and not payload.topics:raise HTTPException(422,'Sélectionne les réponses à approfondir.')
     if payload.action!='training' and not row['active']:raise HTTPException(409,'Ce dossier est déjà archivé.')
-    if row['claimed_by'] and row['claimed_by']!=str(actor_id) and payload.action not in ('training','second_opinion'):raise HTTPException(409,'Ce dossier est pris en charge par un autre membre du Staff.')
+    if row['claimed_by'] and row['claimed_by']!=str(actor_id) and payload.action not in ('training','second_opinion','assign'):raise HTTPException(409,'Ce dossier est pris en charge par un autre membre du Staff.')
     changed=copy.deepcopy(row);current=changed['forms'][-1]
     if payload.action=='training':
+        await db.verification_cases.update_many({'guild_id':guild(),'staff_delivery.advisory_reference_ids':{'$in':[item['id'] for item in row['forms']]}},{'$set':{'staff_delivery.revision':-1}})
         changed['training']=payload.training
-        for form in changed['forms']:form['reference']=False;form['ai']=None
+        for form in changed['forms']:
+            form['reference']=False;form['ai']=None
+            if payload.training:form['ever_training']=True
+    elif payload.action=='assign':changed['claimed_by']=payload.assignee_id
     elif payload.action!='second_opinion' or not changed['claimed_by']:changed['claimed_by']=str(actor_id)
-    if payload.action=='claim':changed['status']='claimed'
+    if payload.action in ('claim','assign'):changed['status']='claimed'
     elif payload.action=='second_opinion':changed['status']='second_opinion'
     elif payload.action in PLANS:
         if payload.action in ('refuse','kick','ban','approve'):
@@ -165,7 +177,7 @@ async def act(member_id,actor_id,payload,*,origin):
             'payload':{'actor_id':str(actor_id),'form_id':current['id'],'action':payload.action,'member_id':member_id,'reason':payload.reason,'rationale':payload.rationale,'topics':payload.topics,'age':current['answers'].get('age'),'training':changed['training']},
             'steps':[{'name':step,'status':'pending'} for step in PLANS[payload.action]]})
         changed['status']='processing'
-    changed['events'].append(event('action.'+payload.action,actor_id,current['id'],origin=origin,request_id=payload.request_id,rationale=payload.rationale))
+    changed['events'].append(event('action.'+payload.action,actor_id,current['id'],origin=origin,request_id=payload.request_id,rationale=payload.rationale,assignee_id=payload.assignee_id))
     return public(await save(row,changed))
 
 async def delete_form(member_id,form_id,actor_id,payload):
@@ -181,6 +193,7 @@ async def delete_form(member_id,form_id,actor_id,payload):
     changed['events']=[item for item in changed['events'] if item.get('form_id')!=form_id]
     changed['jobs']=[item for item in changed['jobs'] if item['form_id']!=form_id]
     changed['tombstones']=list(set(changed['tombstones']+[form['source']]))
+    await db.verification_cases.update_many({'guild_id':guild(),'staff_delivery.advisory_reference_ids':form_id},{'$set':{'staff_delivery.revision':-1}})
     changed['events'].append(event('form.deleted',actor_id,deleted_id=form_id,reason=payload.reason))
     if not changed['forms']:changed.update(status='empty',active=False,claimed_by=None)
     elif form_id==row['forms'][-1]['id']:
@@ -192,8 +205,14 @@ async def review_example(member_id,form_id,actor_id,payload):
     if payload.revision!=row['revision']:raise HTTPException(409,'Le dossier a changé.')
     changed=copy.deepcopy(row);form=next((f for f in changed['forms'] if f['id']==form_id),None)
     if not form:raise HTTPException(404,'Formulaire introuvable.')
-    if payload.enabled and (row['training'] or form['imported'] or form['status'] not in ('approved','refused') or not (form.get('decision') or {}).get('confirmed') or (form.get('decision') or {}).get('training')):
+    if payload.enabled and form['imported']:
+        if form['completeness']!='complete' or form['status'] not in ('approved','refused') or row['training'] or form.get('ever_training'):
+            raise HTTPException(422,'Une archive doit être complète, réellement décidée et hors formation avant qualification.')
+        if len(payload.reason)<30 or len(payload.reason.split())<6:raise HTTPException(422,'Explique la qualification historique en trente caractères et six mots minimum.')
+        form['decision']={'action':'approve' if form['status']=='approved' else 'refuse','actor_id':str(actor_id),'at':stamp(),'reason':'Qualification humaine d’une archive pour les références IA. La décision historique n’est pas réattribuée.','rationale':payload.reason,'confirmed':True,'training':False,'historical_review':True}
+    if payload.enabled and (row['training'] or form.get('ever_training') or form['status'] not in ('approved','refused') or not (form.get('decision') or {}).get('confirmed') or (form.get('decision') or {}).get('training')):
         raise HTTPException(422,'Seuls les dossiers réels, complets et décidés peuvent devenir des exemples.')
+    await db.verification_cases.update_many({'guild_id':guild(),'staff_delivery.advisory_reference_ids':form_id},{'$set':{'staff_delivery.revision':-1}})
     form['reference']=payload.enabled
     form['reference_reason']=payload.reason if payload.enabled else None
     changed['events'].append(event('example.reviewed',actor_id,form_id,enabled=payload.enabled))

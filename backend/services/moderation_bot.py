@@ -111,13 +111,20 @@ intents.members = True
 
 class IrisModerationClient(discord.Client):
     async def setup_hook(self):
-        from services.sanction_command import install
-        try:
-            await install(self)
-            from services.verification_runtime import install as install_verifications
-            await install_verifications(self)
-        except Exception:
-            logger.exception("Impossible d’enregistrer /sanction ; les autres fonctions du bot restent actives.")
+        await install_member_commands(self)
+
+
+async def install_member_commands(client):
+    from services.sanction_command import install as install_sanctions
+    from services.verification_runtime import install as install_verifications
+    from services.casework.commands import install as install_tickets
+    from services import workflow_settings
+    await workflow_settings.apply()
+    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered')]:
+        if getattr(client,registered,False):continue
+        try:await installer(client)
+        except Exception:logger.exception('Enregistrement des commandes %s à reprendre.',name)
+
 
 
 moderation_client = IrisModerationClient(intents=intents)
@@ -272,19 +279,9 @@ async def on_ready():
         logger.info("Salons surveillés : %s", DISCORD_MODERATION_CHANNEL_TYPES)
 
     # Sans danger si on_ready est rappelé après une reconnexion.
-    from services.verification_runtime import install as install_verifications
-    try:
-        await install_verifications(moderation_client)
-    except Exception:
-        logger.exception("Enregistrement des vérifications à reprendre ; les autres fonctions restent actives.")
+    await install_member_commands(moderation_client)
     server_statistics.start(moderation_client)
     ai_moderation.start(moderation_client)
-    if not getattr(moderation_client, "sanction_registered", False):
-        from services.sanction_command import install
-        try:
-            await install(moderation_client)
-        except Exception:
-            logger.exception("Nouvelle tentative d’enregistrement de /sanction impossible.")
 
 
 @moderation_client.event
@@ -317,6 +314,12 @@ async def on_raw_bulk_message_delete(payload):
     await server_statistics.safely(server_statistics.record_delete, payload)
     from services.migration_runtime import message_activity
     await server_statistics.safely(message_activity, payload)
+
+
+@moderation_client.event
+async def on_guild_channel_create(channel):
+    from services.purgatory import channel_created
+    await server_statistics.safely(channel_created,channel)
 
 
 @moderation_client.event

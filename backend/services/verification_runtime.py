@@ -50,18 +50,18 @@ async def private_review_channel(guild):
         raise HTTPException(503, 'Le salon de lecture des formulaires ne doit pas être public.')
     permitted = {str(config.DISCORD_STAFF_ROLE_ID), str(config.DISCORD_RESPONSABLE_ROLE_ID), policy.admin_role()}
     for role in guild.roles:
-        if role.is_default() or str(role.id) in permitted or role.permissions.administrator or role.managed:
+        if role.is_default() or str(role.id) in permitted or role.permissions.administrator or getattr(getattr(role,'tags',None),'bot_id',None):
             continue
         if channel.permissions_for(role).view_channel:
             raise HTTPException(503, 'Un rôle sans accès aux vérifications peut lire le salon de suivi. Corrige ses permissions avant publication.')
     return channel
 
 
-async def publish_staff(client, row):
+async def publish_staff(client, row, advisory=None, reference_ids=None):
     """One durable delivery per case, edits thereafter. Explicit nonce prevents quick retries."""
     guild = await guild_for(client)
     channel = await private_review_channel(guild)
-    view = StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row) if row.get('forms') else message('📁 Formulaire supprimé', 'Les réponses de ce dossier ont été supprimées par un Responsable.')
+    view = StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,advisory=advisory) if row.get('forms') else message('📁 Formulaire supprimé', 'Les réponses de ce dossier ont été supprimées par un Responsable.')
     record = row.get('staff_delivery') or {}
     if record.get('channel_id') and str(channel.id) != record['channel_id']:
         raise HTTPException(409, 'Le salon de suivi a changé : la livraison existante doit être reprise explicitement.')
@@ -100,7 +100,7 @@ async def publish_staff(client, row):
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision']}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
 
@@ -117,6 +117,8 @@ class Adapter:
         if job['payload']['training']:
             return
         if job['action'] == 'approve' and step == 'member_access':
+            if await db.purgatory_states.find_one({'_id':f'{self.guild.id}:{job["payload"]["member_id"]}','status':{'$ne':'released'}}):
+                raise HTTPException(409,'Le membre doit sortir du Purgatoire avant la validation de ses accès.')
             await self.role_configuration(job['payload']['age'])
             self.welcome_gifs()
             channel = await self.guild.fetch_channel(setting('VERIFICATION_WELCOME_CHANNEL_ID', '1081957994125860905'))
@@ -147,7 +149,7 @@ class Adapter:
             gifs = json.loads(os.getenv('VERIFICATION_WELCOME_GIFS', '[]'))
         except ValueError:
             raise HTTPException(503, 'Les quatre GIF d’accueil doivent être configurés.') from None
-        if not isinstance(gifs, list) or len(gifs) != 4 or any(not isinstance(url, str) or not url.startswith('https://') for url in gifs) or len(set(gifs)) != 4:
+        if not isinstance(gifs, list) or len(gifs) != 4 or any(not isinstance(url, str) or not (url.startswith('https://') or url.startswith('iris-asset:')) for url in gifs) or len(set(gifs)) != 4:
             raise HTTPException(503, 'Renseigne quatre GIF distincts dans VERIFICATION_WELCOME_GIFS.')
         return gifs
 
@@ -187,8 +189,10 @@ class Adapter:
                 raise HTTPException(503, 'Salon de bienvenue invalide.')
             gifs = self.welcome_gifs()
             view = message('🌸 Bienvenue dans Oasis', f'Bienvenue <@{member_id}> ! Ton formulaire a été validé. Tu peux maintenant découvrir les salons et rejoindre les échanges.')
-            view.children[0].add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(secrets.choice(gifs))))
-            await self.send_once(channel, view, nonce)
+            from services.workflow_media import asset_for
+            asset=await asset_for(secrets.choice(gifs))
+            view.children[0].add_item(discord.ui.MediaGallery(discord.MediaGalleryItem('attachment://'+asset['discord_filename'])))
+            await self.send_once(channel, view, nonce, assets=[asset])
         elif step == 'create_ticket':
             await self.create_ticket(payload, nonce)
         elif step.startswith('notify_'):
@@ -223,7 +227,7 @@ class Adapter:
         await audit('verification.effect.confirmed', payload['actor_id'], member_id=member_id, step=step, form_id=payload['form_id'])
         return {'confirmed': True}
 
-    async def send_once(self, channel, view, nonce):
+    async def send_once(self, channel, view, nonce, assets=None, allowed_roles=None):
         receipt = await db.workflow_receipts.find_one({'_id': nonce})
         if receipt:
             if receipt.get('status') == 'sent':
@@ -232,54 +236,17 @@ class Adapter:
         await db.workflow_receipts.insert_one({'_id': nonce, 'status': 'inflight', 'channel_id': str(channel.id), 'nonce': nonce, 'at': service.stamp()})
         from services.announcement_publishing import discord_request
         sent = await discord_request('POST', str(channel.id), {'flags': 32768, 'components': view.to_components(),
-            'allowed_mentions': {'parse': []}, 'nonce': nonce, 'enforce_nonce': True}, [])
+            'allowed_mentions': {'parse': [],'roles':allowed_roles or []}, 'nonce': nonce, 'enforce_nonce': True}, assets or [])
         await db.workflow_receipts.update_one({'_id': nonce}, {'$set': {'status': 'sent', 'message_id': str(sent['id'])}})
 
     async def create_ticket(self, payload, nonce):
-        receipt_id = 'ticket:'+payload['form_id']
-        existing = await db.workflow_receipts.find_one({'_id': receipt_id})
-        if existing and existing.get('channel_id'):
-            return
-        marker = 'iris-verification:'+payload['form_id']
-        channels = await self.guild.fetch_channels()
-        matches = [channel for channel in channels if isinstance(channel, discord.TextChannel) and channel.topic == marker]
-        if len(matches) > 1:
-            raise HTTPException(409, 'Plusieurs salons portent la même référence de formulaire.')
-        if existing and not matches:
-            raise HTTPException(409, 'Création interrompue : vérification du salon requise avant reprise.')
-        member = await self.guild.fetch_member(int(payload['member_id']))
-        if matches:
-            channel = matches[0]
-        else:
-            category = self.guild.get_channel(setting('CASEWORK_NATIVE_CATEGORY_ID', '1081957992896942166'))
-            if not isinstance(category, discord.CategoryChannel) or str(category.id) not in policy.Settings().categories('verification'):
-                raise HTTPException(503, 'Catégorie des tickets indisponible.')
-            overwrites = {self.guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                member: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-                self.guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True, read_message_history=True)}
-            for rid in (config.DISCORD_STAFF_ROLE_ID, config.DISCORD_RESPONSABLE_ROLE_ID, policy.admin_role()):
-                role = self.guild.get_role(int(rid)) if rid else None
-                if rid and not role:
-                    raise HTTPException(503, 'Un rôle Staff ou direction configuré est absent du serveur.')
-                if role:
-                    overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
-            await db.workflow_receipts.insert_one({'_id': receipt_id, 'status': 'creating', 'at': service.stamp()})
-            channel = await self.guild.create_text_channel('🎫・｜vérif-'+member.name[:60], category=category, overwrites=overwrites, topic=marker, reason='Iris : approfondissement de vérification')
-        # Keep explicit Iris data authoritative; source-bot trust applies only to legacy discovery.
-        from services.casework import service as cases
-        settings = policy.Settings()
-        from services.casework import assets
-        case_id = cases.key(str(self.guild.id), str(channel.id))
-        avatar_url = getattr(getattr(member, 'display_avatar', None), 'url', None)
-        avatar = await assets.avatar(str(avatar_url) if avatar_url else None, case_id)
-        opening = {'id': str(discord.utils.time_snowflake(datetime.now(timezone.utc))), 'content': f'Vérification de <@{member.id}>', 'timestamp': service.stamp()}
-        await cases.enroll({'id': str(channel.id), 'name': channel.name, 'guild_id': str(self.guild.id), 'parent_id': str(channel.category_id), 'type': 0}, opening,
-            {'id': str(member.id), 'username': member.name, 'display_name': member.display_name, **avatar}, settings, assigned={'id': payload['actor_id']}, initiator_id=payload['actor_id'])
-        # Actual opening ID is recorded after confirmed publication, not inferred from a timestamp.
-        await self.send_once(channel, message('💬 Vérification', f'Vérification de <@{member.id}>\nApprofondissement de vérification par <@{payload["actor_id"]}>\nCet espace permet de compléter ta demande avec le Staff.'), nonce)
-        sent = await db.workflow_receipts.find_one({'_id': nonce})
-        await db.case_tickets.update_one({'_id': cases.key(str(self.guild.id), str(channel.id))}, {'$set': {'source': 'iris', 'opening_id': sent['message_id'], 'verification_case_id': service.key(payload['member_id']), 'sync.due': True}})
-        await db.workflow_receipts.update_one({'_id': receipt_id}, {'$set': {'status': 'sent', 'channel_id': str(channel.id)}})
+        from services.casework import native
+        row=await native.reserve('verification',payload['member_id'],payload['actor_id'],
+            'Échange complémentaire pour le formulaire de vérification.', 'verification:'+payload['form_id'])
+        if row['status']!='open':row=await native.create(row['_id'],self.client)
+        if not row or row['status']!='open':raise HTTPException(409,'Le ticket de vérification attend son ouverture.')
+        await db.workflow_receipts.update_one({'_id':'ticket:'+payload['form_id']},
+            {'$set':{'status':'sent','channel_id':row['channel_id']}},upsert=True)
 
     async def remove_member(self, step, payload, nonce):
         from services import sanction_actions as sanctions
@@ -384,7 +351,7 @@ async def tick(client):
                 except Exception:
                     logger.exception('Traitement de vérification différé (%s).', job['id'])
         current = await service.load(row['member_id'])
-        if (current.get('staff_delivery') or {}).get('revision') != current['revision']:
+        if (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
             except Exception:
@@ -401,18 +368,10 @@ async def install(client):
 
     async def publish(interaction: discord.Interaction):
         try:
-            require_native_workflows()
-            if str(interaction.guild_id) != service.guild():
-                raise HTTPException(403, 'Cette commande appartient au serveur configuré.')
-            roles = await policy.fresh_roles(str(interaction.user.id))
-            if not policy.leadership(roles):
-                raise HTTPException(403, 'La publication est réservée aux Responsables et Administrateurs.')
-            await interaction.response.defer(ephemeral=True, thinking=True)
-            await audit('verification.panel.published', str(interaction.user.id), channel_id=str(interaction.channel_id))
-            await interaction.channel.send(view=Panel(), allowed_mentions=NONE)
-            await interaction.followup.send(view=message('✅ Panneau publié', 'Le formulaire est disponible dans ce salon.'), ephemeral=True, allowed_mentions=NONE)
+            from services.casework.commands import publish_panel
+            await publish_panel(interaction,'verification')
         except Exception as exc:
-            await error(interaction, exc)
+            await error(interaction,exc)
 
     if tree.get_command('panel-vérification', guild=guild_obj) is None:
         command = app_commands.Command(name='panel-vérification', description='Publier le formulaire d’admission Iris', callback=publish)

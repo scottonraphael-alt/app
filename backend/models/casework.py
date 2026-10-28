@@ -17,7 +17,8 @@ class ImportChannel(Strict):
 class Change(Strict):
     revision: int = Field(ge=0)
     request_id: str = Field(min_length=8, max_length=80, pattern=r'^[A-Za-z0-9_:\-]+$')
-    action: Literal['claim', 'assign', 'note', 'sync', 'archive', 'cancel_close']
+    action: Literal['claim', 'assign', 'note', 'sync', 'archive', 'cancel_close', 'suspend', 'reopen', 'restrict', 'unrestrict', 'add_member', 'remove_member']
+    participant_id: str | None = Field(default=None, pattern=r'^[0-9]{17,20}$')
     assignee_id: str | None = Field(default=None, pattern=r'^[0-9]{17,20}$')
     text: str = Field(default='', max_length=25000)
 

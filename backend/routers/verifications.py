@@ -89,7 +89,20 @@ async def advisory(member_id:str,request:Request,helper=Depends(current_helper))
         from fastapi import HTTPException
         raise HTTPException(429,'Trois demandes par minute au maximum ; laisse le temps à l’analyse de se terminer.')
     await audit(request,helper,'advisory_requested',member_id)
-    result=await generate(member_id,helper.id,rules=os.getenv('VERIFICATION_ADMISSION_RULES',''))
+    from services import workflow_settings
+    rules=(await workflow_settings.load())['admission_rules']
+    result=await generate(member_id,helper.id,rules=rules)
+    if (await workflow_settings.load())['admission_rules']!=rules:
+        from fastapi import HTTPException
+        raise HTTPException(409,'Les règles d’admission ont changé pendant l’analyse.')
+    from services.moderation_bot import moderation_client
+    from services.migration_runtime import discord_actions_enabled
+    if discord_actions_enabled() and moderation_client.is_ready():
+        try:
+            from services.verification_runtime import publish_staff
+            await publish_staff(moderation_client,await service.load(member_id),advisory=result['advisory']['summary'],reference_ids=result['advisory']['reference_ids'])
+            result['discord_delivery']='sent'
+        except Exception:result['discord_delivery']='unconfirmed'
     await audit(request,helper,'advisory_completed',member_id,form_id=result['form_id'])
     return result
 

@@ -3,10 +3,11 @@ from database import db
 from services.casework import policy
 
 
-async def entries(member_id, roles, settings, *, before=None, limit=30):
+async def entries(member_id, roles, settings, *, before=None, limit=30, exclude_support=False):
     base = policy.scope(set(roles), settings.guild_id)
     if not base['kind']['$in']:
         return None
+    if exclude_support:base['kind']['$in']=[kind for kind in base['kind']['$in'] if kind!='support']
     base['member.id'] = str(member_id)
     total = await db.case_tickets.count_documents(base)
     projection = {'id': 1, 'kind': 1, 'status': 1, 'created_at': 1, 'archive.at': 1}

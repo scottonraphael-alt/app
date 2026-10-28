@@ -18,6 +18,7 @@ from services.ticket_crisis import schedule_crisis_analysis
 logger = logging.getLogger(__name__)
 # Le message d'ouverture OasisBot distingue explicitement la personne aidée des helpers.
 TICKET_CHANNEL_PREFIX = "🌸・｜soutien-"
+NATIVE_SUPPORT_PREFIX = "🌸・｜iris-soutien-"
 BENEFICIARY = re.compile(r"\bsoutien\s+de\s*:?\s*<@!?([0-9]{15,22})>", re.IGNORECASE)
 
 
@@ -30,7 +31,7 @@ async def import_ticket_channel(channel_id: str, discord: DiscordService) -> boo
     # La catégorie principale désigne les nouveaux tickets ; les catégories d'archives
     # supplémentaires autorisent la lecture mais ne déclenchent pas d'import automatique.
     if (str(channel.get("parent_id")) != config.DISCORD_TICKET_CATEGORY_ID
-            or not channel.get("name", "").startswith(TICKET_CHANNEL_PREFIX)):
+            or not channel.get("name", "").startswith((TICKET_CHANNEL_PREFIX,NATIVE_SUPPORT_PREFIX))):
         return False
     messages = await discord.fetch_channel_history(channel_id, require_ticket_category=True)
     if not messages or not messages[0].author.is_bot:
@@ -73,7 +74,7 @@ async def discover_tickets() -> None:
     for channel in channels:
         if (channel.get("type") != 0
                 or str(channel.get("parent_id")) != config.DISCORD_TICKET_CATEGORY_ID
-                or not channel.get("name", "").startswith(TICKET_CHANNEL_PREFIX)):
+                or not channel.get("name", "").startswith((TICKET_CHANNEL_PREFIX,NATIVE_SUPPORT_PREFIX))):
             continue
         try:
             await import_ticket_channel(str(channel["id"]), discord)

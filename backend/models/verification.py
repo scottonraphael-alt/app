@@ -14,7 +14,8 @@ class Answers(Strict):
     rules:Literal[True]
 
 class Action(Strict):
-    action:Literal['claim','approve','ticket','close','clarify','refuse','kick','ban','second_opinion','training']
+    action:Literal['claim','approve','ticket','close','clarify','refuse','kick','ban','second_opinion','training','assign']
+    assignee_id:str|None=Field(default=None,pattern=r'^[0-9]{17,20}$')
     revision:int=Field(ge=0)
     request_id:str=Field(min_length=8,max_length=80,pattern=r'^[A-Za-z0-9_:\-]+$')
     reason:str=Field(default='',max_length=1500)

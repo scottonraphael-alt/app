@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 def discord_actions_enabled():
-    return os.getenv('IRIS_NATIVE_WORKFLOWS_ENABLED', 'false').lower() == 'true'
+    return os.getenv('IRIS_NATIVE_WORKFLOWS_ENABLED', 'true').lower() == 'true'
 
 
 def can_close_case(row):
-    return discord_actions_enabled() and (row.get('source') == 'iris' or os.getenv('CASEWORK_LEGACY_CLOSURE_ENABLED', 'false').lower() == 'true')
+    return discord_actions_enabled() and (row.get('source') == 'iris' or os.getenv('CASEWORK_LEGACY_CLOSURE_ENABLED', 'true').lower() == 'true')
 
 
 def require_native_workflows():
@@ -62,18 +62,29 @@ async def run(client, stop):
     settings = policy.Settings()
     if not settings.enabled:
         return
-    from services import verification_service
+    from services import verification_service, workflow_settings
+    await workflow_settings.apply()
+    settings = policy.Settings()
     await service.indexes()
     await verification_service.indexes()
     gateway = DiscordGateway(client, settings)
+    discovery_done=False
     # No wait_until_ready in setup_hook, which would deadlock Discord login.
     while not stop.is_set():
         if client.is_ready():
             try:
+                await workflow_settings.apply()
+                settings = policy.Settings()
+                gateway.settings = settings
                 from services import verification_history
                 await verification_history.tick(client)
+                if not discovery_done:
+                    await sync.cycle(gateway,settings)
+                    discovery_done=True
                 if discord_actions_enabled():
                     from services import verification_runtime
+                    from services.casework import native
+                    await native.tick(client)
                     await verification_runtime.tick(client)
                     await worker.tick(gateway, settings)
                 else:

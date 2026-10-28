@@ -1,151 +1,176 @@
-# Intégration BotGhost → Iris : état et bascule
+# OasisLink et Iris : parcours natifs activés
 
-Intégration du 28 octobre 2026, sur `codex/botghost-integration`, construite à partir
-de `origin/security/audit-fixes` (`0c0b193`) et de la préparation `4186ba6`.
-Les modifications récentes du site, de l’agenda, de l’équipe et de la supervision
-sont conservées. Les anciennes fiches de préparation restent des références de
-conception ; **ce document décrit le raccordement actuel**.
+Lot du 28 octobre 2026 sur `codex/botghost-integration`, à partir de la branche
+`security/audit-fixes` et du premier raccordement `8b990d8`. Les fonctionnalités
+natives sont maintenant activées par défaut dans le code. Aucun test n’a envoyé de
+message réel, appliqué de rôle ou touché à la base de production.
 
-## Disponible dans ce lot
+## Déployer ce lot
 
-- Quatre espaces Staff, avec listes, archives et conversations : Vérifications,
-  Convocations, Contacts Staff et Bulles d’échange. Accès depuis le NewDashboard,
-  charte Casier, pas de navbar dans les espaces de lecture.
-- API sous `/api/casework`, découverte des salons existants authentifiés, collecte
-  quotidienne et sur activité, attribution manuelle préservée, notes, recherche sur
-  tous les messages, pagination, fichiers/avatars locaux protégés. Suppression
-  Discord : conservation de la dernière sauvegarde, désattribution et archive dont
-  la complétude est explicitée.
-- Sources supplémentaires dans la vue membre 360°, filtrées avant lecture et comptage.
-  Les droits des anciennes sources Casier/Soutien et le garde de la page sont conservés.
-- Formulaires sous `/staff/verifications` : attente/archives, tentatives, prise en
-  charge, décisions argumentées, formation, références IA sélectionnées par un humain,
-  suppression d’une tentative par un Responsable et tombstone contre sa réimportation.
-- Import historique demandé par un Responsable depuis la liste : fils actifs,
-  archivés publics et privés du salon `1226848987559100458`, avec pagination,
-  progression/reprise et traitement conservateur des informations ambiguës.
-  L’import ne modifie aucun message Discord et n’applique aucune décision ancienne.
-- Préavis Anthropic demandé depuis le détail, avec règles d’admission configurées,
-  citations vérifiées et références humaines ; aucun choix automatique. Trois demandes
-  par minute et par utilisateur au maximum. Aucun résultat IA n’est conservé entre
-  dossiers : suppression/retrait d’une référence prend effet immédiatement.
-- Journal Responsable : événements de dossiers/formulaires dans la catégorie Tickets,
-  libellés français, acteurs et actions, sans copie des conversations ou des notes.
-- Moteur natif d’admission, derrière bascule explicite : `/panel-vérification`,
-  formulaire obligatoire, panneau Staff V2 avec les réponses, vues persistantes,
-  validation/rôles, quatre GIF d’accueil, ticket de discussion, clôture sans expulsion,
-  approfondissement demandant un nouveau formulaire complet, refus/kick/ban justifiés.
-  Sur Discord : prise en charge, validation, ticket et clôture uniquement ; les autres
-  décisions se prennent dans Iris.
-- Jobs durables : résultat confirmé étape par étape, notification MP indépendante,
-  reprises humaines des étapes incertaines. Une réponse perdue n’entraîne pas une
-  seconde sanction. Les messages incertains sont recherchés avec leur nonce lorsqu’il
-  est encore observable ; leur absence ne prouve pas qu’ils n’ont jamais été envoyés.
-- Kick/ban d’admission : protections fraîches et hiérarchie existantes de `/sanction`,
-  mêmes verrous et baux de rôle temporaire, retrait/reprise de nettoyage par la
-  maintenance existante, enregistrement au casier et logs dans les posts configurés.
-  Le bannissement définitif reste réservé au rôle Administrateur de sanction.
-- Clôture de salon depuis Iris : gel, sauvegarde complète et contrôle des fichiers
-  avant suppression. La direction peut annuler une clôture bloquée avant la phase
-  de suppression pour restaurer les permissions sauvegardées.
+1. Déployer **le backend et le frontend de cette branche**, puis redémarrer le backend.
+2. Si ces variables ont été explicitement fixées à `false` sur l’hébergeur, les remettre
+   à `true` : `CASEWORK_ENABLED`, `IRIS_NATIVE_WORKFLOWS_ENABLED`,
+   `CASEWORK_LEGACY_CLOSURE_ENABLED`. Les défauts du nouveau code sont `true`.
+3. Dans le module Responsable, ouvrir **Parcours Discord et rôles**
+   (`/responsable/parcours-discord`). Les identifiants et GIF fournis sont préremplis.
+   Vérifier les destinations, notamment le salon des alertes Staff de convocation.
+4. Sur Discord, choisir **l’application OasisLink**, puis publier les panneaux natifs :
+   `/panel verification`, `/panel contact-staff`, `/panel soutient`.
+5. Arrêter l’utilisation des producteurs et commandes de tickets BotGhost correspondants.
+   La publication remplace les trois anciens messages publics connus ; elle ne peut
+   pas supprimer les commandes appartenant à une autre application Discord.
 
-## Coexistence : configuration par défaut
+Les commandes sont enregistrées individuellement au démarrage, sans synchronisation
+qui supprimerait les autres commandes du bot. Un échec de l’un des modules n’empêche
+pas les autres commandes de s’enregistrer. L’activation est celle du code déployé :
+la modification locale ne redémarre pas elle-même le serveur d’hébergement.
 
-```dotenv
-# Collecte / lecture des quatre familles ; pas de nouveaux messages Discord.
-CASEWORK_ENABLED=true
-CASEWORK_CONTACT_CATEGORY_IDS=1081957992896942166
-CASEWORK_SOURCE_BOT_IDS=1425117786354483263
-CASEWORK_ADMIN_ROLE_ID=1321630097744199721
-CASEWORK_SUSPENDED_CATEGORY_IDS=
+## Commandes disponibles
 
-# Commande native d’admission et effets Discord : désactivés par défaut.
-IRIS_NATIVE_WORKFLOWS_ENABLED=false
-# Clôtures destructrices des salons encore produits par BotGhost : séparées.
-CASEWORK_LEGACY_CLOSURE_ENABLED=false
-```
+| Commande OasisLink | Usage et droits |
+| --- | --- |
+| `/panel verification` | Admission ; Responsable ou Administrateur |
+| `/panel-vérification` | Alias du même panneau d’admission |
+| `/panel contact-staff` | Contact Staff ; Administrateur |
+| `/panel soutient` | Demande de soutien ; Responsable ou Administrateur |
+| `/panel moderation` | Panneau privé du Staff, sélection du membre puis convocation/bulle |
+| `/convocation membre [formation]` | Préparer une convocation, avec contrôle des cibles Staff |
+| `/bulle membre [formation]` | Échange privé rassurant, sans motif disciplinaire |
+| `/dossier` | Actions privées du dossier lié au salon |
+| `/purgatoire membre action` | Entrée/sortie avec motif et confirmation, tous les Staff |
 
-Le rôle historique `DISCORD_ADMIN_ROLE_ID` reste le coordinateur Helper : il n’accorde
-pas les accès Administrateur aux nouveaux dossiers. Les Contacts Staff confidentiels
-sont réservés aux Responsables/Administrateurs, y compris fichiers, archives et 360°.
-Les dossiers avec un autre marqueur hérité de restriction restent conservateurs :
-Administrateur uniquement, tant que leur mapping n’est pas confirmé.
+Les boutons publics de Contact Staff et de demande de soutien sont ouverts aux membres.
+Les droits de gestion sont revérifiés à chaque interaction. Le mode formation n’applique
+aucun salon, rôle, MP ou sanction réelle.
 
-Le démarrage raccorde les tâches au superviseur existant et partage le client Discord
-actuel. Aucun second bot ni second collecteur des soutiens existants n’est lancé.
-Les hooks de messages et salons complètent les traitements existants sans remplacer
-l’automodération, les statistiques ou les autres commandes.
+## Paramètres fournis et conservés
 
-## Activer le parcours d’admission natif
+| Rôle | ID |
+| --- | --- |
+| Membre | `1081957992381042822` |
+| Non validé | `1081957992401997827` |
+| 13-15 ans | `1081957992230047764` |
+| 16-17 ans | `1081957992230047763` |
+| 18-25 ans | `1081957992230047761` |
+| 26 ans et plus | `1081957992230047760` |
+| Purgatoire | `1523827999563186437` |
 
-Avant de remplacer la publication BotGhost, renseigner les valeurs manquantes :
+Les quatre GIF sont copiés dans `backend/assets/welcome/` et envoyés à Discord en
+pièces jointes, avec une probabilité de 25 % chacun. Leur affichage ne dépend plus
+de l’expiration des signatures CDN fournies. Ils peuvent être remplacés par un
+upload GIF dans Iris. Les réglages persistants en base prennent le relais des défauts.
+Les rôles Helper, Helper+, Staff, Responsable, coordination et les logs de sanctions
+réutilisent la configuration du site.
 
-```dotenv
-VERIFICATION_REVIEW_CHANNEL_ID=1425589415165558825
-VERIFICATION_WELCOME_CHANNEL_ID=1081957994125860905
-CASEWORK_NATIVE_CATEGORY_ID=1081957992896942166
-VERIFICATION_MEMBER_ROLE_ID=
-VERIFICATION_UNVERIFIED_ROLE_ID=
-# Objet JSON avec les quatre identifiants distincts, sous forme de chaînes :
-VERIFICATION_AGE_ROLE_IDS={"13-15":"ID","16-17":"ID","18-25":"ID","26+":"ID"}
-# Les quatre véritables URL du panneau d’accueil existant, distinctes :
-VERIFICATION_WELCOME_GIFS=["https://.../1.gif","https://.../2.gif","https://.../3.gif","https://.../4.gif"]
-# Règles explicites utilisées uniquement lors de la demande d’un préavis :
-VERIFICATION_ADMISSION_RULES=
-```
+`DISCORD_ADMIN_ROLE_ID` conserve son sens historique de coordination Helper.
+L’Administrateur réel utilise `CASEWORK_ADMIN_ROLE_ID`, sinon le rôle existant
+`SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID` (`1321630097744199721`).
 
-Le salon de lecture doit être privé au Staff/direction. Le transport refuse d’y
-publier si un rôle ordinaire peut le lire. Les rôles Membre, Non validé et âges doivent
-être distincts, non gérés par Discord et sous le rôle du bot. La catégorie native doit
-appartenir au périmètre autorisé. L’attribution des rôles n’est pas commencée si la
-configuration des quatre GIF ou du salon d’accueil n’est pas valide.
+## Production des salons et coexistence
 
-Après arrêt du producteur de formulaires BotGhost correspondant, activer
-`IRIS_NATIVE_WORKFLOWS_ENABLED=true`, redémarrer et publier `/panel-vérification` avec
-un Responsable ou un Administrateur. L’enregistrement est individuel et ne synchronise
-pas globalement les autres commandes de l’application. Les vues sont réinscrites au
-redémarrage. Une panne d’installation n’arrête pas les autres fonctions du bot.
+Les créations sont réservées en base avant l’appel Discord. Un membre ne peut pas
+ouvrir simultanément deux Contacts Staff, même dans les deux variantes. Les demandes
+de soutien distinguent attente, acceptation en cours, salon ouvert et refus.
+Seuls les Helpers/Helpers+ acceptent ; seul le rôle de coordination refuse, avec motif.
+Le refus est conservé indépendamment du MP et permet une nouvelle demande après
+le délai anti-spam (`CASEWORK_REQUEST_COOLDOWN_SECONDS`, défaut 300 secondes).
 
-Un panneau de suivi interrompu reste en attente de réconciliation plutôt que renvoyé
-aveuglément. Les anciennes archives ne déclenchent pas une notification Staff chacune.
-La suppression d’un formulaire entraîne la mise à jour/rédaction du panneau natif lié
-au prochain cycle actif ; aucune suppression des anciennes copies BotGhost n’est faite.
+Les nouveaux marqueurs ne contiennent pas ceux reconnus par l’ancien événement
+BotGhost, qui utilisait `contains` :
 
-## Ce qui reste à migrer ensuite
+| Famille native | Nom |
+| --- | --- |
+| Contact Staff | `💬・｜contact-staff-…` |
+| Contact confidentiel | `🔒・｜contact-staff-…` |
+| Convocation | `🛡️・｜convocation-…` |
+| Bulle | `🫧・｜discussion-…` |
+| Discussion de vérification | `📋・｜verification-…` |
+| Soutien | `🌸・｜iris-soutien-…` |
 
-Les producteurs publics Contact Staff/Soutien et le panneau de convocation/bulle,
-leurs menus natifs de suspension/réouverture/restriction, l’alerte de convocation à
-J+3 et le Purgatoire ne sont pas remplacés par ce lot. Ils restent chez BotGhost.
-La collecte et les pages Iris fonctionnent en parallèle de ces producteurs existants.
-Les soutiens conservent leur module, résumés et rappels actuels.
+Les anciens noms restent reconnus à l’import, dont `🌸・｜soutien-…`. Les soutiens
+natifs alimentent aussi le module de suivi existant, sans écraser ses réattributions.
+Les fichiers, avatars et conversations des dossiers sont conservés par le moteur
+paginé de dossiers. La vue 360° évite de compter deux fois un soutien déjà fourni par
+son ancienne source. Les droits des sources Casier/Soutien existantes restent inchangés.
 
-**Ne pas activer `CASEWORK_LEGACY_CLOSURE_ENABLED` tant que les producteurs concernés
-ou un pont de remise à zéro des variables BotGhost ne sont pas migrés.** Sinon leurs
-anciens indicateurs `cstaffv3_hastick`, `tat_hastat`, `convlink` pourraient continuer
-à déclarer un ticket ouvert après sa suppression par Iris. L’archivage après une
-suppression réalisée par le système existant reste disponible sans cette option.
+Les indicateurs privés de BotGhost ne sont pas modifiables par Iris. Après une clôture
+native d’un ancien salon, un ancien bouton BotGhost pourrait encore considérer son
+ancien drapeau comme actif : utiliser les panneaux OasisLink après bascule et ne pas
+republier les anciens producteurs. Les nouveaux verrous et demandes ne reposent plus
+sur ces drapeaux.
 
-Les règles d’admission sont configurées par environnement dans ce lot ; leur éditeur
-Responsable et le préavis court dans Discord restent à raccorder. La réattribution
-avancée des admissions et les notifications de second avis restent à compléter.
-L’ID du rôle Purgatoire et ses autorités d’entrée/sortie ne sont pas inventés.
+## Gestion et confidentialité
 
-Le manuel de formation PDF final et sa fiche courte seront produits après ce dernier
-raccordement, pour décrire les écrans et processus effectivement stabilisés.
-Aucun déploiement, import de production, message Discord ni changement BotGhost
-n’a été réalisé pour vérifier le code de ce lot.
+Les dossiers disposent de prise en charge, réattribution, notes, recherche complète,
+pagination, archives et fichiers protégés. Discord et Iris permettent aussi ajout/retrait
+de participants, suspension/réouverture avec instantané, restriction/levée réservées
+aux Administrateurs, et clôture après sauvegarde vérifiée. Les soutiens gardent la
+lecture collective Helpers/Helpers+/Staff et ne peuvent pas être restreints à un seul
+interlocuteur. Deux invités ordinaires au maximum y sont ajoutés.
 
-## Vérification de ce lot
+Un contact confidentiel reste réservé au membre, aux Responsables et Administrateurs.
+L’ajout d’un participant ne permet pas de contourner cette confidentialité. Une
+attribution n’accorde aucun droit de lecture supplémentaire. Le bénéficiaire et les
+accès de supervision ne peuvent pas être retirés comme de simples invités.
 
-- Compilation de production React réussie, avec les avertissements d’ordre CSS déjà
-  présents dans les modules agenda/réunions ; aucun screenshot produit.
-- Suite frontend complète : **105 tests réussis**.
-- Contrôle backend hors ligne : **1 982 réussites et six échecs reproduits sur la base
-  distante inchangée**. Cinq dépendent de Web Push indisponible dans le venv local,
-  le sixième concerne le traitement historique d’un JSON profondément imbriqué dans
-  l’agenda. Aucun de ces fichiers métier n’est modifié par ce lot.
-- Après les corrections de revue : **73 tests ciblés réussis** pour les dossiers,
-  formulaires, le transport natif, les reprises et la vue 360°.
-- Dix anciennes suites prévues pour un serveur de prévisualisation et/ou des chemins
-  `/app` ne sont pas exécutables dans ce workspace local. Aucun environnement distant
-  n’a été utilisé pour contourner cette limitation.
+Une action interrompue est affichée « à vérifier ». Les demandes d’ouverture peuvent
+être relues et reprises dans Iris, avec explication et confirmation d’un élément absent.
+Une réponse Discord perdue ne déclenche pas une nouvelle création ou sanction aveugle.
+Les opérations, consultations et demandes de reprise sont journalisées sans copier
+les notes ou conversations dans le journal Responsable.
+
+## Admissions et préavis IA
+
+Le panneau présente les réponses au Staff, avec vues persistantes réinscrites au
+redémarrage. Les seules décisions disponibles directement dans Discord sont prise
+en charge, validation, ticket de discussion et clôture sans expulsion. Refus, kick,
+ban, approfondissement et second avis passent par Iris avec justification argumentée.
+La direction peut réattribuer un dossier d’admission.
+
+Le préavis Anthropic est demandé explicitement dans Iris : citations vérifiées,
+références choisies par un humain et aucune décision automatique. Un aperçu court
+peut être publié temporairement dans le panneau Staff ; il expire ou est invalidé
+lors du retrait d’une référence. Les archives complètes et explicitement décidées
+peuvent être qualifiées manuellement comme exemples par un Responsable, sans
+inventer leur date ou réattribuer leur ancienne décision au curateur. Les tests et
+formations sont exclus durablement des références.
+
+L’import du salon historique `1226848987559100458` est déclenché dans Iris par un
+Responsable et parcourt les fils actifs, archivés publics et privés. Les informations
+ambiguës restent signalées plutôt qu’inférées. La suppression d’un formulaire purge
+ses réponses et références et laisse un tombstone contre sa réimportation.
+
+Les kicks/bans réutilisent les protections de cible, verrous, baux de rôle temporaire,
+casier et posts de logs existants. Le bannissement définitif exige le rôle Administrateur
+prévu et le garde Staff de modération. Le plafond de modération IA à 3 000 tokens
+n’est pas modifié.
+
+## Purgatoire et alerte à trois jours
+
+Tous les Staff peuvent demander entrée et sortie avec motif et confirmation. Les
+cibles protégées ne sont pas sanctionnables. Le rôle d’accès initial Membre ou Non
+validé et les overwrites sont sauvegardés avant mutation. Les autres rôles ne peuvent
+pas redonner accès aux salons masqués. Les nouveaux salons sont pris en compte et
+les instantanés ne sont pas remplacés par un état déjà restreint lors d’une reprise.
+La sortie restitue le rôle et les permissions sauvegardés.
+
+Les modifications d’accès d’un dossier impliquant un participant au Purgatoire et
+la validation de ses accès d’admission attendent son rétablissement. Une opération
+partielle reste réparable ; aucun délai d’expulsion ou de sanction n’est ajouté.
+
+Une convocation ouverte sans réponse du membre depuis trois jours produit une
+alerte dans la destination Staff configurée, après contrôle d’un historique complet.
+Les destinations internes doivent être privées et accessibles aux seuls rôles prévus ;
+un salon dont les droits sont trop larges est refusé. Aucune sanction automatique.
+
+## Documentation et validation
+
+- [Manuel de formation](../../output/pdf/iris-manuel-formation.pdf) : six pages.
+- [Mémo Staff](../../output/pdf/iris-memo-staff.pdf) : une page.
+- Suite backend hors ligne : **2 009 tests réussis**, six échecs déjà reproduits sur la
+  base d’origine (cinq Web Push liés au venv, un cas historique d’agenda sous Python 3.13).
+- Suite frontend complète : **105 tests réussis**. Build de production réussi avec
+  avertissements d’ordre CSS existants et plugin ESLint indisponible dans le runtime local.
+- Dix anciennes suites exigent un serveur de preview et/ou `/app` ; elles ne sont
+  pas exécutées dans ce workspace. Aucun envoi ou rôle réel n’a servi de test.
+- Les PDF ont été rendus et vérifiés ; aucune capture d’écran du site n’a été faite.

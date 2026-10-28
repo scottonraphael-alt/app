@@ -13,7 +13,7 @@ from test_verification_preparation import ANS, RATIONALE
 @pytest.fixture(autouse=True)
 def reset(monkeypatch):
     h.reset_db();h.reset_discord()
-    monkeypatch.delenv('IRIS_NATIVE_WORKFLOWS_ENABLED',raising=False)
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','false')
     monkeypatch.setattr(casework,'settings',SETTINGS)
 
 
@@ -145,12 +145,15 @@ def test_failed_closure_can_be_cancelled_only_by_leadership():
     restore.assert_awaited_once()
 
 
-def test_native_approval_changes_only_access_and_age_roles(monkeypatch):
+def test_native_approval_changes_only_access_and_age_roles(monkeypatch,tmp_path):
     import json
     monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
     monkeypatch.setenv('VERIFICATION_MEMBER_ROLE_ID','10');monkeypatch.setenv('VERIFICATION_UNVERIFIED_ROLE_ID','11')
     monkeypatch.setenv('VERIFICATION_AGE_ROLE_IDS',json.dumps({'13-15':'12','16-17':'13','18-25':'14','26+':'15'}))
-    monkeypatch.setenv('VERIFICATION_WELCOME_GIFS',json.dumps([f'https://example.org/{i}.gif' for i in range(4)]))
+    from services.workflow_defaults import GIFS
+    from services import storage_service
+    monkeypatch.setattr(storage_service,'STORAGE_ROOT',tmp_path)
+    monkeypatch.setenv('VERIFICATION_WELCOME_GIFS',json.dumps(GIFS))
     class Role:
         def __init__(self,ident):self.id=ident;self.managed=False
         def __ge__(self,other):return self.id>=other.id
@@ -164,7 +167,7 @@ def test_native_approval_changes_only_access_and_age_roles(monkeypatch):
     class Channel:
         def permissions_for(self,who):return SimpleNamespace(send_messages=True)
     channel=Channel();monkeypatch.setattr(transport.discord,'TextChannel',Channel)
-    guild=SimpleNamespace(fetch_roles=AsyncMock(return_value=list(roles.values())),me=bot,
+    guild=SimpleNamespace(id=int(h.GUILD_ID),fetch_roles=AsyncMock(return_value=list(roles.values())),me=bot,
         fetch_member=AsyncMock(side_effect=lambda ident:bot if ident==99 else member),fetch_channel=AsyncMock(return_value=channel))
     client=SimpleNamespace(user=SimpleNamespace(id=99),is_ready=lambda:True,get_guild=lambda ident:guild)
     adapter=transport.Adapter(client);adapter.send_once=AsyncMock()
@@ -178,36 +181,16 @@ def test_native_approval_changes_only_access_and_age_roles(monkeypatch):
     assert h.run(h.db.sanction_commands.count_documents({}))==0
 
 
-def test_native_discussion_creation_is_enrolled_and_idempotent(monkeypatch):
-    from services import announcement_publishing
-    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
-    monkeypatch.setenv('CASEWORK_CONTACT_CATEGORY_IDS',h.TICKET_CATEGORY_ID)
-    monkeypatch.setenv('CASEWORK_NATIVE_CATEGORY_ID',h.TICKET_CATEGORY_ID)
-    class Role:
-        def __init__(self,ident):self.id=ident
-    class Member:
-        def __init__(self,ident):self.id=ident;self.name='alex';self.display_name='Alex';self.display_avatar=None
-    class Category:
-        id=int(h.TICKET_CATEGORY_ID)
-    class Channel:
-        id=600000000000000020
-        name='🎫・｜vérif-alex'
-        topic='iris-verification:form-123'
-        category_id=int(h.TICKET_CATEGORY_ID)
-    monkeypatch.setattr(transport.discord,'CategoryChannel',Category)
-    monkeypatch.setattr(transport.discord,'TextChannel',Channel)
-    member=Member(int(MEMBER));channel=Channel()
-    guild=SimpleNamespace(id=int(h.GUILD_ID),default_role=Role(0),me=Member(99),
-        fetch_channels=AsyncMock(return_value=[]),get_channel=lambda ident:Category(),get_role=lambda ident:Role(ident),
-        fetch_member=AsyncMock(return_value=member),create_text_channel=AsyncMock(return_value=channel))
-    adapter=transport.Adapter(SimpleNamespace());adapter.guild=guild
-    send=AsyncMock(return_value={'id':'800000000000000020'});monkeypatch.setattr(announcement_publishing,'discord_request',send)
-    payload={'form_id':'form-123','member_id':MEMBER,'actor_id':STAFF}
-    h.run(adapter.create_ticket(payload,'new-discussion'));h.run(adapter.create_ticket(payload,'new-discussion'))
-    row=h.run(h.db.case_tickets.find_one({'channel_id':str(channel.id)}))
-    assert row['kind']=='verification' and row['source']=='iris' and row['opening_id']=='800000000000000020'
-    assert row['assigned']['id']==STAFF and row['member']['id']==MEMBER
-    guild.create_text_channel.assert_awaited_once();send.assert_awaited_once()
+def test_native_discussion_uses_the_shared_producer(monkeypatch):
+    from services.casework import native
+    reserve=AsyncMock(return_value={'_id':'request-1','status':'pending'})
+    create=AsyncMock(return_value={'_id':'request-1','status':'open','channel_id':'600000000000000020'})
+    monkeypatch.setattr(native,'reserve',reserve);monkeypatch.setattr(native,'create',create)
+    client=SimpleNamespace();adapter=transport.Adapter(client)
+    h.run(adapter.create_ticket({'form_id':'form-123','member_id':MEMBER,'actor_id':STAFF},'nonce'))
+    reserve.assert_awaited_once();create.assert_awaited_once_with('request-1',client)
+    receipt=h.run(h.db.workflow_receipts.find_one({'_id':'ticket:form-123'}))
+    assert receipt['status']=='sent' and receipt['channel_id']=='600000000000000020'
 
 
 def test_revoked_executor_becomes_recoverable_without_applying_anything():

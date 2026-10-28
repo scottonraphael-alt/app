@@ -13,7 +13,13 @@ async def tick(gateway, settings):
             await closure.cancel(row['_id'], gateway, settings)
         except Exception:
             logger.warning('Rétablissement du dossier à reprendre : %s', row['_id'])
+    from services.casework import operations
+    async for row in db.case_tickets.find({'guild_id':settings.guild_id,'operation.status':{'$in':['pending','running']}}):
+        try:await operations.run(row['_id'],gateway,settings)
+        except Exception:logger.warning('Action de dossier à reprendre : %s',row['_id'])
     report = await sync.cycle(gateway, settings)
+    try:await operations.alerts(gateway.client)
+    except Exception:logger.warning('Alertes de convocation à reprendre.')
     from services.migration_runtime import can_close_case
     async for row in db.case_tickets.find({'guild_id': settings.guild_id, 'status': 'closing'}):
         if not can_close_case(row):

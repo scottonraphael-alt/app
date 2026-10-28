@@ -349,9 +349,11 @@ async def install(client):
     if tree is None:
         tree=app_commands.CommandTree(client)
         client.sanction_tree=tree
+    scope=discord.Object(id=int(config.DISCORD_GUILD_ID))
+    if tree.get_command('sanction',guild=scope) is None:
         command=app_commands.Command(name='sanction',description='Préparer une sanction privée et consulter le casier d’un membre',callback=sanction)
         command.guild_only=True
-        tree.add_command(command,guild=discord.Object(id=int(config.DISCORD_GUILD_ID)))
+        tree.add_command(command,guild=scope)
     from services.wellbeing_commands import register
     guild=discord.Object(id=int(config.DISCORD_GUILD_ID))
     register(tree,guild)

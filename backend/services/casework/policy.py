@@ -9,11 +9,11 @@ KINDS = ('verification', 'summons', 'contact_staff', 'bubble', 'support')
 LABELS = {'verification': 'Vérifications', 'summons': 'Convocations',
           'contact_staff': 'Contacts Staff', 'bubble': 'Bulles d’échange', 'support': 'Soutiens'}
 PREFIXES = {
-    'verification': ('🎫・｜vérif-', '⚜️・｜vérif-'),
-    'summons': ('🎫・｜convoc-', '🚧・｜convoc-', '⚜️・｜convoc-'),
-    'contact_staff': ('🎫・｜cstaff-', '⚜️・｜cstaff-'),
-    'bubble': ('🎫・｜bulle-', '🫧・｜bulle-', '⚜️・｜bulle-'),
-    'support': ('🌸・｜soutien-',),
+    'verification': ('📋・｜verification-', '🎫・｜vérif-', '⚜️・｜vérif-'),
+    'summons': ('🛡️・｜convocation-', '🎫・｜convoc-', '🚧・｜convoc-', '⚜️・｜convoc-'),
+    'contact_staff': ('💬・｜contact-staff-', '🔒・｜contact-staff-', '🎫・｜cstaff-', '⚜️・｜cstaff-'),
+    'bubble': ('🫧・｜discussion-', '🎫・｜bulle-', '🫧・｜bulle-', '⚜️・｜bulle-'),
+    'support': ('🌸・｜soutien-', '🌸・｜iris-soutien-'),
 }
 
 
@@ -33,8 +33,8 @@ class Settings:
 
     def categories(self, kind):
         if kind == 'support':
-            return frozenset(config.ALLOWED_TICKET_CATEGORY_IDS)
-        return self.contact_categories
+            return frozenset(config.ALLOWED_TICKET_CATEGORY_IDS) | ids(os.getenv('CASEWORK_SUPPORT_CATEGORY_ID',''))
+        return self.contact_categories | ids(os.getenv("CASEWORK_NATIVE_CATEGORY_ID",""))
 
 
 def admin_role():
@@ -93,6 +93,7 @@ def detect(name):
 
 
 def visibility(kind, name):
+    if kind=='contact_staff' and name.startswith('🔒・｜contact-staff-'):return 'leadership'
     if name.startswith('⚜️'):
         return 'leadership' if kind == 'contact_staff' else 'restricted'
     return 'staff'

@@ -150,9 +150,13 @@ async def synchronize(case_id, reader, settings):
         if (current.get('lease') or {}).get('token') != token or current['status'] == 'archived':
             raise HTTPException(409, 'Le dossier a changé pendant la synchronisation.')
         changed = copy.deepcopy(current)
+        if changed['kind']=='support':
+            mirror=await db.tickets.find_one({'channel_id':changed['channel_id']},{'assigned_helper':1,'id':1})
+            if mirror:
+                changed['assigned']=mirror.get('assigned_helper');changed['support_ticket_id']=mirror.get('id')
         changed['channel_name'] = channel['name']
         changed['category_id'] = str(channel.get('parent_id') or '')
-        if changed['status'] not in ('closing', 'reopening'):
+        if changed.get('source') != 'iris' and changed['status'] not in ('closing', 'reopening'):
             if changed['category_id'] in settings.suspended_categories:
                 changed['status'] = 'suspended'
             elif changed['visibility'] == 'restricted':
@@ -209,8 +213,8 @@ async def cycle(reader, settings):
         except Exception:
             report['errors'] += 1
     cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    query = {'guild_id': settings.guild_id, 'kind': {'$in': list(settings.managed_kinds)},
-             'status': {'$nin': ['archived', 'closing']},
+    query = {'guild_id': settings.guild_id, '$or': [{'kind': {'$in': list(settings.managed_kinds)}}, {'kind': 'support', 'source': 'iris'}],
+             'operation.status': {'$nin': ['pending','running','uncertain']}, 'status': {'$nin': ['archived', 'closing']},
              '$and': [{'$or': [{'sync.at': {'$exists': False}}, {'sync.at': {'$lte': cutoff}}, {'sync.due': True}]},
                       {'$or': [{'sync.retry_after': {'$exists': False}}, {'sync.retry_after': {'$lte': service.now()}}]}]}
     async for row in db.case_tickets.find(query, {'_id': 1}):

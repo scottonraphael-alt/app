@@ -274,6 +274,7 @@ const pills = [
             className="nd-responsable-actions"
             aria-label="Outils du responsable"
           >
+            <Link to="/responsable/parcours-discord" className="nd-responsable-link"><KeyRound size={18}/><span>Parcours Discord et rôles</span><ArrowRight size={18}/></Link>
             <Link to="/responsable/acces-sanctions" className="nd-responsable-link">
               <KeyRound size={18} aria-hidden="true" />
               <span>Codes d’accès modération</span>

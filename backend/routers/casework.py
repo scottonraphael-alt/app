@@ -55,6 +55,67 @@ async def import_channel(data: ImportChannel, request: Request, helper=Depends(c
     return await service.get(case_id, helper.id, settings)
 
 
+@router.get('/requests')
+async def requests_list(request:Request,kind:Kind|None=None,helper=Depends(current_helper)):
+    roles=await policy.fresh_roles(helper.id)
+    kinds=policy.scope(roles,settings.guild_id,kind)['kind']['$in']
+    query={'guild_id':settings.guild_id,'kind':{'$in':kinds},'status':{'$in':['waiting','pending','creating','uncertain']}}
+    if not policy.leadership(roles):query['confidential']={'$ne':True}
+    rows=await db.case_requests.find(query).sort('created_at',-1).limit(100).to_list(100)
+    await audit(request,helper,'requests.viewed')
+    keys=('_id','kind','member_id','status','stage','created_at','channel_id','case_id','error_type','actor_id','assigned_id','reason','triggers')
+    return {'items':[{key:row.get(key) for key in keys} for row in rows]}
+
+
+from pydantic import BaseModel,ConfigDict,Field
+class RequestRetry(BaseModel):
+    model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
+    reason:str=Field(min_length=20,max_length=1500)
+    confirmed_missing:bool=False
+
+
+@router.post('/requests/{request_id}/retry')
+async def retry_request(request_id:str,payload:RequestRetry,request:Request,helper=Depends(current_helper)):
+    from services.migration_runtime import require_native_workflows
+    from services.casework import native
+    from services.moderation_bot import moderation_client
+    require_native_workflows()
+    row=await db.case_requests.find_one({'_id':request_id,'guild_id':settings.guild_id})
+    roles=await policy.fresh_roles(helper.id)
+    if not row or not policy.can_read(roles,{'kind':row['kind'],'visibility':'leadership' if row['confidential'] else 'staff'}):raise HTTPException(404,'Demande inaccessible.')
+    if helper.id not in (row['actor_id'],row.get('decision_by')) and not policy.leadership(roles):raise HTTPException(403,'Reprise réservée à son intervenant ou à la direction.')
+    if row['status']!='uncertain':raise HTTPException(409,'Cette demande n’attend pas de reprise.')
+    if payload.confirmed_missing:
+        server=await native.guild(moderation_client)
+        found=[channel for channel in await server.fetch_channels() if getattr(channel,'topic',None)=='iris-workflow:'+request_id]
+        if not found and not row.get('channel_id'):
+            await db.case_requests.update_one({'_id':request_id,'status':'uncertain'},{'$set':{'stage':'reserved'}})
+        elif row.get('channel_id'):
+            import hashlib
+            nonce=hashlib.sha256(('opening:'+request_id).encode()).hexdigest()[:24]
+            from services.verification_runtime import reconcile_message
+            receipt=await db.workflow_receipts.find_one({'_id':nonce})
+            if receipt and receipt['status']=='inflight':
+                receipt=await reconcile_message(moderation_client,receipt)
+                if receipt['status']!='sent':await db.workflow_receipts.delete_one({'_id':nonce,'status':'inflight'})
+    await audit(request,helper,'request.retry_requested',request_id=request_id,confirmed_missing=payload.confirmed_missing)
+    await db.case_requests.update_one({'_id':request_id,'status':'uncertain'},{'$set':{'status':'pending','lease_until':None}})
+    return {'status':'pending'}
+
+
+class SupportDecisionIn(BaseModel):
+    model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
+    accept:bool
+    reason:str=Field(default='',max_length=1500)
+
+@router.post('/requests/{request_id}/decision')
+async def support_decision(request_id:str,payload:SupportDecisionIn,request:Request,helper=Depends(current_helper)):
+    from services.casework.native import decide_support
+    await decide_support(request_id,helper.id,accept=payload.accept,reason=payload.reason)
+    await audit(request,helper,'support.decision_recorded',request_id=request_id,accepted=payload.accept)
+    return {'status':'pending' if payload.accept else 'refused'}
+
+
 @router.get('/{case_id}')
 async def detail(case_id: str, request: Request, helper=Depends(current_helper)):
     result = await service.get(case_id, helper.id, settings)

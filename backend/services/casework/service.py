@@ -60,6 +60,7 @@ def public(row, detail=True):
         for name in ('notes', 'events', 'participants'):
             result[name] = copy.deepcopy(row.get(name, []))
     result['closure'] = {k: copy.deepcopy((row.get('closure') or {}).get(k)) for k in ('stage', 'error_type', 'cancel_error', 'requested_at')} if row.get('closure') else None
+    result['operation'] = {k: copy.deepcopy((row.get('operation') or {}).get(k)) for k in ('action','status','error_type','participant_id')} if row.get('operation') else None
     # Source URLs and filesystem paths live only in case_messages / private fields.
     return result
 
@@ -140,6 +141,9 @@ async def messages(case_id, actor_id, settings, *, offset=0, limit=50, query='')
 
 async def change(case_id, actor_id, data, settings):
     data = Change.model_validate(data)
+    from services.casework.operations import ACTIONS, request_action
+    if data.action in ACTIONS:
+        return await request_action(case_id,str(actor_id),data.action,data.text,data.request_id,revision=data.revision,participant_id=data.participant_id)
     row = await load(case_id, settings.guild_id)
     roles = await policy.authorize(actor_id, row)
     previous = next((e for e in row['events'] if e.get('request_id') == data.request_id), None)
@@ -149,6 +153,8 @@ async def change(case_id, actor_id, data, settings):
         return public(row)
     if data.revision != row['revision']:
         raise HTTPException(409, 'Le dossier a changé. Actualise avant de continuer.')
+    if (row.get('operation') or {}).get('status') in ('pending','running','uncertain'):
+        raise HTTPException(409, 'Une modification des accès est à terminer avant cette action.')
     if row['status'] == 'archived':
         raise HTTPException(409, 'Ce dossier est archivé ; son historique est conservé.')
     if row.get('lease') and row['lease']['until'] > now():
@@ -171,7 +177,7 @@ async def change(case_id, actor_id, data, settings):
             if not policy.can_assign(target_roles, row):
                 raise HTTPException(422, 'Cet intervenant ne peut pas accéder à ce dossier.')
             snapshot = await policy.DiscordService().fetch_member(target)
-            assigned = {'id': target, 'display_name': snapshot.display_name or snapshot.username}
+            assigned = {'id': target, 'username':snapshot.username, 'display_name': snapshot.display_name or snapshot.username, 'avatar_url':snapshot.avatar_url}
         details.update(previous_assignee=(row.get('assigned') or {}).get('id'), assignee_id=target)
         changed.update(assigned=assigned, assignment_source='manual')
     elif data.action == 'note':
@@ -201,7 +207,11 @@ async def change(case_id, actor_id, data, settings):
                               'actor_id': str(actor_id), 'reason': data.text,
                               'stage': (row.get('closure') or {}).get('stage', 'requested'), 'requested_at': now()}
     changed['events'].append(event('action', str(actor_id), **details))
-    return public(await save(row, changed))
+    saved=await save(row, changed)
+    if saved['kind']=='support' and data.action in ('claim','assign'):
+        await db.tickets.update_many({'channel_id':saved['channel_id']},{'$set':{'assigned_helper':saved['assigned']}})
+        await db.case_tickets.update_one({'_id':saved['_id']},{'$set':{'sync.due':True}})
+    return public(saved)
 
 
 async def mark_deleted(case_id, settings, *, expected=False):
@@ -218,7 +228,14 @@ async def mark_deleted(case_id, settings, *, expected=False):
                               'previous_assignee': row.get('assigned')}
         changed['events'].append(event('archived', complete=ready, source='discord'))
         try:
-            return await save(row, changed)
+            saved=await save(row, changed)
+            if row.get('request_id'):
+                from services.casework.native import slot_key
+                await db.case_requests.update_one({'_id':row['request_id']},{'$set':{'status':'closed'}})
+                await db.case_open_slots.delete_one({'_id':slot_key(row['kind'],row['member']['id']),'request_id':row['request_id']})
+            if row['kind']=='support':
+                await db.tickets.update_many({'channel_id':row['channel_id']},{'$set':{'status':'archived','assigned_helper':None}})
+            return saved
         except HTTPException as error:
             if error.status_code != 409:
                 raise

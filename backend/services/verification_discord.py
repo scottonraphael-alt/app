@@ -79,7 +79,7 @@ class Panel(discord.ui.LayoutView):
         box.add_item(discord.ui.ActionRow(button));self.add_item(box)
 
 class StaffPanel(discord.ui.LayoutView):
-    def __init__(self,member_id,*,base_url,row=None):
+    def __init__(self,member_id,*,base_url,row=None,advisory=None):
         super().__init__(timeout=None)
         self.member_id=str(member_id)
         box=discord.ui.Container(discord.ui.TextDisplay('## 📋 Une vérification attend le Staff'),
@@ -90,6 +90,9 @@ class StaffPanel(discord.ui.LayoutView):
             for key, title in [('name', '👤 Prénom / pseudo'), ('age', '🎂 Tranche d’âge'), ('reason', '🌱 Motif de venue'), ('psychiatry', '💬 Avis sur la psychiatrie')]:
                 box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key))))
             box.add_item(discord.ui.TextDisplay(f"-# État : {row['status']} · Intervenant : "+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'À attribuer')))
+        if advisory:
+            short=str(advisory).encode('utf-16-le')[:600].decode('utf-16-le','ignore')
+            box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+short+'\n-# Analyse complète dans Iris. Ce préavis ne prend aucune décision.'))
         actions=discord.ui.ActionRow()
         for action,label in [('claim','Je m’en occupe'),('approve','Valider'),('ticket','Créer un ticket'),('close','Clore sans expulser')]:
             button=discord.ui.Button(label=label,style=discord.ButtonStyle.secondary,custom_id=f'iris:verification:{self.member_id}:{action}')

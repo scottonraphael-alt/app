@@ -1,3 +1,5 @@
+const WorkflowSettingsPage=lazy(()=>import("./pages/WorkflowSettingsPage"));
+const SupportDossiersPage=lazy(()=>import("./pages/CaseworkPages").then(m=>({default:m.SupportDossiersPage})));
 const VerificationListPage = lazy(() => import("./pages/VerificationPages").then(m => ({ default: m.VerificationListPage })));
 const VerificationDetailPage = lazy(() => import("./pages/VerificationPages").then(m => ({ default: m.VerificationDetailPage })));
 const VerificationTicketsPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.VerificationTicketsPage })));
@@ -149,6 +151,9 @@ function AuthenticatedApp({
     >
       <Suspense fallback={<Loading />}>
         <Routes>
+<Route path="/responsable/parcours-discord" element={isResponsable ? <WorkflowSettingsPage/> : <Navigate to={defaultRoute} replace/>}/>
+<Route path="/staff/dossiers/support" element={(canSeeCasework||isHelper) ? <SupportDossiersPage canReassign={isResponsable||isServerAdmin||isAdmin} canSeeMember360={canSeeOperateur}/> : <Navigate to={defaultRoute} replace/>}/>
+<Route path="/staff/dossiers/support/:caseId" element={(canSeeCasework||isHelper) ? <SupportDossiersPage canReassign={isResponsable||isServerAdmin||isAdmin} canSeeMember360={canSeeOperateur}/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/staff/dossiers/verification" element={canSeeCasework ? <VerificationTicketsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/dossiers/verification/:caseId" element={canSeeCasework ? <VerificationTicketsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/dossiers/summons" element={canSeeCasework ? <ConvocationsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
@@ -158,7 +163,7 @@ function AuthenticatedApp({
 <Route path="/staff/dossiers/bubble" element={canSeeCasework ? <BullesPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/dossiers/bubble/:caseId" element={canSeeCasework ? <BullesPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/verifications" element={canSeeCasework ? <VerificationListPage responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
-<Route path="/staff/verifications/:memberId" element={canSeeCasework ? <VerificationDetailPage responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/verifications/:memberId" element={canSeeCasework ? <VerificationDetailPage canReassign={isResponsable||isServerAdmin} responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
           <Route
   path="/"
   element={

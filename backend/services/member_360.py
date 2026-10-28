@@ -227,7 +227,7 @@ async def build_member_360(
         settings = policy.Settings()
         if settings.enabled:
             cursor = (before if before.tzinfo else before.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat() if before else None
-            cases = await timeline.entries(discord_id, case_roles, settings, before=cursor, limit=limit + 1)
+            cases = await timeline.entries(discord_id, case_roles, settings, before=cursor, limit=limit + 1, exclude_support=can_tickets)
             allowed = policy.can_read(set(case_roles), {'kind': 'verification', 'visibility': 'staff'})
             forms = await verification_timeline.entries(discord_id, can_verifications=allowed)
             for source in (cases, forms):

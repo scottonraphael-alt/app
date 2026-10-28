@@ -38,7 +38,7 @@ async def context(member_id,actor_id,*,rules):
     async for candidate in db.verification_cases.find({'guild_id':service.guild(),'training':False,'forms.reference':True}).limit(40):
         if candidate['_id']==row['_id']:continue
         for item in candidate['forms']:
-            if not item.get('reference') or item.get('imported') or item.get('completeness')!='complete':continue
+            if not item.get('reference') or (item.get('imported') and not (item.get('decision') or {}).get('historical_review')) or item.get('ever_training') or item.get('completeness')!='complete':continue
             decision=item.get('decision') or {}
             if decision.get('training') or not decision.get('confirmed') or item['status'] not in ('approved','refused'):continue
             references.append({'id':item['id'],'reason':item['answers'].get('reason',''),

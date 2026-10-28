@@ -1,3 +1,5 @@
+import WorkflowRequests from "../components/casework/WorkflowRequests";
+import "../WorkflowSettings.css";
 // Prepared routes: mount each page behind the existing Staff access guard at integration.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -13,10 +15,11 @@ const FAMILIES = {
   verification: { title: 'Les tickets de vérification', short: 'Vérifications', intro: 'Les échanges complémentaires autour de l’admission, reliés au parcours du membre.', tone: 'violet' },
   summons: { title: 'Les convocations', short: 'Convocations', intro: 'Retrouvez les échanges demandés par l’équipe et leur historique.', tone: 'gold' },
   contact_staff: { title: 'Les contacts Staff', short: 'Contacts Staff', intro: 'Questions, signalements et demandes confidentielles, avec les accès adaptés.', tone: 'sage' },
+  support: { title:'Les soutiens',short:'Soutiens',intro:'Les échanges accessibles collectivement aux Helpers, Helpers+ et Staff.',tone:'violet' },
   bubble: { title: 'Les bulles d’échange', short: 'Bulles', intro: 'Un espace pour discuter sereinement, sans présumer d’un problème ou d’une faute.', tone: 'blue' },
 };
 const STATES = { reopening: 'Rétablissement des accès', open: 'Ouvert', suspended: 'Suspendu', restricted: 'Accès restreint', closing: 'Clôture en cours', archived: 'Archivé' };
-const ACTIONS = { cancel_close: 'Annuler la clôture et rétablir les accès', claim: 'Prendre en charge', assign: 'Réattribuer', note: 'Ajouter une note', sync: 'Actualiser les messages', archive: 'Clôturer et archiver' };
+const ACTIONS = { suspend:'Suspendre',reopen:'Rouvrir et restaurer les participants',restrict:'Restreindre',unrestrict:'Lever la restriction',add_member:'Ajouter un participant',remove_member:'Retirer un participant', cancel_close: 'Annuler la clôture et rétablir les accès', claim: 'Prendre en charge', assign: 'Réattribuer', note: 'Ajouter une note', sync: 'Actualiser les messages', archive: 'Clôturer et archiver' };
 const EVENTS = { discovered: 'Dossier ajouté depuis Discord', archived: 'Dossier archivé', action: 'Action manuelle', 'visibility.tightened': 'Accès du dossier restreint' };
 const date = value => value ? new Date(value).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'medium', timeStyle: 'short' }) : 'Pas encore disponible';
 const errorText = error => typeof getErrorMessage(error) === 'string' ? getErrorMessage(error) : 'Vérifie les champs renseignés.';
@@ -68,6 +71,7 @@ function CaseList({ kind }) {
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
   return <Frame kind={kind} refresh={() => setRefresh(n => n + 1)}>
+    <WorkflowRequests kind={kind}/>
     <section className="cw-guide"><FileText size={22} /><div><h2>Du salon au dossier</h2><p>Les conversations restent dans Iris après la suppression du salon Discord. Les archives signalent si leur dernière sauvegarde est incomplète.</p></div></section>
     <div className="cw-toolbar">
       <div className="cw-toolbar" role="group" aria-label="État des dossiers">{[[false, 'Ouverts'], [true, 'Archives']].map(([value, label]) =>
@@ -98,6 +102,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
   const [messages, setMessages] = useState(null), [messageError, setMessageError] = useState(''), [offset, setOffset] = useState(0), [query, setQuery] = useState(''), [search, setSearch] = useState('');
   const [tab, setTab] = useState('notes'), [draftNote, setDraftNote] = useState(''), [assignee, setAssignee] = useState(''), [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(null), [busy, setBusy] = useState(false);
+  const [opAction,setOpAction]=useState('suspend'),[opReason,setOpReason]=useState(''),[participant,setParticipant]=useState('');
   const request = useRef(null);
   useEffect(() => {
     let live = true; setError('');
@@ -119,7 +124,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, Boolean(row), generation, offset, search]);
   useEffect(() => {
-    if (!row || !(row.sync?.due || row.sync?.status === 'running' || row.status === 'closing' || row.status === 'reopening')) return;
+    if (!row || !(row.sync?.due || row.sync?.status === 'running' || row.status === 'closing' || row.status === 'reopening' || ['pending','running'].includes(row.operation?.status))) return;
     const timer = setInterval(() => { if (document.visibilityState !== 'hidden') setRefresh(n => n + 1); }, 10000);
     return () => clearInterval(timer);
   }, [row]);
@@ -139,6 +144,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
       {row.visibility !== 'staff' && <strong><LockKeyhole size={14} /> Accès confidentiel</strong>}</section>
       {row.discord_actions_enabled===false && <p className="cw-guide">La collecte et le suivi sont disponibles. La clôture Discord sera accessible après la bascule des commandes BotGhost vers Iris.</p>}
       {(row.closure?.error_type||row.closure?.cancel_error) && <p className="cw-alert">La clôture demande une vérification des accès, des fichiers ou des derniers messages. Le salon n’est pas annoncé comme supprimé. Un Responsable ou Administrateur peut reprendre l’action.</p>}
+      {row.operation&&<p className="cw-guide">Action : {ACTIONS[row.operation.action]} · {row.operation.status==='completed'?'Confirmée':row.operation.status==='uncertain'?'À vérifier et reprendre':'En cours'}</p>}
       {row.status === 'archived' && row.archive && <section className={`cw-archive ${row.archive.complete ? 'is-complete' : ''}`}><h2>{row.archive.complete ? 'Conversation archivée dans Iris' : 'Dernière sauvegarde conservée'}</h2>
         <p>{row.archive.complete ? 'Les messages et fichiers ont été vérifiés avant la suppression du salon.' : 'Le salon Discord a disparu avant une clôture confirmée. Des messages ou fichiers peuvent manquer ; les données déjà récupérées restent consultables.'}</p></section>}
       <div className="cw-layout"><section className="cw-card cw-conversation"><header className="cw-section-head"><div><p className="cz-eyebrow">CONVERSATION</p><h2>Les échanges</h2></div><span>{messages?.total ?? row.message_count} messages</span></header>
@@ -157,6 +163,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
           {canReassign && <form onSubmit={e => { e.preventDefault(); action('assign', { assignee_id: assignee || null }); }}><label>Réattribuer à un intervenant<input pattern="[0-9]{17,20}" placeholder="Identifiant Discord, ou vide pour désattribuer" value={assignee} onChange={e => setAssignee(e.target.value)} /></label><button className="cw-button" disabled={busy}>Vérifier la réattribution</button></form>}
           {(row.status !== 'closing' || canReassign) && <form onSubmit={e => { e.preventDefault(); action('archive', { text: reason }); }}><label>Motif de clôture<textarea required minLength={10} maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></label><button className="cw-button cw-danger" disabled={busy||row.discord_actions_enabled===false}>{row.status === 'closing' ? 'Reprendre la clôture' : 'Préparer la clôture'}</button></form>}
           {row.status==='closing'&&canReassign&&row.closure?.stage!=='deleting'&&<button className="cw-button" disabled={busy||reason.trim().length<10||row.native_workflows_enabled===false} onClick={()=>action('cancel_close',{text:reason})}>Annuler la clôture et rétablir les accès</button>}
+          {row.status!=='closing'&&row.status!=='reopening'&&<form onSubmit={e=>{e.preventDefault();action(opAction,{text:opReason,participant_id:['add_member','remove_member'].includes(opAction)?participant:null});}}><label>Gestion des accès<select value={opAction} onChange={e=>setOpAction(e.target.value)}>{[['suspend','Suspendre'],['reopen','Rouvrir et restaurer les participants'],...(kind==='support'?[]:[['restrict','Restreindre à l’administration'],['unrestrict','Lever la restriction']]),['add_member','Ajouter un participant'],['remove_member','Retirer un participant']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{['add_member','remove_member'].includes(opAction)&&<label>Identifiant du participant<input required pattern="[0-9]{17,20}" value={participant} onChange={e=>setParticipant(e.target.value)}/></label>}<label>Motif<textarea required minLength={10} maxLength={1000} value={opReason} onChange={e=>setOpReason(e.target.value)}/></label><button className="cw-button" disabled={busy||row.native_workflows_enabled===false}>Vérifier l’action sur les accès</button></form>}
         </div>}</section>
         <section className="cw-card cw-followup"><header className="cw-section-head"><div><p className="cz-eyebrow">SUIVI DU DOSSIER</p><h2>Repères et historique</h2></div></header>
           <div className="cw-tabs" role="group" aria-label="Informations du dossier">{[['notes', 'Notes'], ['history', 'Historique'], ['links', 'Parcours']].map(([value, label]) => <button className="cw-button" key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div>
@@ -182,3 +189,5 @@ export const VerificationTicketsPage = props => <FamilyPage kind="verification" 
 export const ConvocationsPage = props => <FamilyPage kind="summons" {...props} />;
 export const ContactsStaffPage = props => <FamilyPage kind="contact_staff" {...props} />;
 export const BullesPage = props => <FamilyPage kind="bubble" {...props} />;
+
+export const SupportDossiersPage = props => <FamilyPage kind="support" {...props} />;
