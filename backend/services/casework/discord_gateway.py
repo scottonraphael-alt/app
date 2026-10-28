@@ -65,3 +65,30 @@ class DiscordGateway(DiscordReader):
         if actual != row['archive']['watermark']:
             raise HTTPException(409, 'Le salon contient un nouveau message ; nouvelle sauvegarde nécessaire.')
         await channel.delete(reason=f'Iris : clôture archivée {row["id"]}')
+
+    async def restore_access(self, row):
+        actor = row['closure']['cancel_actor_id']
+        roles = await policy.authorize(actor, row)
+        if not policy.leadership(roles):
+            raise HTTPException(403, 'La direction doit autoriser la réouverture.')
+        channel = await self.text_channel(row)
+        backup = row['closure'].get('access_backup')
+        if backup is None:
+            return  # The close failed before the original permission snapshot/freeze.
+        overwrites = {}
+        for item in backup:
+            if item['type'] == 'role':
+                target = channel.guild.get_role(int(item['id']))
+            else:
+                try:
+                    target = await channel.guild.fetch_member(int(item['id']))
+                except discord.NotFound:
+                    continue
+            if target is None:
+                continue
+            overwrite = discord.PermissionOverwrite.from_pair(discord.Permissions(item['allow']), discord.Permissions(item['deny']))
+            # Never restore the broad Staff role after a concurrent privacy tightening.
+            if item['type'] == 'role' and row['visibility'] != 'staff' and item['id'] == str(policy.config.DISCORD_STAFF_ROLE_ID):
+                overwrite.view_channel = False
+            overwrites[target] = overwrite
+        await channel.edit(overwrites=overwrites, reason=f'Iris : annulation clôture {row["id"]}')

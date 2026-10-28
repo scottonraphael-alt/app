@@ -1,3 +1,5 @@
+> Mise à jour : le raccordement au site est désormais développé. Voir [activation-iris.md](activation-iris.md) pour l’état actuel, les réglages et les limites du lot. Le document ci-dessous conserve l’état de la préparation.
+
 # Dossiers de tickets — code préparé pour intégration ultérieure
 
 Ce lot prépare les quatre espaces Iris demandés : **Vérifications, Convocations,

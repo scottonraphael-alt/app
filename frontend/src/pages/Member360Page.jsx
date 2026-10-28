@@ -29,6 +29,8 @@ const SNOWFLAKE = /^\d{17,20}$/;
 const PAGE_SIZE = 30;
 
 const TYPE_META = {
+  case_ticket: { label: "Dossier", icon: Ticket },
+  verification: { label: "Admission", icon: ShieldCheck },
   sanction: { label: "Sanction", icon: Gavel },
   ai_flag: { label: "Signalement IA", icon: Bot },
   ticket: { label: "Ticket", icon: Ticket },
@@ -39,6 +41,8 @@ const TYPE_META = {
 // Filtres : « fiches » regroupe fiches S et informations ajoutées aux sanctions.
 const FILTERS = [
   { value: "all", label: "Tout", types: null },
+  { value: "case_ticket", label: "Dossiers", types: ["case_ticket"] },
+  { value: "verification", label: "Admission", types: ["verification"] },
   { value: "sanction", label: "Sanctions", types: ["sanction"] },
   { value: "ai_flag", label: "Signalements IA", types: ["ai_flag"] },
   { value: "ticket", label: "Tickets", types: ["ticket"] },
@@ -170,8 +174,10 @@ function MemberView({ discordId }) {
       ["sanction", "ai_flag", "fiche", "note"].forEach((type) => set.add(type));
     }
     if (summary.tickets_count !== null && summary.tickets_count !== undefined) set.add("ticket");
+    if (summary.case_tickets_count != null) set.add("case_ticket");
+    if (summary.verification_forms_count != null) set.add("verification");
     return set;
-  }, [summary.sanctions_count, summary.tickets_count]);
+  }, [summary.sanctions_count, summary.tickets_count, summary.case_tickets_count, summary.verification_forms_count]);
   const filters = FILTERS.filter((item) => !item.types || item.types.some((type) => allowedTypes.has(type)));
 
   if (query.isPending) {
@@ -235,6 +241,8 @@ function MemberView({ discordId }) {
         <dl className="m3-stats">
           <Stat label={plural(summary.sanctions_count, "sanction", "sanctions").replace(/^[\d\s  ]+/, "")} value={summary.sanctions_count} />
           <Stat label="Signalements IA" value={summary.ai_flags_count} />
+          {summary.case_tickets_count != null && <Stat label="Dossiers" value={summary.case_tickets_count} />}
+          {summary.verification_forms_count != null && <Stat label="Formulaires" value={summary.verification_forms_count} />}
           <Stat label={plural(summary.tickets_count, "ticket", "tickets").replace(/^[\d\s  ]+/, "")} value={summary.tickets_count} />
           <Stat label={plural(summary.fiches_count, "fiche S", "fiches S").replace(/^[\d\s  ]+/, "")} value={summary.fiches_count} />
         </dl>

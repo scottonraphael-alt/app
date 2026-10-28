@@ -1,4 +1,4 @@
-"""Effect executor, deliberately not scheduled until integration.
+"""Resumable effect executor for the hybrid admission workflow.
 
 The adapter must enforce target protection, Discord hierarchy and the existing temporary
 sanction-role lease. `reconcile` returns applied/not_applied/unknown after an ambiguous call.
@@ -31,10 +31,17 @@ async def run_job(member_id,job_id,adapter):
     row=await service.load(member_id);job=find_job(row,job_id)
     if job['status']=='completed':return service.public(row)
     if job['lease_until'] and job['lease_until']>service.stamp():raise HTTPException(409,'Cette action est déjà en cours de traitement.')
-    await service.authority(job['actor_id'])
-    if job['action']=='ban':
+    try:
         roles=await service.authority(job['actor_id'])
-        if str(service.config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID) not in roles:raise HTTPException(403,'Rôle administrateur de sanction requis.')
+        if job['action']=='ban' and str(service.config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID) not in roles:
+            raise HTTPException(403,'Rôle administrateur de sanction requis.')
+    except HTTPException as error:
+        if error.status_code!=403:raise
+        changed=copy.deepcopy(row)
+        find_job(changed,job_id).update(status='uncertain',lease_until=None)
+        changed['status']='action_required'
+        changed['events'].append(service.event('effect.unconfirmed',job['actor_id'],job['form_id'],step='authorization'))
+        return service.public(await service.save(row,changed))
     token=uuid4().hex;changed=copy.deepcopy(row);claimed=find_job(changed,job_id)
     claimed.update(status='running',token=token,lease_until=(service.now()+timedelta(seconds=90)).isoformat())
     await service.save(row,changed)

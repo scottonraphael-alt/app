@@ -1,6 +1,7 @@
 """Archive before deletion, resumable after an ambiguous Discord response."""
 import asyncio
 import copy
+import discord
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from fastapi import HTTPException
@@ -74,11 +75,46 @@ async def run(case_id, gateway, settings):
         await gateway.delete_archived(row)
         return await service.mark_deleted(case_id, settings, expected=True)
     except Exception as error:
+        fields = {'closure.error_type': type(error).__name__, 'closure.lease_until': None}
+        # A definite preflight/API rejection invalidates deletion readiness. If someone
+        # later removes the channel manually, we cannot claim our old snapshot was complete.
+        definite = isinstance(error, HTTPException) or (isinstance(error, discord.HTTPException) and error.status < 500)
+        if definite and row.get('archive'):
+            fields['archive.complete'] = False
         await db.case_tickets.update_one(
             {'_id': case_id, 'closure.token': token, 'status': 'closing'},
-            {'$set': {'closure.error_type': type(error).__name__, 'closure.lease_until': None},
-             '$inc': {'revision': 1}})
+            {'$set': fields, '$inc': {'revision': 1}})
         raise
     finally:
         await db.case_tickets.update_one({'_id': case_id, 'closure.token': token},
                                         {'$set': {'closure.lease_until': None}})
+
+
+async def cancel(case_id, gateway, settings):
+    """Restore the saved overwrites; a crash can repeat this exact restoration safely."""
+    token = uuid4().hex
+    row = await db.case_tickets.find_one_and_update(
+        {'_id': case_id, 'guild_id': settings.guild_id, 'status': 'reopening',
+         '$or': [{'closure.lease_until': None}, {'closure.lease_until': {'$lte': service.now()}}]},
+        {'$set': {'closure.token': token, 'closure.lease_until': (datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat()},
+         '$inc': {'revision': 1}}, return_document=ReturnDocument.AFTER)
+    if not row:
+        return
+    try:
+        roles = await policy.authorize(row['closure']['cancel_actor_id'], row)
+        if not policy.leadership(roles) or row['closure']['stage'] == 'deleting':
+            raise HTTPException(403, 'Rétablissement non autorisé pendant une suppression.')
+        await gateway.restore_access(row)
+        current = await service.load(case_id, settings.guild_id)
+        if current['status'] != 'reopening' or current['closure'].get('token') != token:
+            raise HTTPException(409, 'Le dossier a changé pendant le rétablissement.')
+        changed = copy.deepcopy(current)
+        changed.update(status='open', closure=None, archive=None)
+        changed['events'].append(service.event('closure.cancelled', row['closure']['cancel_actor_id']))
+        return await service.save(current, changed)
+    except Exception as error:
+        await db.case_tickets.update_one({'_id': case_id, 'closure.token': token, 'status': 'reopening'},
+            {'$set': {'closure.cancel_error': type(error).__name__}})
+        raise
+    finally:
+        await db.case_tickets.update_one({'_id': case_id, 'closure.token': token}, {'$set': {'closure.lease_until': None}})

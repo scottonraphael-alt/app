@@ -114,6 +114,8 @@ class IrisModerationClient(discord.Client):
         from services.sanction_command import install
         try:
             await install(self)
+            from services.verification_runtime import install as install_verifications
+            await install_verifications(self)
         except Exception:
             logger.exception("Impossible d’enregistrer /sanction ; les autres fonctions du bot restent actives.")
 
@@ -270,6 +272,11 @@ async def on_ready():
         logger.info("Salons surveillés : %s", DISCORD_MODERATION_CHANNEL_TYPES)
 
     # Sans danger si on_ready est rappelé après une reconnexion.
+    from services.verification_runtime import install as install_verifications
+    try:
+        await install_verifications(moderation_client)
+    except Exception:
+        logger.exception("Enregistrement des vérifications à reprendre ; les autres fonctions restent actives.")
     server_statistics.start(moderation_client)
     ai_moderation.start(moderation_client)
     if not getattr(moderation_client, "sanction_registered", False):
@@ -282,26 +289,46 @@ async def on_ready():
 
 @moderation_client.event
 async def on_message(message: discord.Message):
+    from services.migration_runtime import message_activity
     # Les métriques sont indépendantes des filtres, de la clé et des appels IA.
     await asyncio.gather(
         server_statistics.safely(server_statistics.record_message, message),
         handle_application_message(message),
+        server_statistics.safely(message_activity, message),
     )
 
 
 @moderation_client.event
 async def on_raw_message_edit(payload):
     await server_statistics.safely(server_statistics.record_edit, payload)
+    from services.migration_runtime import message_activity
+    await server_statistics.safely(message_activity, payload)
 
 
 @moderation_client.event
 async def on_raw_message_delete(payload):
     await server_statistics.safely(server_statistics.record_delete, payload)
+    from services.migration_runtime import message_activity
+    await server_statistics.safely(message_activity, payload)
 
 
 @moderation_client.event
 async def on_raw_bulk_message_delete(payload):
     await server_statistics.safely(server_statistics.record_delete, payload)
+    from services.migration_runtime import message_activity
+    await server_statistics.safely(message_activity, payload)
+
+
+@moderation_client.event
+async def on_guild_channel_delete(channel):
+    from services.migration_runtime import channel_deleted
+    await server_statistics.safely(channel_deleted, channel)
+
+
+@moderation_client.event
+async def on_guild_channel_update(before, after):
+    from services.migration_runtime import channel_updated
+    await server_statistics.safely(channel_updated, before, after)
 
 
 @moderation_client.event

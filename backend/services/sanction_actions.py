@@ -285,7 +285,8 @@ async def prepare(guild, actor_id, member_id, values, attachments, interaction_i
 
 
 def native_reason(job):
-    prefix=f'Iris /sanction [{job["_id"]}] · {job["actor"]["id"]} · '
+    command='/verification' if job.get('workflow')=='verification' else '/sanction'
+    prefix=f'Iris {command} [{job["_id"]}] · {job["actor"]["id"]} · '
     remaining=510-len(prefix.encode())
     return prefix+job['reason'].encode()[:remaining].decode('utf-8','ignore')
 
@@ -306,7 +307,7 @@ async def _record(job):
     await db.sanction_commands.update_one({'_id':job['_id'],'status':'recording'},
         {'$set':{'status':'applied','casier_id':str(updated['_id']),'finished_at':now()}})
     cleanup_files(job)
-    await audit('casier.sanction.created',job=job,casier_id=str(updated['_id']),duration=job['duration'],reason_excerpt=job['reason'][:200],source='discord_command')
+    await audit('casier.sanction.created',job=job,casier_id=str(updated['_id']),duration=job['duration'],reason_excerpt=job['reason'][:200],source=job.get('workflow','discord_command'))
     return await db.sanction_commands.find_one({'_id':job['_id']})
 
 

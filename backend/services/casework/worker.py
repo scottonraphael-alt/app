@@ -1,4 +1,4 @@
-"""Explicit opt-in lifecycle. Never imported by the active application startup."""
+"""Supervised lifecycle; collection and native mutations have separate handover flags."""
 import asyncio
 import logging
 from database import db
@@ -8,8 +8,16 @@ logger = logging.getLogger(__name__)
 
 
 async def tick(gateway, settings):
+    async for row in db.case_tickets.find({'guild_id': settings.guild_id, 'status': 'reopening'}):
+        try:
+            await closure.cancel(row['_id'], gateway, settings)
+        except Exception:
+            logger.warning('Rétablissement du dossier à reprendre : %s', row['_id'])
     report = await sync.cycle(gateway, settings)
-    async for row in db.case_tickets.find({'guild_id': settings.guild_id, 'status': 'closing'}, {'_id': 1}):
+    from services.migration_runtime import can_close_case
+    async for row in db.case_tickets.find({'guild_id': settings.guild_id, 'status': 'closing'}):
+        if not can_close_case(row):
+            continue
         try:
             await closure.run(row['_id'], gateway, settings)
         except Exception:

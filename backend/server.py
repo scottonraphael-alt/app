@@ -7,6 +7,8 @@ import logging
 from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
 from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report, team_presence, ticket_notes, ticket_tags, ticket_followups, agenda_polls, agenda_move, meeting_extras, casier_bulk, moderation_stats, project_extras, staff_directory, staff_status, kudos, onboarding, team_weather, reflex_sheets, trainings, debriefs, staff_announcements, system_health
+from routers import casework, verifications
+from services.migration_runtime import run as run_migration_runtime
 from services import agenda_indexes, agenda_reminders
 from services.system_health import supervise
 from services import presence as presence_service, casier_history as casier_history_service
@@ -83,6 +85,8 @@ _ticket_avatars_task = None
 async def root() -> dict[str, str]:
     return {"message": "Iris API opérationnelle"}
 
+app.include_router(casework.router, prefix="/api")
+app.include_router(verifications.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
@@ -199,6 +203,7 @@ async def startup() -> None:
         logger.exception("Index présence / historique casier impossibles au démarrage")
     _feature_stop_event = asyncio.Event()
     _feature_tasks[:] = [
+        asyncio.create_task(supervise("member_casework", run_migration_runtime(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_crisis", run_ticket_crisis_loop(_feature_stop_event))),
         asyncio.create_task(supervise("sla", run_sla_loop(_feature_stop_event))),
         asyncio.create_task(supervise("load_watch", run_load_watch_loop(_feature_stop_event))),

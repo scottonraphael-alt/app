@@ -26,7 +26,7 @@ CATEGORY_CLAUSES = {
     "casiers": {"event_type": {"$regex": r"^casier\."}},
     "annonces": {"event_type": {"$regex": r"^announcement\."}},
     "projets": {"event_type": {"$regex": r"^project\."}},
-    "tickets": {"event_type": {"$regex": r"^ticket\."}},
+    "tickets": {"event_type": {"$regex": r"^(ticket|casework|verification)\."}},
 }
 CATEGORY_KEYS = (*CATEGORY_CLAUSES, "autres")
 

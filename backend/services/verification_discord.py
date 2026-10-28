@@ -26,6 +26,8 @@ async def error(interaction,error):
 
 
 def check_guild(interaction):
+    from services.migration_runtime import require_native_workflows
+    require_native_workflows()
     if str(interaction.guild_id)!=service.guild():raise HTTPException(403,'Ce panneau appartient à un autre serveur.')
 
 
@@ -58,6 +60,8 @@ class Form(discord.ui.Modal):
             await service.submit({'id':str(user.id),'username':user.name,'display_name':user.display_name},
                 {'name':self.name.value,'age':self.age.value,'reason':self.reason.value,'psychiatry':self.psychiatry.value,'rules':True},
                 f'interaction:{interaction.id}')
+            from services.migration_runtime import audit
+            await audit('verification.submitted', str(user.id), member_id=str(user.id))
             await interaction.followup.send(view=message('📬 Formulaire enregistré','Merci ! Ton formulaire est enregistré pour lecture par le Staff. Tu recevras la suite de ta vérification en message privé lorsque cela est possible.'),ephemeral=True,allowed_mentions=NONE)
         except Exception as exc:await error(interaction,exc)
 
@@ -75,14 +79,21 @@ class Panel(discord.ui.LayoutView):
         box.add_item(discord.ui.ActionRow(button));self.add_item(box)
 
 class StaffPanel(discord.ui.LayoutView):
-    def __init__(self,member_id,*,base_url):
+    def __init__(self,member_id,*,base_url,row=None):
         super().__init__(timeout=None)
         self.member_id=str(member_id)
         box=discord.ui.Container(discord.ui.TextDisplay('## 📋 Une vérification attend le Staff'),
             discord.ui.TextDisplay(f'Membre : <@{self.member_id}>\nOuvre son dossier pour lire les réponses et consulter les tentatives précédentes.'),accent_colour=0x5B8171)
+        if row and row.get('forms'):
+            form = row['forms'][-1]
+            from services.verification_runtime import fence
+            for key, title in [('name', '👤 Prénom / pseudo'), ('age', '🎂 Tranche d’âge'), ('reason', '🌱 Motif de venue'), ('psychiatry', '💬 Avis sur la psychiatrie')]:
+                box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key))))
+            box.add_item(discord.ui.TextDisplay(f"-# État : {row['status']} · Intervenant : "+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'À attribuer')))
         actions=discord.ui.ActionRow()
         for action,label in [('claim','Je m’en occupe'),('approve','Valider'),('ticket','Créer un ticket'),('close','Clore sans expulser')]:
             button=discord.ui.Button(label=label,style=discord.ButtonStyle.secondary,custom_id=f'iris:verification:{self.member_id}:{action}')
+            button.disabled=bool(row and (not row.get("active") or any(j["status"] in ("pending","running","uncertain","retry") for j in row.get("jobs",[]))))
             button.callback=self.callback_for(action);actions.add_item(button)
         box.add_item(actions)
         box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Lire et gérer dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id))))
@@ -95,6 +106,8 @@ class StaffPanel(discord.ui.LayoutView):
                 check_guild(interaction)
                 await interaction.response.defer(ephemeral=True,thinking=True)
                 row=await service.get(self.member_id,str(interaction.user.id))
+                from services.migration_runtime import audit
+                await audit('verification.viewed', str(interaction.user.id), member_id=self.member_id)
                 # Destructive/closing decisions always receive an explicit private confirmation.
                 if action!='claim':
                     view=Confirm(self.member_id,action,row['revision'],str(interaction.user.id))

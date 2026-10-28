@@ -1,3 +1,5 @@
+import os
+import config
 import base64
 import hashlib
 import hmac
@@ -196,6 +198,7 @@ async def get_helper_role_flags(helper_id: str) -> dict[str, bool]:
 
     flags = {
         "is_admin": DISCORD_ADMIN_ROLE_ID in role_ids,
+        "is_server_admin": os.getenv("CASEWORK_ADMIN_ROLE_ID", config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID).strip() in role_ids,
         "is_staff": bool(DISCORD_STAFF_ROLE_ID) and DISCORD_STAFF_ROLE_ID in role_ids,
         "is_responsable": bool(DISCORD_RESPONSABLE_ROLE_ID) and DISCORD_RESPONSABLE_ROLE_ID in role_ids,
         "is_animateur": bool(DISCORD_ANIMATEUR_ROLE_ID) and DISCORD_ANIMATEUR_ROLE_ID in role_ids,
@@ -249,6 +252,7 @@ async def has_any_access(helper_id: str) -> bool:
     flags = await get_helper_role_flags(helper_id)
     return (
         flags["is_helper"]
+        or flags.get("is_server_admin", False)
         or flags["is_staff"]
         or flags["is_animateur"]
         or flags["is_operateur"]

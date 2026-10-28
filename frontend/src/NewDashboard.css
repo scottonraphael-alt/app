@@ -2152,3 +2152,9 @@ body.dashboard-no-nav .app-shell > .app-main {
 @media (max-width: 520px) {
   .nd-page .hm-day-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Shared admission and private-case entry points, isolated from Helper coordination. */
+.nd-page .nd-casework-module{margin-block:28px;padding:24px;border:1px solid var(--iris-border,#dce5de);border-radius:22px;background:var(--iris-surface,#fff)}
+.nd-page .nd-casework-module h2{margin:0 0 8px;font-size:1.4rem;color:var(--iris-text,#263b31)}
+.nd-page .nd-casework-module>p{margin:0 0 18px;color:var(--iris-muted,#748178)}
+.nd-page .nd-casework-module>.nd-responsable-link{display:inline-flex;margin-top:14px}

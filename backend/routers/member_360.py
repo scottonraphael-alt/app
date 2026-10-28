@@ -30,11 +30,15 @@ async def get_member_360(
     flags = await get_helper_role_flags(helper.id)
     can_casier = bool(flags.get("is_staff"))  # même règle que routers/casier.py (current_staff)
     can_tickets = bool(flags.get("is_helper") or flags.get("is_responsable"))  # même règle que current_ticket_helper
-    if not (can_casier or can_tickets):
+    case_roles = None
+    if flags.get("is_staff") or flags.get("is_responsable") or flags.get("is_server_admin"):
+        from services.casework.policy import fresh_roles
+        case_roles = await fresh_roles(helper.id)
+    if not (can_casier or can_tickets or case_roles):
         raise HTTPException(status_code=403, detail="Aucun accès à la vue membre.")
 
     data = await member_360.build_member_360(
-        discord_id, can_casier=can_casier, can_tickets=can_tickets, before=before, limit=limit
+        discord_id, can_casier=can_casier, can_tickets=can_tickets, before=before, limit=limit, case_roles=case_roles
     )
 
     # Vue sensible : si la consultation ne peut pas être journalisée, rien n'est renvoyé.

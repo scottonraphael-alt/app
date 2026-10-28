@@ -1,3 +1,5 @@
+> Mise à jour : le raccordement au site est désormais développé. Voir [activation-iris.md](activation-iris.md) pour l’état actuel, les réglages et les limites du lot. Le document ci-dessous conserve l’état de la préparation.
+
 # Vérifications : état du code préparé et raccordement à venir
 
 Branche isolée : `codex/botghost-migration`, base `c89520a`. Aucun module ci-dessous

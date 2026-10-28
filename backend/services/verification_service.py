@@ -42,8 +42,9 @@ def event(kind,actor_id,form_id=None,**details):
 
 async def authority(actor_id,*,responsable=False):
     roles={str(value) for value in await DiscordService().fetch_member_role_ids(str(actor_id))}
+    from services.casework.policy import leadership
     required=config.DISCORD_RESPONSABLE_ROLE_ID if responsable else config.DISCORD_STAFF_ROLE_ID
-    if not required or str(required) not in roles:raise HTTPException(403,'Rôle Responsable requis.' if responsable else 'Rôle Staff requis.')
+    if not (required and str(required) in roles) and (responsable or not leadership(roles)):raise HTTPException(403,'Rôle Responsable requis.' if responsable else 'Rôle Staff requis.')
     return roles
 
 async def indexes():
@@ -135,13 +136,17 @@ async def act(member_id,actor_id,payload,*,origin):
     if payload.action=='ban' and str(config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID) not in roles:
         raise HTTPException(403,'Le bannissement définitif requiert le rôle administrateur de sanction.')
     row=await load(member_id)
-    if any(item.get('request_id')==payload.request_id for item in row['events']):return public(row)
+    previous=next((item for item in row['events'] if item.get('request_id')==payload.request_id),None)
+    if previous:
+        if previous.get('actor_id')!=str(actor_id) or previous['kind']!='action.'+payload.action:
+            raise HTTPException(409,'Cette référence appartient à une autre action.')
+        return public(row)
     if payload.revision!=row['revision']:raise HTTPException(409,'Le dossier a changé. Actualise avant de continuer.')
     if not row['forms']:raise HTTPException(404,'Aucun formulaire conservé.')
     if any(job['status'] in ('pending','running','retry','uncertain') for job in row['jobs']):raise HTTPException(409,'Une action est déjà en cours.')
     if payload.action in JUSTIFIED:
         if len(payload.rationale)<30 or len(payload.rationale.split())<6:raise HTTPException(422,'Rédige une justification argumentée (30 caractères et six mots minimum).')
-    if payload.action in ('refuse','kick','ban') and len(payload.reason)<10:raise HTTPException(422,'Un motif destiné au membre est obligatoire.')
+    if payload.action in ('refuse','kick','ban','clarify') and len(payload.reason)<10:raise HTTPException(422,'Un motif destiné au membre est obligatoire.')
     if payload.action=='clarify' and not payload.topics:raise HTTPException(422,'Sélectionne les réponses à approfondir.')
     if payload.action!='training' and not row['active']:raise HTTPException(409,'Ce dossier est déjà archivé.')
     if row['claimed_by'] and row['claimed_by']!=str(actor_id) and payload.action not in ('training','second_opinion'):raise HTTPException(409,'Ce dossier est pris en charge par un autre membre du Staff.')

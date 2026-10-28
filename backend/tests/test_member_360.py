@@ -73,6 +73,7 @@ def test_staff_sees_casier_types_only():
     assert set(_types(r)) == {"sanction", "ai_flag", "fiche", "note"}
     assert data["summary"] == {
         "status": "mute", "sanctions_count": 2, "ai_flags_count": 1, "tickets_count": None,
+        "case_tickets_count": 0, "verification_forms_count": 0,
         "fiches_count": 1, "last_activity_at": "2026-03-01T10:00:00+00:00",
     }
     assert data["member"]["username"] == "alice" and data["member"]["display_name"] == "Alice"

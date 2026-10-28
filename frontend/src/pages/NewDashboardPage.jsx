@@ -1,3 +1,4 @@
+import CaseworkDashboardLinks from "../components/casework/CaseworkDashboardLinks";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -47,6 +48,7 @@ export default function NewDashboardPage({
   isOperateur = false,
   isAnimateur = false,
   isAdjoint = false,
+  isServerAdmin = false,
 }) {
   useEffect(() => {
     document.body.classList.add("dashboard-no-nav");
@@ -246,6 +248,7 @@ const pills = [
         </div>
       )}
 
+      {(isStaff || isResponsable || isServerAdmin) && <section className="nd-casework-module" aria-labelledby="member-casework-title"><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/><Link className="nd-responsable-link" to="/staff/verifications">Formulaires d’admission <ArrowRight size={18}/></Link></section>}
       {/* Espace réservé aux responsables */}
       {isResponsable && (
         <section

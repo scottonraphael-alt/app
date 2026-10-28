@@ -1,4 +1,4 @@
-"""Trusted discovery, paginated snapshots and archive retention. Not scheduled at startup."""
+"""Trusted discovery, paginated snapshots and archive retention. Scheduled through migration_runtime."""
 import asyncio
 import copy
 import re
@@ -152,7 +152,7 @@ async def synchronize(case_id, reader, settings):
         changed = copy.deepcopy(current)
         changed['channel_name'] = channel['name']
         changed['category_id'] = str(channel.get('parent_id') or '')
-        if changed['status'] != 'closing':
+        if changed['status'] not in ('closing', 'reopening'):
             if changed['category_id'] in settings.suspended_categories:
                 changed['status'] = 'suspended'
             elif changed['visibility'] == 'restricted':
@@ -191,9 +191,11 @@ async def channel_deleted(channel_id, guild_id, settings):
     row = await db.case_tickets.find_one({'_id': case_id})
     if not row:
         return None
-    # Even a recently synced snapshot cannot prove that no final messages were missed.
-    return await service.mark_deleted(case_id, settings,
-                                      expected=bool((row.get('archive') or {}).get('complete') and (row.get('closure') or {}).get('stage') == 'deleting'))
+    # A failed deletion/preflight cannot certify a later external removal.
+    closure = row.get('closure') or {}
+    expected = bool((row.get('archive') or {}).get('complete')
+                    and closure.get('stage') == 'deleting' and not closure.get('error_type'))
+    return await service.mark_deleted(case_id, settings, expected=expected)
 
 
 async def cycle(reader, settings):

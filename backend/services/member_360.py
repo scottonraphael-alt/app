@@ -211,15 +211,29 @@ def member_out(discord_id: str, *sources) -> dict:
 
 
 async def build_member_360(
-    discord_id: str, *, can_casier: bool, can_tickets: bool, before: datetime | None, limit: int
+    discord_id: str, *, can_casier: bool, can_tickets: bool, before: datetime | None, limit: int, case_roles=None
 ) -> dict:
     """Réponse complète ; `can_*` filtrent AVANT la lecture. Lève ValueError si aucun droit."""
-    if not (can_casier or can_tickets):
+    if not (can_casier or can_tickets or case_roles):
         raise ValueError("no access")
     casier = await load_casier_entries(discord_id) if can_casier else None
     tickets = await load_ticket_entries(discord_id) if can_tickets else None
 
     entries = (casier["entries"] if casier else []) + (tickets["entries"] if tickets else [])
+    cases = forms = None
+    if case_roles is not None:
+        from services.casework import timeline, policy
+        from services import verification_timeline
+        settings = policy.Settings()
+        if settings.enabled:
+            cursor = (before if before.tzinfo else before.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat() if before else None
+            cases = await timeline.entries(discord_id, case_roles, settings, before=cursor, limit=limit + 1)
+            allowed = policy.can_read(set(case_roles), {'kind': 'verification', 'visibility': 'staff'})
+            forms = await verification_timeline.entries(discord_id, can_verifications=allowed)
+            for source in (cases, forms):
+                for entry in (source or {}).get('entries', []):
+                    moment = datetime.fromisoformat(entry['at'].replace('Z', '+00:00'))
+                    entries.append({**entry, '_moment': moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)})
     entries.sort(key=lambda item: (item["_moment"], item["id"]), reverse=True)
     last_activity = entries[0]["at"] if entries else None
     if before is not None:
@@ -240,4 +254,6 @@ async def build_member_360(
         "fiches_count": casier["fiches_count"] if casier else None,
         "last_activity_at": last_activity,
     }
+    if cases is not None: summary["case_tickets_count"] = cases["count"]
+    if forms is not None: summary["verification_forms_count"] = forms["count"]
     return {"member": member, "summary": summary, "timeline": timeline, "next_before": next_before}

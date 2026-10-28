@@ -23,7 +23,7 @@ def ids(value):
 
 @dataclass(frozen=True)
 class Settings:
-    enabled: bool = field(default_factory=lambda: os.getenv('CASEWORK_ENABLED', 'false').lower() == 'true')
+    enabled: bool = field(default_factory=lambda: os.getenv('CASEWORK_ENABLED', 'true').lower() == 'true')
     guild_id: str = field(default_factory=lambda: str(config.DISCORD_GUILD_ID or ''))
     contact_categories: frozenset = field(default_factory=lambda: ids(os.getenv('CASEWORK_CONTACT_CATEGORY_IDS', '1081957992896942166')))
     source_bot_ids: frozenset = field(default_factory=lambda: ids(os.getenv('CASEWORK_SOURCE_BOT_IDS', '1425117786354483263')))

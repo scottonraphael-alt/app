@@ -1,4 +1,4 @@
-"""Prepared routes; deliberately not mounted in server.py until integration."""
+"""Staff cases: fresh access checks, private files and staged Discord closure."""
 import re
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from database import db
@@ -59,6 +59,10 @@ async def import_channel(data: ImportChannel, request: Request, helper=Depends(c
 async def detail(case_id: str, request: Request, helper=Depends(current_helper)):
     result = await service.get(case_id, helper.id, settings)
     await audit(request, helper, 'viewed', case_id)
+    from services.migration_runtime import discord_actions_enabled
+    from services.migration_runtime import can_close_case
+    result['discord_actions_enabled'] = can_close_case(await service.load(case_id, settings.guild_id))
+    result['native_workflows_enabled'] = discord_actions_enabled()
     return result
 
 
@@ -73,11 +77,20 @@ async def messages(case_id: str, request: Request, offset: int = Query(0, ge=0),
 
 @router.post('/{case_id}/actions')
 async def change(case_id: str, data: Change, request: Request, helper=Depends(current_helper)):
+    if data.action in ('archive', 'cancel_close'):
+        from services.migration_runtime import require_native_workflows
+        require_native_workflows()
     row = await service.load(case_id, settings.guild_id)
     await policy.authorize(helper.id, row)
+    from services.migration_runtime import can_close_case
+    if data.action == 'archive' and not can_close_case(row):
+        raise HTTPException(503, 'Les clôtures des salons hérités attendent la bascule de leurs producteurs BotGhost.')
     await audit(request, helper, 'action_requested', case_id, action=data.action)
     result = await service.change(case_id, helper.id, data, settings)
     await audit(request, helper, 'action_recorded', case_id, action=data.action)
+    from services.migration_runtime import discord_actions_enabled
+    result['discord_actions_enabled']=can_close_case(await service.load(case_id, settings.guild_id))
+    result['native_workflows_enabled']=discord_actions_enabled()
     return result
 
 

@@ -148,6 +148,7 @@ class AuthenticatedHelper(BaseModel):
 
 
 class AuthSession(BaseModel):
+    is_server_admin: bool = False
     authenticated: bool
     helper: AuthenticatedHelper | None = None
     is_admin: bool = False

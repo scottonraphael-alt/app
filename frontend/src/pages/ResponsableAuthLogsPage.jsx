@@ -1,3 +1,5 @@
+import { CASEWORK_AUDIT_LABELS } from "../components/casework/caseworkAudit";
+import { VERIFICATION_AUDIT_LABELS } from "../components/casework/verificationAudit";
 import { ANNOUNCEMENT_AUDIT_LABELS, announcementLogSummary } from '../components/announcements/auditLabels';
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -100,6 +102,8 @@ const TICKET_EVENT_LABELS = {
 };
 
 const EVENT_LABELS = {
+  ...CASEWORK_AUDIT_LABELS,
+  ...VERIFICATION_AUDIT_LABELS,
   ...ANNOUNCEMENT_AUDIT_LABELS,
   ...PROJECT_AUDIT_LABELS,
   "auth.login.started": "Connexion démarrée",
@@ -379,6 +383,8 @@ function describeEvent(log) {
   const fiche = d.fiche_title
     ? ["la fiche S ", quote(d.fiche_title)]
     : ["une fiche S"];
+
+  if (type.startsWith("casework.") || type.startsWith("verification.")) return { parts: [actor, " · ", EVENT_LABELS[type] || humanize(type), ...forMember], extras: [["Dossier", d.case_id || d.member_id || "—"], ...(d.action ? [["Action", humanize(d.action)]] : [])] };
 
   if (type.startsWith("ticket.")) {
     const failed = type.endsWith(".failed");

@@ -212,11 +212,13 @@ async def session(request: Request, response: Response) -> AuthSession:
     is_animateur = False
     is_operateur = False
     is_adjoint = False
+    is_server_admin = False
 
     if helper:
         try:
             flags = await get_helper_role_flags(helper.id)
             is_admin = flags["is_admin"]
+            is_server_admin = flags.get("is_server_admin", False)
             is_staff = flags["is_staff"]
             is_helper = flags["is_helper"]
             is_responsable = flags["is_responsable"]
@@ -225,7 +227,8 @@ async def session(request: Request, response: Response) -> AuthSession:
             is_adjoint = flags.get("is_adjoint", False)
 
             if (
-                not is_helper
+                not is_server_admin
+                and not is_helper
                 and not is_staff
                 and not is_responsable
                 and not is_animateur
@@ -262,6 +265,7 @@ async def session(request: Request, response: Response) -> AuthSession:
         is_operateur=is_operateur,
         is_animateur=is_animateur,
         is_adjoint=is_adjoint,
+        is_server_admin=is_server_admin,
     )
 
 

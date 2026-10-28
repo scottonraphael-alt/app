@@ -1,3 +1,9 @@
+const VerificationListPage = lazy(() => import("./pages/VerificationPages").then(m => ({ default: m.VerificationListPage })));
+const VerificationDetailPage = lazy(() => import("./pages/VerificationPages").then(m => ({ default: m.VerificationDetailPage })));
+const VerificationTicketsPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.VerificationTicketsPage })));
+const ConvocationsPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.ConvocationsPage })));
+const ContactsStaffPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.ContactsStaffPage })));
+const BullesPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.BullesPage })));
 import { useCallback, useEffect, useState, Suspense, lazy } from "react";
 import "./App.css";
 import "./MentalHealth.css";
@@ -63,6 +69,7 @@ function AuthenticatedApp({
   isOperateur,
   isAnimateur,
   isAdjoint,
+  isServerAdmin,
   onSessionRefresh,
 }) {
   const queryClient = useQueryClient();
@@ -72,6 +79,7 @@ function AuthenticatedApp({
   const canSeeStaff = isResponsable || isAdmin || isHelper || isStaff || isOperateur;
   const canSeeAnimateur = isAnimateur || isResponsable;
   const canSeeOperateur = isOperateur || isResponsable;
+  const canSeeCasework = isStaff || isResponsable || isServerAdmin;
   const canSeeTeam = canSeeStaff || isAnimateur;
 
   const ticketsQuery = useQuery({
@@ -141,10 +149,20 @@ function AuthenticatedApp({
     >
       <Suspense fallback={<Loading />}>
         <Routes>
+<Route path="/staff/dossiers/verification" element={canSeeCasework ? <VerificationTicketsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/verification/:caseId" element={canSeeCasework ? <VerificationTicketsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/summons" element={canSeeCasework ? <ConvocationsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/summons/:caseId" element={canSeeCasework ? <ConvocationsPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/contact_staff" element={canSeeCasework ? <ContactsStaffPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/contact_staff/:caseId" element={canSeeCasework ? <ContactsStaffPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/bubble" element={canSeeCasework ? <BullesPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/dossiers/bubble/:caseId" element={canSeeCasework ? <BullesPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/verifications" element={canSeeCasework ? <VerificationListPage responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/verifications/:memberId" element={canSeeCasework ? <VerificationDetailPage responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
           <Route
   path="/"
   element={
-    canSeeHelper ? (
+    (canSeeHelper || canSeeCasework) ? (
       <NewDashboardPage
         stats={stats}
         tickets={tickets}
@@ -155,6 +173,7 @@ function AuthenticatedApp({
         isResponsable={isResponsable}
         isOperateur={isOperateur}
         isAnimateur={isAnimateur}
+        isServerAdmin={isServerAdmin}
         isAdjoint={isAdjoint}
       />
     ) : (
@@ -490,6 +509,7 @@ function MainApp() {
             isResponsable={session.is_responsable}
             isOperateur={session.is_operateur}
             isAnimateur={session.is_animateur}
+            isServerAdmin={session.is_server_admin}
             isAdjoint={session.is_adjoint}
             onSessionRefresh={() => sessionQuery.refetch()}
           />

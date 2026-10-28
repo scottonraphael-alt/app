@@ -59,7 +59,7 @@ def public(row, detail=True):
     if detail:
         for name in ('notes', 'events', 'participants'):
             result[name] = copy.deepcopy(row.get(name, []))
-    result['closure'] = {k: copy.deepcopy((row.get('closure') or {}).get(k)) for k in ('stage', 'error_type', 'requested_at')} if row.get('closure') else None
+    result['closure'] = {k: copy.deepcopy((row.get('closure') or {}).get(k)) for k in ('stage', 'error_type', 'cancel_error', 'requested_at')} if row.get('closure') else None
     # Source URLs and filesystem paths live only in case_messages / private fields.
     return result
 
@@ -82,7 +82,7 @@ async def enroll(channel, opening, member, settings, *, assigned=None, initiator
         context['triggers'] = blocks[1].strip()[:8000] if len(blocks) > 1 else None
     linked_form = await db.verification_cases.find_one({'_id': f'{settings.guild_id}:{member["id"]}'}, {'_id': 1}) if kind == 'verification' else None
     row = {'_id': case_id, 'id': case_id, 'guild_id': settings.guild_id,
-           'kind': kind, 'visibility': visibility, 'member': copy.deepcopy(member),
+           'source': 'legacy', 'kind': kind, 'visibility': visibility, 'member': copy.deepcopy(member),
            'channel_id': str(channel['id']), 'channel_name': channel['name'],
            'category_id': str(channel['parent_id']), 'opening_id': str(opening['id']),
            'initiator_id': initiator_id, 'assigned': assigned, 'assignment_source': 'import',
@@ -153,8 +153,10 @@ async def change(case_id, actor_id, data, settings):
         raise HTTPException(409, 'Ce dossier est archivé ; son historique est conservé.')
     if row.get('lease') and row['lease']['until'] > now():
         raise HTTPException(409, 'Une synchronisation est en cours. Réessaie dans un instant.')
-    if row['status'] == 'closing' and data.action != 'sync' and not (data.action == 'archive' and policy.leadership(roles)):
+    if row['status'] == 'closing' and data.action != 'sync' and not (data.action in ('archive', 'cancel_close') and policy.leadership(roles)):
         raise HTTPException(409, 'Une clôture est déjà en cours.')
+    if row['status'] == 'reopening':
+        raise HTTPException(409, 'Le rétablissement du salon est en cours.')
     changed = copy.deepcopy(row)
     details = {'request_id': data.request_id, 'action': data.action}
     if data.action in ('claim', 'assign'):
@@ -180,6 +182,15 @@ async def change(case_id, actor_id, data, settings):
         details['note_id'] = note_id
     elif data.action == 'sync':
         changed['sync']['due'] = True
+    elif data.action == 'cancel_close':
+        if row['status'] != 'closing' or not policy.leadership(roles):
+            raise HTTPException(403, 'L’annulation d’une clôture est réservée à la direction.')
+        if len(data.text.strip()) < 10:
+            raise HTTPException(422, 'Explique pourquoi la clôture doit être annulée.')
+        if (row['closure'].get('lease_until') or '') > now() or row['closure']['stage'] == 'deleting':
+            raise HTTPException(409, 'Une suppression en cours ou incertaine doit être réconciliée avant toute annulation.')
+        changed['status'] = 'reopening'
+        changed['closure'].update(cancel_actor_id=str(actor_id), cancel_reason=data.text, cancel_error=None)
     elif data.action == 'archive':
         if len(data.text.strip()) < 10:
             raise HTTPException(422, 'Un motif de clôture de dix caractères minimum est requis.')
