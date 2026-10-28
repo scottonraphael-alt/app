@@ -197,6 +197,8 @@ invalidées. Limiter les données personnelles transmises à celles nécessaires
 
 ## État de réalisation
 
-L'analyse et les choix ci-dessus sont documentés. Aucun code de migration fonctionnel
-n'est encore écrit, aucun import exécuté et aucun raccordement au démarrage du bot ni
-à l'API de production n'a été ajouté.
+Une première base de code a été préparée dans cette branche isolée : domaine, API,
+écrans Iris, composants V2, normaliseur d’archives, préavis et source 360°. Aucun import
+réel ni raccordement au démarrage du bot ou aux routes de production n’a été effectué.
+L’adaptateur des effets Discord et les raccordements restent à réaliser. Voir
+[le bilan et la procédure d’intégration](verification-integration.md).
