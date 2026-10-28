@@ -201,3 +201,15 @@ est confirmée dans ses blocs d'écriture. Deux nouveaux choix utilisateur : pro
 toutes les cibles Staff (convocation par Administrateur seulement), et remplacer
 l'annonce de sanction automatique à trois jours par une alerte au Staff suivie
 d'une décision humaine.
+
+## Compléments Contact Staff et Purgatoire
+
+Voir [panel-contact-staff.md](panel-contact-staff.md) pour le producteur public :
+formulaire, deux variantes, drapeau partagé et limites de concurrence. Choix validés :
+contact confidentiel visible au membre, aux Administrateurs et aux Responsables ;
+clôture du premier Contact Staff obligatoire avant un nouveau, même confidentiel.
+
+L'utilisateur a précisé le fonctionnement du Purgatoire encore inachevé dans
+BotGhost : substitution temporaire du rôle Membre/Non validé, puis restauration du
+rôle antérieur. Voir [purgatoire.md](purgatoire.md), sans l'assimiler à un ban ou à une
+sanction automatique après silence à une convocation.
