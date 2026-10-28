@@ -49,14 +49,88 @@ toutes les conversations du fil.
 - Tous les membres ayant le rôle Staff peuvent prendre en charge et décider.
 - « Clore / sans réponse » archive, sans expulsion ; le membre reste non validé.
 - Un approfondissement demande de refaire **tout le formulaire**.
-- Discord reste une interface complète de traitement, avec arrivée du formulaire,
-  notification, prise en charge et décisions, sans passage obligatoire par le site.
+- Discord permet l'arrivée du formulaire, la notification, la prise en charge,
+  la validation, la création de ticket et la clôture sans expulsion.
+- Le refus, l'expulsion, le bannissement et l'approfondissement nécessitent un passage
+  par Iris avec une justification argumentée. Sur Discord, ces choix ouvrent le dossier
+  Iris concerné ; ils ne doivent pas exécuter directement l'action.
 - Iris conserve le dossier, toutes les tentatives et les décisions et propose une
   interface plus détaillée. Les actions des deux interfaces utilisent le même état.
 - Le préavis IA est court sur Discord et détaillé sur Iris. Il reste indicatif :
   aucune décision d'admission, expulsion ou bannissement automatique par l'IA.
 - Le préavis arrive après le formulaire et ne bloque ni sa notification ni son traitement.
 - Les anciens fils du salon d'archives sont une source d'import, à lire sans les modifier.
+- Les responsables peuvent supprimer réellement des formulaires de la base Iris,
+  notamment les essais et formulaires de formation, selon les règles ci-dessous.
+
+## Actions selon l'interface
+
+| Action | Depuis Discord | Depuis Iris |
+| --- | --- | --- |
+| Prise en charge | Oui | Oui |
+| Validation | Oui | Oui |
+| Création d'un ticket | Oui | Oui |
+| Clôture sans réponse, sans expulsion | Oui | Oui |
+| Refus | Lien vers le dossier Iris | Justification argumentée obligatoire |
+| Expulsion | Lien vers le dossier Iris | Justification argumentée obligatoire |
+| Bannissement | Lien vers le dossier Iris | Justification argumentée et droits de sanction existants |
+| Approfondissement | Lien vers le dossier Iris | Sujets et justification obligatoires ; nouveau formulaire complet |
+| Demande de second avis | Lien vers le dossier Iris | Observation et sollicitation d'un collègue |
+| Suppression d'un formulaire | Aucune action de suppression | Responsable uniquement |
+
+Le passage imposé par Iris doit être respecté par les gestionnaires d'interactions
+Discord et le service métier, pas seulement par l'affichage des boutons. Une valeur
+`origin=iris` envoyée librement par un client ne remplace pas l'authentification et
+les droits. Les liens pointent vers le dossier exact et nécessitent une session Iris.
+Une session expirée ne doit pas déclencher l'action ni faire perdre le contexte du dossier.
+
+Pour les actions demandant une justification, distinguer le motif communiqué au membre
+et l'explication interne lorsque nécessaire. Un motif prédéfini seul ou un champ composé
+d'espaces ne constitue pas une justification argumentée. Prévoir une rédaction guidée
+et la possibilité de corriger avant confirmation. Une action préparée dans un formulaire
+ne doit pas être appliquée avant sa confirmation et le contrôle des droits actuels.
+
+## Suppression réelle des formulaires et données de formation
+
+Cette fonctionnalité est réservée aux responsables, avec vérification côté serveur.
+La préparation et les tests n'autorisent aucune suppression de données de production.
+
+La page du dossier permet de supprimer une tentative identifiée ; une suppression de
+dossier entier présente explicitement toutes les tentatives concernées. Avant une
+suppression réelle, afficher le périmètre concret et demander une confirmation adaptée.
+
+Les réponses, versions et préavis attachés aux formulaires supprimés sont effacés de la
+base active, ainsi que leurs représentations dans la recherche, les caches et les éventuels
+exemples/index IA. Actualiser la frise 360°, les compteurs et l'encart d'admission. Les
+autres tentatives du membre, les tickets et les sanctions effectivement appliquées sont
+des objets distincts et ne doivent pas être effacés par cette opération. Les rôles Discord
+ne sont pas modifiés par la suppression d'une fiche de la base.
+
+Conserver une trace d'administration minimale (auteur, date, motif et périmètre technique),
+sans recopier les réponses ou le préavis effacés dans le journal. Les copies historiques
+sur Discord restent soumises à leur conservation propre : supprimer dans Iris n'autorise
+pas à supprimer les fils Discord. Conserver uniquement les références sources nécessaires
+pour que l'import ne recrée pas les formulaires volontairement supprimés.
+
+Prévoir un marquage explicite « Formation / test », géré par les responsables, permettant
+de retrouver et nettoyer les essais. Ces fiches sont exclues des exemples de référence IA
+et des statistiques d'admission réelles. Le marquage ne doit pas permettre à un candidat
+de contourner les vérifications ou de s'accorder l'accès au serveur.
+
+## Garanties du parcours validées
+
+- Prise en charge et décisions atomiques ; nouvelle lecture de l'état avant action.
+- Vérification des droits actuels à chaque action ; restrictions de bannissement
+  définitif identiques au module de sanction existant.
+- État « Action à terminer » si une étape Discord n'est pas confirmée, avec résultat
+  de chaque étape et reprise idempotente. Un MP fermé ne bloque pas le dossier.
+- Historique des décisions, corrections et actions confirmées, avec auteur et motif.
+- Demande de second avis conservée au dossier ; aucune décision automatique à sa place.
+- Un dossier actif par membre, regroupant les tentatives, avec temporisation des envois
+  rapprochés compatible avec un approfondissement demandant un nouveau formulaire.
+- Préavis IA explicable et contestable, règles d'admission administrables par les
+  responsables, références sélectionnées et retirables, incertitudes visibles.
+- Import différenciant les dossiers complets, partiels et à décision non déterminée.
 
 ## Corrections de conception à prévoir
 
