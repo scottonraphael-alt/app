@@ -8,11 +8,14 @@ router=APIRouter(prefix='/responsable/discord-workflows',tags=['discord-workflow
 @router.get('')
 async def get(request:Request,helper=Depends(current_responsable)):
     roles,channels=await service.choices()
-    result=await service.load()
+    result=await service.apply()
     from services.migration_runtime import discord_actions_enabled
     result['native_enabled']=discord_actions_enabled()
     result['roles']=[{'id':str(r['id']),'name':r['name']} for r in roles if not r.get('managed')]
     result['channels']=[{'id':str(c['id']),'name':c['name'],'type':c['type']} for c in channels if c['type'] in (0,4)]
+    from services.moderation_bot import moderation_client
+    from services.verification_runtime import delivery_diagnostic
+    result['verification_delivery']=await delivery_diagnostic(moderation_client)
     await log_auth_event('casework.settings.viewed',request,helper=helper,status_code=200)
     return result
 

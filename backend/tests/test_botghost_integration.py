@@ -1,7 +1,7 @@
 """Offline integration: mounted routes, privacy, handover and durable Discord effects."""
 import security_harness as h
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 import pytest
 from fastapi import HTTPException
 from routers import casework, verifications, member_360
@@ -110,6 +110,50 @@ def test_staff_panel_has_answers_but_no_forbidden_action_buttons():
     assert ANS['reason'] in content and ANS['psychiatry'] in content
     assert 'Créer un ticket' in content and 'Clore sans expulser' in content
     assert all(action not in content for action in (':ban',':kick',':refuse',':clarify'))
+
+
+def review_guild(monkeypatch,*,unexpected=False,bot_allowed=True):
+    import discord
+    monkeypatch.setattr(transport.config,'DISCORD_STAFF_ROLE_ID','11')
+    monkeypatch.setattr(transport.config,'DISCORD_RESPONSABLE_ROLE_ID','12')
+    monkeypatch.setattr(policy,'admin_role',lambda:'13')
+    roles=[SimpleNamespace(id=i,name=name,is_default=lambda i=i:i==1,
+        permissions=SimpleNamespace(administrator=False),tags=None)
+        for i,name in [(1,'@everyone'),(11,'Staff'),(22,'Visiteurs')]]
+    guild=SimpleNamespace(id=1,roles=roles,default_role=roles[0],me=SimpleNamespace(id=99))
+    channel=Mock(spec=discord.TextChannel);channel.id=1425589415165558825;channel.name='formulaires';channel.guild=guild
+    def permissions(role):
+        visible=role.id==11 or (role.id==22 and unexpected) or (role.id==99 and bot_allowed)
+        return SimpleNamespace(view_channel=visible,send_messages=visible,attach_files=visible)
+    channel.permissions_for.side_effect=permissions
+    guild.fetch_channel=AsyncMock(return_value=channel)
+    return guild
+
+
+def test_form_delivery_names_the_role_and_channel_that_block_publication(monkeypatch):
+    guild=review_guild(monkeypatch,unexpected=True)
+    with pytest.raises(HTTPException) as exc:h.run(transport.private_review_channel(guild))
+    assert 'Visiteurs (22)' in exc.value.detail and 'formulaires (1425589415165558825)' in exc.value.detail
+
+
+@pytest.mark.parametrize('bot_allowed',[True,False])
+def test_form_delivery_requires_bot_read_and_send_permissions(monkeypatch,bot_allowed):
+    guild=review_guild(monkeypatch,bot_allowed=bot_allowed)
+    if bot_allowed:assert h.run(transport.private_review_channel(guild)).name=='formulaires'
+    else:
+        with pytest.raises(HTTPException) as exc:h.run(transport.private_review_channel(guild))
+        assert 'OasisLink' in exc.value.detail
+
+
+def test_delivery_diagnostic_checks_both_destinations_without_publishing(monkeypatch):
+    guild=review_guild(monkeypatch,unexpected=True)
+    monkeypatch.setattr(transport,'guild_for',AsyncMock(return_value=guild))
+    send=AsyncMock();monkeypatch.setattr(transport,'publish_staff',send)
+    result=h.run(transport.delivery_diagnostic(SimpleNamespace()))
+    assert result['forms']['ok'] is False and 'Visiteurs (22)' in result['forms']['message']
+    assert result['welcome']['ok'] is True
+    assert len(guild.fetch_channel.await_args_list)==2
+    send.assert_not_awaited()
 
 
 @pytest.mark.parametrize('lost',[True,False])

@@ -47,14 +47,49 @@ async def private_review_channel(guild):
     if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild.id:
         raise HTTPException(503, 'Le suivi des formulaires doit être un salon textuel du serveur.')
     if channel.permissions_for(guild.default_role).view_channel:
-        raise HTTPException(503, 'Le salon de lecture des formulaires ne doit pas être public.')
+        raise HTTPException(503, f'Le salon {channel.name} ({channel.id}) est visible par @everyone. Désactive Voir le salon pour @everyone.')
     permitted = {str(config.DISCORD_STAFF_ROLE_ID), str(config.DISCORD_RESPONSABLE_ROLE_ID), policy.admin_role()}
+    unexpected = []
     for role in guild.roles:
         if role.is_default() or str(role.id) in permitted or role.permissions.administrator or getattr(getattr(role,'tags',None),'bot_id',None):
             continue
         if channel.permissions_for(role).view_channel:
-            raise HTTPException(503, 'Un rôle sans accès aux vérifications peut lire le salon de suivi. Corrige ses permissions avant publication.')
+            unexpected.append(f'{role.name} ({role.id})')
+    if unexpected:
+        raise HTTPException(503, f'Publication bloquée dans {channel.name} ({channel.id}). Rôles ayant accès sans autorisation aux vérifications : '+', '.join(unexpected)+'. Désactive Voir le salon pour ces rôles ou vérifie les IDs Staff/Responsable configurés.')
+    permissions = channel.permissions_for(guild.me)
+    if not permissions.view_channel or not permissions.send_messages:
+        raise HTTPException(503, f'OasisLink ne peut pas voir ou envoyer des messages dans {channel.name} ({channel.id}).')
     return channel
+
+
+async def delivery_diagnostic(client):
+    """Read-only diagnosis for Responsables; never sends a form or a welcome."""
+    results = {}
+    for kind, variable, default in (
+        ('forms', 'VERIFICATION_REVIEW_CHANNEL_ID', '1425589415165558825'),
+        ('welcome', 'VERIFICATION_WELCOME_CHANNEL_ID', '1081957994125860905'),
+    ):
+        channel_id = os.getenv(variable, default)
+        try:
+            guild = await guild_for(client)
+            if kind == 'forms':
+                channel = await private_review_channel(guild)
+            else:
+                channel = await guild.fetch_channel(setting(variable, default))
+                if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild.id:
+                    raise HTTPException(503, 'Le salon de bienvenue doit être un salon textuel du serveur.')
+                permissions = channel.permissions_for(guild.me)
+                if not permissions.view_channel or not permissions.send_messages or not permissions.attach_files:
+                    raise HTTPException(503, f'OasisLink doit pouvoir voir le salon {channel.name} ({channel.id}), envoyer des messages et joindre les GIF.')
+            results[kind] = {'ok': True, 'channel_id': str(channel.id), 'message': f'Salon {channel.name} ({channel.id}) accessible.'}
+        except Exception as exc:
+            detail = str(exc.detail) if isinstance(exc, HTTPException) else (
+                'Discord refuse l’accès au salon : vérifie les permissions du bot.' if isinstance(exc, discord.Forbidden) else
+                'Salon introuvable sur le serveur configuré.' if isinstance(exc, discord.NotFound) else
+                'Diagnostic Discord indisponible. Réessaie après connexion du bot.')
+            results[kind] = {'ok': False, 'channel_id': channel_id, 'message': detail}
+    return results
 
 
 async def publish_staff(client, row, advisory=None, reference_ids=None):
