@@ -18,7 +18,7 @@ from database import db
 from services import verification_service as service, verification_jobs as jobs
 from services.casework import policy
 from services.migration_runtime import audit, discord_actions_enabled, require_native_workflows
-from services.verification_discord import Panel, StaffPanel, message, error
+from services.verification_discord import Panel, StaffPanel, StaffForm, message, error
 
 logger = logging.getLogger(__name__)
 NONE = discord.AllowedMentions.none()
@@ -65,6 +65,8 @@ async def private_review_channel(guild):
     permissions = channel.permissions_for(guild.me)
     if not permissions.view_channel or not permissions.send_messages:
         raise HTTPException(503, f'OasisLink ne peut pas voir ou envoyer des messages dans {channel.name} ({channel.id}).')
+    if not permissions.create_public_threads or not permissions.send_messages_in_threads:
+        raise HTTPException(503, f'OasisLink doit pouvoir créer des fils publics et envoyer des messages dans les fils de {channel.name} ({channel.id}). Ces fils héritent de la confidentialité du salon Staff.')
     return channel
 
 
@@ -137,12 +139,68 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
             sent_id = str(sent['id'])
             await db.workflow_receipts.update_one({'_id': receipt_key}, {'$set': {'status': 'sent', 'message_id': sent_id}})
         record = {'channel_id': str(channel.id), 'message_id': sent_id}
+    # Save the starter before creating its thread: a failed thread send must resume
+    # this same message, including when migrating an existing full-size panel.
+    record['layout_version'] = 1  # Only mark complete once both Discord messages are updated.
+    await db.verification_cases.update_one({'_id':row['_id']},{'$set':{'staff_delivery':record}})
+    thread_url = None
+    if row.get('forms') or record.get('thread_id'):
+        thread = await review_thread(channel, record, row)
+        record['thread_id'] = str(thread.id)
+        await db.verification_cases.update_one({'_id':row['_id']},{'$set':{'staff_delivery':record}})
+        await publish_thread_form(client, thread, row, record)
+        thread_url = f'https://discord.com/channels/{guild.id}/{thread.id}'
+    view = StaffPanel(row['member_id'],base_url=config.FRONTEND_URL,row=row,advisory=advisory,thread_url=thread_url) if row.get('forms') else message('📁 Formulaire supprimé','Les réponses de ce dossier ont été supprimées par un Responsable.')
+    await channel.get_partial_message(int(record['message_id'])).edit(view=view,allowed_mentions=NONE)
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision'], 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':2, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
+
+
+async def review_thread(channel, record, row):
+    # A thread started from a message has the SAME snowflake as its starter.
+    # Fetching it first also reconciles a lost create_thread response without
+    # creating a second unrelated thread.
+    try:
+        thread = await channel.guild.fetch_channel(int(record.get('thread_id') or record['message_id']))
+    except discord.NotFound:
+        member=row.get('member') or {}
+        name=' '.join(str(member.get('display_name') or member.get('username') or row['member_id']).split())[:65]
+        thread = await channel.get_partial_message(int(record['message_id'])).create_thread(
+            name='Formulaire · '+name,auto_archive_duration=1440,
+            reason='Iris : lecture et échange Staff sur le formulaire')
+    if not isinstance(thread,discord.Thread) or thread.parent_id != channel.id or thread.guild.id != channel.guild.id:
+        raise HTTPException(409,'Le fil du formulaire ne correspond pas au salon Staff configuré.')
+    if thread.archived:
+        if thread.locked:raise HTTPException(409,'Le fil a été verrouillé : un Responsable doit le rouvrir avant sa mise à jour.')
+        await thread.edit(archived=False,reason='Iris : actualisation du formulaire')
+    return thread
+
+
+async def publish_thread_form(client, thread, row, record):
+    view=StaffForm(row['member_id'],base_url=config.FRONTEND_URL,row=row) if row.get('forms') else message('📁 Formulaire supprimé','Les réponses de ce dossier ont été supprimées par un Responsable.')
+    if record.get('form_message_id'):
+        try:
+            await thread.get_partial_message(int(record['form_message_id'])).edit(view=view,allowed_mentions=NONE)
+            return
+        except discord.NotFound:
+            # Do not blindly repeat an old receipt whose message was deleted.
+            record.pop('form_message_id',None)
+    if not row.get('forms'):return
+    key=hashlib.sha256(f'verification-thread-form:{thread.id}:{row["forms"][-1]["id"]}'.encode()).hexdigest()[:24]
+    receipt=await db.workflow_receipts.find_one({'_id':key})
+    if receipt and receipt.get('status')=='inflight':
+        receipt=await reconcile_message(client,receipt)
+        if receipt.get('status')!='sent':raise HTTPException(409,'Envoi du formulaire dans le fil à réconcilier avant répétition.')
+    if receipt and receipt.get('message_id'):
+        await thread.get_partial_message(int(receipt['message_id'])).edit(view=view,allowed_mentions=NONE)
+    else:
+        await Adapter(client).send_once(thread,view,key)
+        receipt=await db.workflow_receipts.find_one({'_id':key})
+    record['form_message_id']=str(receipt['message_id'])
 
 
 class Adapter:
@@ -391,7 +449,7 @@ async def tick(client):
                 except Exception:
                     logger.exception('Traitement de vérification différé (%s).', job['id'])
         current = await service.load(row['member_id'])
-        if (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
+        if (current.get('staff_delivery') or {}).get('layout_version') != 2 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
             except Exception:
@@ -419,7 +477,9 @@ async def install(client):
         tree.add_command(command, guild=guild_obj)
     client.add_view(Panel())
     async for row in db.verification_cases.find({'guild_id': service.guild(), 'staff_delivery.message_id': {'$exists': True}}):
-        client.add_view(StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row), message_id=int(row['staff_delivery']['message_id']))
+        thread_id=row['staff_delivery'].get('thread_id')
+        client.add_view(StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,
+            thread_url=f'https://discord.com/channels/{service.guild()}/{thread_id}' if thread_id else None), message_id=int(row['staff_delivery']['message_id']))
     async with httpx.AsyncClient(timeout=15) as http:
         command = tree.get_command('panel-vérification', guild=guild_obj)
         response = await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{service.guild()}/commands',

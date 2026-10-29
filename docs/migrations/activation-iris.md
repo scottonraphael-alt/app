@@ -27,6 +27,15 @@ la modification locale ne redémarre pas elle-même le serveur d’hébergement.
 
 ### Lecture du salon des formulaires
 
+Le salon présente un mini panneau de prise en charge (état, intervenant, actions et
+lien Iris). Les réponses complètes sont publiées dans un fil associé au panneau,
+avec un bouton « Lire le formulaire ». Les anciens panneaux sont convertis sur
+place au prochain cycle, sans second panneau. Le bot doit pouvoir créer des fils
+publics et écrire dans les fils ; leur accès reste celui du salon Staff privé.
+Les IDs du fil et du message de réponses sont conservés pour actualiser le même
+formulaire, retrouver un fil créé malgré une réponse réseau perdue et retirer les
+réponses Discord si le dernier formulaire est supprimé dans Iris.
+
 Le contrôle de publication reconnaît les rôles Opérateur/Opérateur en formation
 configurés dans les variables existantes. Pour le serveur Oasis uniquement
 (`1081957992188088391`), il reconnaît également les lecteurs déjà présents et

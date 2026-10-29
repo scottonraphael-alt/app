@@ -78,18 +78,33 @@ class Panel(discord.ui.LayoutView):
         button.callback=open_form
         box.add_item(discord.ui.ActionRow(button));self.add_item(box)
 
+STATUS_LABELS={'waiting':'En attente','claimed':'Pris en charge','clarification':'Précisions demandées',
+    'second_opinion':'Second avis demandé','processing':'Traitement en cours','action_required':'Action requise',
+    'approved':'Validé','refused':'Refusé','closed':'Clos','historical_unknown':'Archive historique'}
+
+
+class StaffForm(discord.ui.LayoutView):
+    """Full answers live in the associated Staff thread, not in the channel index."""
+    def __init__(self,member_id,*,base_url,row):
+        super().__init__(timeout=None)
+        from services.verification_runtime import fence
+        box=discord.ui.Container(discord.ui.TextDisplay(f'## 📝 Formulaire de <@{member_id}>'),accent_colour=0x846594)
+        form=row['forms'][-1]
+        for key,title in [('name','👤 Prénom / pseudo'),('age','🎂 Tranche d’âge'),('reason','🌱 Motif de venue'),('psychiatry','💬 Avis sur la psychiatrie')]:
+            box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key))))
+        box.add_item(discord.ui.TextDisplay('-# Règlement accepté : '+('Oui' if form['answers'].get('rules') else 'Non renseigné')))
+        box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Dossier et historique dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id))))
+        self.add_item(box)
+
+
 class StaffPanel(discord.ui.LayoutView):
-    def __init__(self,member_id,*,base_url,row=None,advisory=None):
+    def __init__(self,member_id,*,base_url,row=None,advisory=None,thread_url=None):
         super().__init__(timeout=None)
         self.member_id=str(member_id)
         box=discord.ui.Container(discord.ui.TextDisplay('## 📋 Une vérification attend le Staff'),
-            discord.ui.TextDisplay(f'Membre : <@{self.member_id}>\nOuvre son dossier pour lire les réponses et consulter les tentatives précédentes.'),accent_colour=0x5B8171)
-        if row and row.get('forms'):
-            form = row['forms'][-1]
-            from services.verification_runtime import fence
-            for key, title in [('name', '👤 Prénom / pseudo'), ('age', '🎂 Tranche d’âge'), ('reason', '🌱 Motif de venue'), ('psychiatry', '💬 Avis sur la psychiatrie')]:
-                box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key))))
-            box.add_item(discord.ui.TextDisplay(f"-# État : {row['status']} · Intervenant : "+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'À attribuer')))
+            discord.ui.TextDisplay(f'Membre : <@{self.member_id}>\nLe formulaire complet se trouve dans le fil associé.'),accent_colour=0x5B8171)
+        if row:
+            box.add_item(discord.ui.TextDisplay('**État :** '+STATUS_LABELS.get(row['status'],'À vérifier')+' · **Intervenant :** '+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'À attribuer')))
         if advisory:
             short=str(advisory).encode('utf-16-le')[:600].decode('utf-16-le','ignore')
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+short+'\n-# Analyse complète dans Iris. Ce préavis ne prend aucune décision.'))
@@ -99,7 +114,9 @@ class StaffPanel(discord.ui.LayoutView):
             button.disabled=bool(row and (not row.get("active") or any(j["status"] in ("pending","running","uncertain","retry") for j in row.get("jobs",[]))))
             button.callback=self.callback_for(action);actions.add_item(button)
         box.add_item(actions)
-        box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Lire et gérer dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id))))
+        links=discord.ui.ActionRow(discord.ui.Button(label='Gérer dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id)))
+        if thread_url:links.add_item(discord.ui.Button(label='Lire le formulaire',emoji='📝',style=discord.ButtonStyle.link,url=thread_url))
+        box.add_item(links)
         box.add_item(discord.ui.TextDisplay('-# Refus, expulsion, bannissement, approfondissement et second avis : depuis Iris avec une justification.'))
         self.add_item(box)
 

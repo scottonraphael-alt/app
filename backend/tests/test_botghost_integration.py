@@ -102,12 +102,14 @@ def test_verification_delivery_retries_after_worker_failure(monkeypatch):
     assert delivery.await_count==2
 
 
-def test_staff_panel_has_answers_but_no_forbidden_action_buttons():
-    from services.verification_discord import StaffPanel
+def test_staff_panel_is_compact_and_answers_only_appear_in_thread():
+    from services.verification_discord import StaffPanel,StaffForm
     row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:live'))
-    async def render():return StaffPanel(MEMBER,base_url='https://iris.example',row=row).to_components()
-    content=str(h.run(render()))
-    assert ANS['reason'] in content and ANS['psychiatry'] in content
+    async def render():return (StaffPanel(MEMBER,base_url='https://iris.example',row=row,thread_url='https://discord.com/channels/1/2').to_components(),StaffForm(MEMBER,base_url='https://iris.example',row=row).to_components())
+    panel,full=h.run(render());content=str(panel)
+    assert ANS['reason'] not in content and ANS['psychiatry'] not in content
+    assert ANS['reason'] in str(full) and ANS['psychiatry'] in str(full)
+    assert 'Lire le formulaire' in content and 'En attente' in content
     assert 'Créer un ticket' in content and 'Clore sans expulser' in content
     assert all(action not in content for action in (':ban',':kick',':refuse',':clarify'))
 
@@ -124,7 +126,7 @@ def review_guild(monkeypatch,*,unexpected=False,bot_allowed=True):
     channel=Mock(spec=discord.TextChannel);channel.id=1425589415165558825;channel.name='formulaires';channel.guild=guild
     def permissions(role):
         visible=role.id==11 or (role.id==22 and unexpected) or (role.id==99 and bot_allowed)
-        return SimpleNamespace(view_channel=visible,send_messages=visible,attach_files=visible)
+        return SimpleNamespace(view_channel=visible,send_messages=visible,attach_files=visible,create_public_threads=visible,send_messages_in_threads=visible)
     channel.permissions_for.side_effect=permissions
     guild.fetch_channel=AsyncMock(return_value=channel)
     return guild
@@ -146,7 +148,7 @@ def test_known_oasis_form_readers_do_not_block_staff_publication(monkeypatch):
         for role_id in VERIFICATION_REVIEW_READERS[str(guild.id)]]]
     guild.fetch_channel.return_value.permissions_for.return_value=SimpleNamespace(view_channel=True,send_messages=True)
     guild.fetch_channel.return_value.permissions_for.side_effect=lambda role:SimpleNamespace(
-        view_channel=role is not guild.default_role,send_messages=True)
+        view_channel=role is not guild.default_role,send_messages=True,create_public_threads=True,send_messages_in_threads=True)
     monkeypatch.delenv('VERIFICATION_REVIEW_READER_ROLE_IDS',raising=False)
     assert h.run(transport.private_review_channel(guild)).name=='formulaires'
     # These defaults cannot permit a similarly named role or leak to another guild.
@@ -189,6 +191,82 @@ def test_delivery_diagnostic_checks_both_destinations_without_publishing(monkeyp
     assert result['welcome']['ok'] is True
     assert len(guild.fetch_channel.await_args_list)==2
     send.assert_not_awaited()
+
+
+def thread_delivery_fixture(monkeypatch,*,lost_thread=False):
+    import discord
+    from services import announcement_publishing
+    h.run(forms.submit({'id':MEMBER,'display_name':'Alex'},ANS,'interaction:thread'))
+    row=h.run(forms.load(MEMBER))
+    row['staff_delivery']={'channel_id':'888','message_id':'555','revision':row['revision']}
+    h.run(h.db.verification_cases.replace_one({'_id':row['_id']},row))
+    guild=SimpleNamespace(id=int(h.GUILD_ID))
+    channel=Mock(spec=discord.TextChannel);channel.id=888;channel.guild=guild
+    thread=Mock(spec=discord.Thread);thread.id=555;thread.parent_id=888;thread.guild=guild;thread.archived=False;thread.locked=False
+    starter=SimpleNamespace(edit=AsyncMock(),create_thread=AsyncMock())
+    detail=SimpleNamespace(edit=AsyncMock());thread.get_partial_message.return_value=detail
+    channel.get_partial_message.return_value=starter
+    state={'created':False}
+    async def fetch(cid):
+        if state['created']:return thread
+        raise discord.NotFound(SimpleNamespace(status=404,reason='Not Found'),{'code':10003,'message':'Unknown Channel'})
+    async def create(**kwargs):
+        state['created']=True
+        if lost_thread:raise TimeoutError('thread created, response lost')
+        return thread
+    guild.fetch_channel=AsyncMock(side_effect=fetch);starter.create_thread.side_effect=create
+    client=SimpleNamespace(add_view=Mock(),user=SimpleNamespace(id=99),fetch_channel=AsyncMock(return_value=thread))
+    monkeypatch.setattr(transport,'guild_for',AsyncMock(return_value=guild))
+    monkeypatch.setattr(transport,'private_review_channel',AsyncMock(return_value=channel))
+    post=AsyncMock(return_value={'id':'777'});monkeypatch.setattr(announcement_publishing,'discord_request',post)
+    return client,starter,detail,thread,post
+
+
+@pytest.mark.parametrize('lost_thread',[False,True])
+def test_existing_panel_migrates_to_one_thread_and_resumes_lost_creation(monkeypatch,lost_thread):
+    client,starter,detail,thread,post=thread_delivery_fixture(monkeypatch,lost_thread=lost_thread)
+    if lost_thread:
+        with pytest.raises(TimeoutError):h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    row=h.run(forms.load(MEMBER))
+    assert row['staff_delivery']['thread_id']=='555' and row['staff_delivery']['form_message_id']=='777'
+    assert row['staff_delivery']['layout_version']==2
+    h.run(transport.publish_staff(client,row))
+    starter.create_thread.assert_awaited_once();post.assert_awaited_once()
+    assert 'Alex' in starter.create_thread.await_args.kwargs['name']
+    assert ANS['reason'] in str(post.await_args.args[2])
+    assert ANS['reason'] not in str(starter.edit.await_args.kwargs['view'].to_components())
+    assert f'https://discord.com/channels/{h.GUILD_ID}/555' in str(starter.edit.await_args.kwargs['view'].to_components())
+
+
+def test_thread_form_redacted_when_responsable_deletes_last_form(monkeypatch):
+    client,starter,detail,thread,post=thread_delivery_fixture(monkeypatch)
+    h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    row=h.run(forms.load(MEMBER));row['forms']=[];row['active']=False;row['revision']+=1
+    h.run(h.db.verification_cases.replace_one({'_id':row['_id']},row))
+    h.run(transport.publish_staff(client,row))
+    content=str(detail.edit.await_args.kwargs['view'].to_components())
+    assert 'Formulaire supprimé' in content and ANS['reason'] not in content
+    assert 'Formulaire supprimé' in str(starter.edit.await_args.kwargs['view'].to_components())
+    post.assert_awaited_once()
+
+
+def test_lost_thread_message_is_reconciled_instead_of_duplicated(monkeypatch):
+    client,starter,detail,thread,post=thread_delivery_fixture(monkeypatch)
+    post.side_effect=TimeoutError('Discord accepted, response lost')
+    with pytest.raises(TimeoutError):h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    receipt=h.run(h.db.workflow_receipts.find_one({'status':'inflight'}))
+    class History:
+        used=False
+        def __aiter__(self):return self
+        async def __anext__(self):
+            if self.used:raise StopAsyncIteration
+            self.used=True
+            return SimpleNamespace(id=777,nonce=receipt['nonce'],author=SimpleNamespace(id=99))
+    thread.history=lambda **kwargs:History()
+    h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    assert h.run(forms.load(MEMBER))['staff_delivery']['form_message_id']=='777'
+    post.assert_awaited_once();starter.create_thread.assert_awaited_once()
 
 
 @pytest.mark.parametrize('lost',[True,False])
