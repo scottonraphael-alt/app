@@ -2,7 +2,6 @@
 import hashlib
 import os
 import discord
-import httpx
 from discord import app_commands
 from fastapi import HTTPException
 import config
@@ -340,8 +339,6 @@ async def install(client):
     async for row in db.case_requests.find({'guild_id':str(config.DISCORD_GUILD_ID),'status':{'$in':['waiting','open']}}):
         if row.get('notification') and row['status']=='waiting':client.add_view(SupportDecision(row),message_id=int(row['notification']['message_id']))
         if row['status']=='open':client.add_view(RoomPanel(row['_id'],row=row))
-    async with httpx.AsyncClient(timeout=15) as http:
-        for name in ('panel','convocation','bulle','dossier','purgatoire'):
-            response=await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{config.DISCORD_GUILD_ID}/commands',headers={'Authorization':f'Bot {config.DISCORD_BOT_TOKEN}'},json=tree.get_command(name,guild=scope).to_dict(tree))
-            response.raise_for_status()
+    from services.discord_command_registration import upsert_commands
+    await upsert_commands(client,tree,scope,('panel','convocation','bulle','dossier','purgatoire'))
     client.member_workflows_registered=True

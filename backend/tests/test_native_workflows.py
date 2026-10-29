@@ -227,11 +227,8 @@ def test_all_staff_can_request_purgatory_but_not_for_other_staff(world):
 
 def test_command_registration_preserves_existing_commands_and_spelling(monkeypatch):
     posted=[]
-    class HTTP:
-        async def __aenter__(self):return self
-        async def __aexit__(self,*args):return False
-        async def post(self,url,**kwargs):posted.append(kwargs['json']);return SimpleNamespace(raise_for_status=lambda:None)
-    monkeypatch.setattr(commands.httpx,'AsyncClient',lambda **kw:HTTP())
+    async def upsert(http,app_id,guild_id,payload):posted.append(payload);return {'id':'1'}
+    monkeypatch.setattr(discord.http.HTTPClient,'upsert_guild_command',upsert)
     async def install():
         client=discord.Client(intents=discord.Intents.none());client._connection.application_id=123
         await commands.install(client)

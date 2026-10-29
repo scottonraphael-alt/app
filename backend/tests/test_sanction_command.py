@@ -208,16 +208,12 @@ def test_private_view_refuses_other_executor():
 
 def test_registration_single_guild_upsert_preserves_other_commands(monkeypatch):
     captured=[]
-    class HTTP:
-        def __init__(self,**kw):pass
-        async def __aenter__(self):return self
-        async def __aexit__(self,*args):pass
-        async def post(self,url,**kw):captured.append((url,kw));return httpx.Response(200,json={'id':'1'})
-    monkeypatch.setattr(ui.httpx,'AsyncClient',HTTP)
+    async def upsert(http,app_id,guild_id,payload):captured.append((app_id,guild_id,payload));return {'id':'1'}
+    monkeypatch.setattr(discord.http.HTTPClient,'upsert_guild_command',upsert)
     async def check():
         client=discord.Client(intents=discord.Intents.none());client._connection.application_id=123;await ui.install(client)
-        assert captured[0][0].endswith(f'/applications/123/guilds/{h.GUILD_ID}/commands') and captured[0][1]['json']['name']=='sanction'
-        assert [entry[1]['json']['name'] for entry in captured]==['sanction','infos-troubles','crise']
+        assert captured[0][:2]==(123,int(h.GUILD_ID)) and captured[0][2]['name']=='sanction'
+        assert [entry[2]['name'] for entry in captured]==['sanction','infos-troubles','crise']
         assert client.sanction_tree.get_command('sanction',guild=discord.Object(id=int(h.GUILD_ID)))
         await client.close()
     h.run(check())

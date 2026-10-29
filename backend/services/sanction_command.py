@@ -2,7 +2,6 @@
 import logging
 
 import discord
-import httpx
 from discord import app_commands
 from fastapi import HTTPException
 
@@ -357,11 +356,7 @@ async def install(client):
     from services.wellbeing_commands import register
     guild=discord.Object(id=int(config.DISCORD_GUILD_ID))
     register(tree,guild)
-    async with httpx.AsyncClient(timeout=15) as http:
-        for name in ('sanction','infos-troubles','crise'):
-            command=tree.get_command(name,guild=guild)
-            response=await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{config.DISCORD_GUILD_ID}/commands',
-                headers={'Authorization':f'Bot {config.DISCORD_BOT_TOKEN}'},json=command.to_dict(tree))
-            if response.is_error:raise RuntimeError(f'Enregistrement /{name} refusé par Discord (HTTP {response.status_code}).')
+    from services.discord_command_registration import upsert_commands
+    await upsert_commands(client,tree,guild,('sanction','infos-troubles','crise'))
     client.sanction_registered=True
     logger.info('Commandes /sanction, /infos-troubles et /crise enregistrées.')

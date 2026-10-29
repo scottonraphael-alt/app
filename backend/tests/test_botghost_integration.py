@@ -296,6 +296,50 @@ def test_durable_message_is_not_blindly_repeated(monkeypatch,lost):
     assert call.call_count==1
 
 
+def test_definite_message_rejection_can_resume_without_repeating_a_success(monkeypatch):
+    from services import announcement_publishing
+    call=AsyncMock(side_effect=[HTTPException(502,'Discord refuse le GIF.'),{'id':'555'}])
+    monkeypatch.setattr(announcement_publishing,'discord_request',call)
+    adapter=transport.Adapter(SimpleNamespace())
+    async def send():
+        from services.verification_discord import message
+        return await adapter.send_once(SimpleNamespace(id=123),message('Bienvenue','Texte'),'welcome-retry')
+    with pytest.raises(HTTPException):h.run(send())
+    assert h.run(h.db.workflow_receipts.find_one({'_id':'welcome-retry'}))['status']=='rejected'
+    assert h.run(adapter.reconcile('welcome',{},'welcome-retry'))=='not_applied'
+    h.run(send());h.run(send())
+    assert call.await_count==2
+    assert h.run(h.db.workflow_receipts.find_one({'_id':'welcome-retry'}))['status']=='sent'
+
+
+def test_job_failure_keeps_readable_cause_and_retry_skips_confirmed_roles(monkeypatch):
+    import copy
+    from services import verification_jobs
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:welcome-failed'))
+    h.run(forms.act(MEMBER,STAFF,{'action':'approve','revision':row['revision'],'request_id':'approve-failed'},origin='iris'))
+    job_id=h.run(forms.load(MEMBER))['jobs'][0]['id']
+    class Adapter:
+        calls=[]
+        failed=False
+        async def authorize(self,*args):pass
+        async def reconcile(self,*args):return 'not_applied'
+        async def perform(self,step,payload,nonce):
+            self.calls.append(step)
+            if step=='welcome' and not self.failed:
+                self.failed=True
+                raise HTTPException(503,'OasisLink ne peut pas joindre le GIF dans général (1081957994125860905).')
+            return {'confirmed':True}
+    adapter=Adapter();failed=h.run(verification_jobs.run_job(MEMBER,job_id,adapter))
+    assert failed['status']=='action_required'
+    assert '1081957994125860905' in failed['jobs'][0]['steps'][1]['error_message']
+    row=h.run(forms.load(MEMBER));changed=copy.deepcopy(row);changed['jobs'][0].update(status='pending',lease_until=None)
+    h.run(forms.save(row,changed))
+    done=h.run(verification_jobs.run_job(MEMBER,job_id,adapter))
+    assert done['status']=='approved' and adapter.calls==['member_access','welcome','welcome','archive']
+    assert 'error_message' not in done['jobs'][0]['steps'][1]
+
+
 def test_duplicate_roles_and_missing_gifs_fail_before_mutation(monkeypatch):
     adapter=transport.Adapter(SimpleNamespace());adapter.guild=SimpleNamespace(fetch_roles=AsyncMock())
     with pytest.raises(HTTPException):h.run(adapter.role_configuration('18-25'))
@@ -366,19 +410,29 @@ def test_native_approval_changes_only_access_and_age_roles(monkeypatch,tmp_path)
         async def remove_roles(self,*remove,**kwargs):self.roles=[role for role in self.roles if role not in remove]
     member=Member();bot=SimpleNamespace(guild_permissions=SimpleNamespace(manage_roles=True),top_role=Role(999))
     class Channel:
-        def permissions_for(self,who):return SimpleNamespace(send_messages=True)
+        id=1081957994125860905
+        name='général'
+        def permissions_for(self,who):return SimpleNamespace(view_channel=True,send_messages=True,attach_files=True)
     channel=Channel();monkeypatch.setattr(transport.discord,'TextChannel',Channel)
     guild=SimpleNamespace(id=int(h.GUILD_ID),fetch_roles=AsyncMock(return_value=list(roles.values())),me=bot,
         fetch_member=AsyncMock(side_effect=lambda ident:bot if ident==99 else member),fetch_channel=AsyncMock(return_value=channel))
+    channel.guild=guild
     client=SimpleNamespace(user=SimpleNamespace(id=99),is_ready=lambda:True,get_guild=lambda ident:guild)
-    adapter=transport.Adapter(client);adapter.send_once=AsyncMock()
+    adapter=transport.Adapter(client)
+    from services import announcement_publishing
+    post=AsyncMock(return_value={'id':'welcome-1'});monkeypatch.setattr(announcement_publishing,'discord_request',post)
     h.run(forms.submit({'id':MEMBER},ANS,'interaction:live'));row=h.run(forms.load(MEMBER))
     h.run(forms.act(MEMBER,STAFF,{'action':'approve','revision':row['revision'],'request_id':'approve-live'},origin='iris'))
     from services import verification_jobs
     row=h.run(forms.load(MEMBER));result=h.run(verification_jobs.run_job(MEMBER,row['jobs'][0]['id'],adapter))
     assert result['status']=='approved' and result['active'] is False
     assert {role.id for role in member.roles}=={10,14,77}
-    adapter.send_once.assert_awaited_once()
+    post.assert_awaited_once()
+    assert post.await_args.args[1]=='1081957994125860905'
+    assert 'attachment://welcome.gif' in str(post.await_args.args[2]['components'])
+    asset=post.await_args.args[3][0]
+    assert storage_service._resolve_inside_root(asset['storage_path']).read_bytes().startswith((b'GIF87a',b'GIF89a'))
+    h.run(verification_jobs.run_job(MEMBER,row['jobs'][0]['id'],adapter));post.assert_awaited_once()
     assert h.run(h.db.sanction_commands.count_documents({}))==0
 
 

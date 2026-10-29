@@ -40,3 +40,9 @@ test('pending effects prevent another decision and show readable step labels',as
  await render(<VerificationDetailPage/>);expect(container.querySelector('form')).toBeNull();
  expect(container.textContent).toContain('Attribution des accès : En attente');expect(container.textContent).not.toContain('member_access');
 });
+test('shows the exact welcome failure so Staff can repair the destination and resume',async()=>{
+ api.get.mockResolvedValue({data:{...row,status:'action_required',jobs:[{id:'job-1',action:'approve',status:'uncertain',steps:[{name:'welcome',status:'uncertain',error_type:'HTTPException',error_message:'OasisLink doit pouvoir joindre les GIF dans général (1081957994125860905).'}]}]}});
+ await render(<VerificationDetailPage/>);
+ expect(container.textContent).toContain('OasisLink doit pouvoir joindre les GIF dans général (1081957994125860905).');
+ expect(button('Vérifier et reprendre l’action')).toBeTruthy();
+});

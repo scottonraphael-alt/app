@@ -7,10 +7,13 @@ Never use an adapter that blindly repeats a kick, ban or message after a lost re
 import asyncio
 import copy
 import hashlib
+import logging
 from datetime import timedelta
 from uuid import uuid4
 from fastapi import HTTPException
 from services import verification_service as service
+
+logger=logging.getLogger(__name__)
 
 
 def find_job(row,job_id):
@@ -62,11 +65,17 @@ async def run_job(member_id,job_id,adapter):
                 await update(member_id,job_id,token,lambda row,job:job['steps'][index].update(status='inflight'))
                 result=await asyncio.wait_for(adapter.perform(step['name'],claimed['payload'],nonce),60)
                 if not isinstance(result,dict) or result.get('confirmed') is not True:raise RuntimeError('confirmation_unknown')
-            await update(member_id,job_id,token,lambda row,job:job['steps'][index].update(status='done',confirmed_at=service.stamp()))
+            def confirmed(row,job):
+                current=job['steps'][index]
+                current.update(status='done',confirmed_at=service.stamp())
+                current.pop('error_type',None);current.pop('error_message',None)
+            await update(member_id,job_id,token,confirmed)
         except Exception as error:
+            detail=str(error.detail) if isinstance(error,HTTPException) else 'Discord refuse cette opération.' if hasattr(error,'status') else 'Erreur technique : '+type(error).__name__
+            logger.exception('Vérification membre=%s action=%s étape=%s : %s',member_id,claimed['action'],step['name'],detail)
             optional=step['name'] in service.OPTIONAL
             def failed(row,job):
-                job['steps'][index].update(status='optional_failed' if optional else 'uncertain',error_type=type(error).__name__)
+                job['steps'][index].update(status='optional_failed' if optional else 'uncertain',error_type=type(error).__name__,error_message=detail[:2200])
                 if not optional:
                     job.update(status='uncertain',lease_until=None);row['status']='action_required'
                     row['events'].append(service.event('effect.unconfirmed',job['actor_id'],job['form_id'],step=step['name']))

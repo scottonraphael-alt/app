@@ -7,7 +7,6 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import discord
-import httpx
 from discord import app_commands
 from fastapi import HTTPException
 from pymongo import ReturnDocument
@@ -70,6 +69,16 @@ async def private_review_channel(guild):
     return channel
 
 
+async def welcome_channel(guild):
+    channel=await guild.fetch_channel(setting('VERIFICATION_WELCOME_CHANNEL_ID','1081957994125860905'))
+    if not isinstance(channel,discord.TextChannel) or channel.guild.id!=guild.id:
+        raise HTTPException(503,'Le salon de bienvenue doit être un salon textuel du serveur.')
+    permissions=channel.permissions_for(guild.me)
+    if not permissions.view_channel or not permissions.send_messages or not permissions.attach_files:
+        raise HTTPException(503,f'OasisLink doit pouvoir voir le salon {channel.name} ({channel.id}), envoyer des messages et joindre les GIF.')
+    return channel
+
+
 async def delivery_diagnostic(client):
     """Read-only diagnosis for Responsables; never sends a form or a welcome."""
     results = {}
@@ -83,12 +92,7 @@ async def delivery_diagnostic(client):
             if kind == 'forms':
                 channel = await private_review_channel(guild)
             else:
-                channel = await guild.fetch_channel(setting(variable, default))
-                if not isinstance(channel, discord.TextChannel) or channel.guild.id != guild.id:
-                    raise HTTPException(503, 'Le salon de bienvenue doit être un salon textuel du serveur.')
-                permissions = channel.permissions_for(guild.me)
-                if not permissions.view_channel or not permissions.send_messages or not permissions.attach_files:
-                    raise HTTPException(503, f'OasisLink doit pouvoir voir le salon {channel.name} ({channel.id}), envoyer des messages et joindre les GIF.')
+                channel = await welcome_channel(guild)
             results[kind] = {'ok': True, 'channel_id': str(channel.id), 'message': f'Salon {channel.name} ({channel.id}) accessible.'}
         except Exception as exc:
             detail = str(exc.detail) if isinstance(exc, HTTPException) else (
@@ -216,14 +220,13 @@ class Adapter:
         await service.authority(job['actor_id'])
         if job['payload']['training']:
             return
+        if job['action']=='approve' and step in ('member_access','welcome'):
+            self.welcome_gifs()
+            await welcome_channel(self.guild)
         if job['action'] == 'approve' and step == 'member_access':
             if await db.purgatory_states.find_one({'_id':f'{self.guild.id}:{job["payload"]["member_id"]}','status':{'$ne':'released'}}):
                 raise HTTPException(409,'Le membre doit sortir du Purgatoire avant la validation de ses accès.')
             await self.role_configuration(job['payload']['age'])
-            self.welcome_gifs()
-            channel = await self.guild.fetch_channel(setting('VERIFICATION_WELCOME_CHANNEL_ID', '1081957994125860905'))
-            if not isinstance(channel, discord.TextChannel) or not channel.permissions_for(self.guild.me).send_messages:
-                raise HTTPException(503, 'Salon de bienvenue inaccessible.')
         if job['action'] in ('refuse', 'kick', 'ban') and step == 'notify_refusal':
             from services import sanction_actions as sanctions
             sanction_type = 'bannissement' if job['action'] == 'ban' else 'kick'
@@ -284,9 +287,7 @@ class Adapter:
             await member.add_roles(member_role, age_role, reason='Iris : formulaire validé', atomic=True)
             await member.remove_roles(*[role for role in remove if role in member.roles], reason='Iris : validation du formulaire', atomic=True)
         elif step == 'welcome':
-            channel = await self.guild.fetch_channel(setting('VERIFICATION_WELCOME_CHANNEL_ID', '1081957994125860905'))
-            if not isinstance(channel, discord.TextChannel):
-                raise HTTPException(503, 'Salon de bienvenue invalide.')
+            channel = await welcome_channel(self.guild)
             gifs = self.welcome_gifs()
             view = message('🌸 Bienvenue dans Oasis', f'Bienvenue <@{member_id}> ! Ton formulaire a été validé. Tu peux maintenant découvrir les salons et rejoindre les échanges.')
             from services.workflow_media import asset_for
@@ -332,11 +333,20 @@ class Adapter:
         if receipt:
             if receipt.get('status') == 'sent':
                 return
-            raise HTTPException(409, 'Un envoi interrompu doit être vérifié avant d’être répété.')
-        await db.workflow_receipts.insert_one({'_id': nonce, 'status': 'inflight', 'channel_id': str(channel.id), 'nonce': nonce, 'at': service.stamp()})
+            if receipt.get('status')!='rejected':raise HTTPException(409, 'Un envoi interrompu doit être vérifié avant d’être répété.')
+            claimed=await db.workflow_receipts.update_one({'_id':nonce,'status':'rejected'},{'$set':{'status':'inflight','at':service.stamp()}})
+            if not claimed.matched_count:raise HTTPException(409,'La reprise de cet envoi est déjà en cours.')
+        else:
+            await db.workflow_receipts.insert_one({'_id': nonce, 'status': 'inflight', 'channel_id': str(channel.id), 'nonce': nonce, 'at': service.stamp()})
         from services.announcement_publishing import discord_request
-        sent = await discord_request('POST', str(channel.id), {'flags': 32768, 'components': view.to_components(),
-            'allowed_mentions': {'parse': [],'roles':allowed_roles or []}, 'nonce': nonce, 'enforce_nonce': True}, assets or [])
+        try:
+            sent = await discord_request('POST', str(channel.id), {'flags': 32768, 'components': view.to_components(),
+                'allowed_mentions': {'parse': [],'roles':allowed_roles or []}, 'nonce': nonce, 'enforce_nonce': True}, assets or [])
+        except HTTPException as exc:
+            # A definite Discord rejection/local validation error proves nothing
+            # was sent. Timeouts and 5xx remain inflight and require reconciliation.
+            await db.workflow_receipts.update_one({'_id':nonce,'status':'inflight'},{'$set':{'status':'rejected','error_message':str(exc.detail)[:2200]}})
+            raise
         await db.workflow_receipts.update_one({'_id': nonce}, {'$set': {'status': 'sent', 'message_id': str(sent['id'])}})
 
     async def create_ticket(self, payload, nonce):
@@ -393,6 +403,7 @@ class Adapter:
 
     async def reconcile(self, step, payload, nonce):
         receipt = await db.workflow_receipts.find_one({'_id': nonce})
+        if receipt and receipt.get('status')=='rejected':return 'not_applied'
         if receipt and receipt.get('status') == 'inflight':
             receipt = await reconcile_message(self.client, receipt)
         if receipt and receipt.get('status') == 'sent':
@@ -484,11 +495,8 @@ async def install(client):
             thread_url=f'https://discord.com/channels/{service.guild()}/{thread_id}' if thread_id else None), message_id=int(row['staff_delivery']['message_id']))
         if row.get('forms') and row['staff_delivery'].get('form_message_id'):
             client.add_view(StaffForm(row['member_id'],base_url=config.FRONTEND_URL,row=row),message_id=int(row['staff_delivery']['form_message_id']))
-    async with httpx.AsyncClient(timeout=15) as http:
-        command = tree.get_command('panel-vérification', guild=guild_obj)
-        response = await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{service.guild()}/commands',
-            headers={'Authorization': f'Bot {config.DISCORD_BOT_TOKEN}'}, json=command.to_dict(tree))
-        response.raise_for_status()
+    from services.discord_command_registration import upsert_commands
+    await upsert_commands(client,tree,guild_obj,('panel-vérification',))
     client.verification_registered = True
 
 

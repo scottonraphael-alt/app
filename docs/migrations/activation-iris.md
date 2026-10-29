@@ -25,6 +25,16 @@ qui supprimerait les autres commandes du bot. Un échec de l’un des modules n�
 pas les autres commandes de s’enregistrer. L’activation est celle du code déployé :
 la modification locale ne redémarre pas elle-même le serveur d’hébergement.
 
+L'enregistrement individuel utilise le client HTTP de discord.py afin de respecter
+les limites et les délais `retry_after` de Discord, notamment au démarrage (HTTP 429).
+Une validation suit les étapes accès, bienvenue avec GIF, puis archivage. Si une
+étape échoue, sa cause est affichée dans « Étapes d'application » du dossier Iris
+et journalisée avec le membre et le nom de l'étape. « Vérifier et reprendre l'action »
+conserve les étapes déjà confirmées, donc ne réattribue pas les rôles déjà appliqués.
+Un envoi explicitement refusé peut être retenté ; un délai réseau ambigu doit être
+réconcilié avec Discord avant répétition. Les dossiers en mode Formation / test
+n'appliquent aucun rôle et n'envoient aucun accueil réel.
+
 ### Lecture du salon des formulaires
 
 Le salon présente un mini panneau de prise en charge (membre, état, intervenant,
