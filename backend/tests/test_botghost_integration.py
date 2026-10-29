@@ -110,8 +110,18 @@ def test_staff_panel_is_compact_and_answers_only_appear_in_thread():
     assert ANS['reason'] not in content and ANS['psychiatry'] not in content
     assert ANS['reason'] in str(full) and ANS['psychiatry'] in str(full)
     assert 'Lire le formulaire' in content and 'En attente' in content
-    assert 'Créer un ticket' in content and 'Clore sans expulser' in content
-    assert all(action not in content for action in (':ban',':kick',':refuse',':clarify'))
+    assert 'Créer un ticket' not in content and 'Clore sans expulser' not in content
+    assert 'Créer un ticket' in str(full) and 'Clore sans expulser' in str(full)
+    assert 'En attente de prise en charge' in content and f'Formulaire de <@{MEMBER}>' in content
+    assert 'uniquement sur Iris' in content and 'uniquement sur Iris' in str(full)
+    def buttons(components):
+        for item in components:
+            if item['type']==2:yield item
+            yield from buttons(item.get('components',[]))
+    claim=next(b for b in buttons(panel) if b.get('custom_id','').endswith(':claim'))
+    assert claim['style']==1
+    assert {b.get('custom_id','').split(':')[-1] for b in buttons(full) if b.get('custom_id')}=={'approve','ticket','close'}
+    assert all(action not in str((panel,full)) for action in (':ban',':kick',':refuse',':clarify'))
 
 
 def review_guild(monkeypatch,*,unexpected=False,bot_allowed=True):
@@ -230,7 +240,8 @@ def test_existing_panel_migrates_to_one_thread_and_resumes_lost_creation(monkeyp
     h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
     row=h.run(forms.load(MEMBER))
     assert row['staff_delivery']['thread_id']=='555' and row['staff_delivery']['form_message_id']=='777'
-    assert row['staff_delivery']['layout_version']==2
+    assert row['staff_delivery']['layout_version']==3
+    assert any(call.kwargs['message_id']==777 for call in client.add_view.call_args_list)
     h.run(transport.publish_staff(client,row))
     starter.create_thread.assert_awaited_once();post.assert_awaited_once()
     assert 'Alex' in starter.create_thread.await_args.kwargs['name']

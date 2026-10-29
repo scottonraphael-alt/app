@@ -27,8 +27,9 @@ la modification locale ne redémarre pas elle-même le serveur d’hébergement.
 
 ### Lecture du salon des formulaires
 
-Le salon présente un mini panneau de prise en charge (état, intervenant, actions et
-lien Iris). Les réponses complètes sont publiées dans un fil associé au panneau,
+Le salon présente un mini panneau de prise en charge (membre, état, intervenant,
+bouton violet « Je m’en occupe » et lien Iris). Les actions Valider, Créer un ticket
+et Clore sont placées dans le formulaire du fil. Les réponses complètes sont publiées dans un fil associé au panneau,
 avec un bouton « Lire le formulaire ». Les anciens panneaux sont convertis sur
 place au prochain cycle, sans second panneau. Le bot doit pouvoir créer des fils
 publics et écrire dans les fils ; leur accès reste celui du salon Staff privé.

@@ -155,7 +155,7 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':2, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':3, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
 
@@ -185,6 +185,7 @@ async def publish_thread_form(client, thread, row, record):
     if record.get('form_message_id'):
         try:
             await thread.get_partial_message(int(record['form_message_id'])).edit(view=view,allowed_mentions=NONE)
+            if row.get('forms'):client.add_view(view,message_id=int(record['form_message_id']))
             return
         except discord.NotFound:
             # Do not blindly repeat an old receipt whose message was deleted.
@@ -201,6 +202,7 @@ async def publish_thread_form(client, thread, row, record):
         await Adapter(client).send_once(thread,view,key)
         receipt=await db.workflow_receipts.find_one({'_id':key})
     record['form_message_id']=str(receipt['message_id'])
+    client.add_view(view,message_id=int(record['form_message_id']))
 
 
 class Adapter:
@@ -449,7 +451,7 @@ async def tick(client):
                 except Exception:
                     logger.exception('Traitement de vérification différé (%s).', job['id'])
         current = await service.load(row['member_id'])
-        if (current.get('staff_delivery') or {}).get('layout_version') != 2 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
+        if (current.get('staff_delivery') or {}).get('layout_version') != 3 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
             except Exception:
@@ -480,6 +482,8 @@ async def install(client):
         thread_id=row['staff_delivery'].get('thread_id')
         client.add_view(StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,
             thread_url=f'https://discord.com/channels/{service.guild()}/{thread_id}' if thread_id else None), message_id=int(row['staff_delivery']['message_id']))
+        if row.get('forms') and row['staff_delivery'].get('form_message_id'):
+            client.add_view(StaffForm(row['member_id'],base_url=config.FRONTEND_URL,row=row),message_id=int(row['staff_delivery']['form_message_id']))
     async with httpx.AsyncClient(timeout=15) as http:
         command = tree.get_command('panel-vérification', guild=guild_obj)
         response = await http.post(f'https://discord.com/api/v10/applications/{client.application_id}/guilds/{service.guild()}/commands',
