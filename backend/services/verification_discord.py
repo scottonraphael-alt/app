@@ -87,7 +87,7 @@ IRIS_DECISIONS='### 🌐 Décisions à faire sur Iris\n**Refus, bannissement et 
 
 def staff_status(row):
     if not row:return 'Aucun intervenant pour le moment.'
-    return '**État :** '+STATUS_LABELS.get(row['status'],'À vérifier')+'\n**Pris en charge par :** '+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'Personne pour le moment')
+    return ('**🧪 Formation / test : simulation, aucun rôle ni accueil réel.**\n' if row.get('training') else '')+'**État :** '+STATUS_LABELS.get(row['status'],'À vérifier')+'\n**Pris en charge par :** '+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'Personne pour le moment')
 
 
 def staff_buttons(owner,row,choices):
@@ -112,7 +112,7 @@ class StaffActions:
                 await audit('verification.viewed', str(interaction.user.id), member_id=self.member_id)
                 # Destructive/closing decisions always receive an explicit private confirmation.
                 if action!='claim':
-                    view=Confirm(self.member_id,action,row['revision'],str(interaction.user.id))
+                    view=Confirm(self.member_id,action,row['revision'],str(interaction.user.id),training=row.get('training',False))
                     await interaction.followup.send(view=view,ephemeral=True,allowed_mentions=NONE);return
                 await service.act(self.member_id,str(interaction.user.id),{'action':action,'revision':row['revision'],'request_id':f'discord:{interaction.id}'},origin='discord')
                 await interaction.followup.send(view=message('🤝 Dossier pris en charge','La prise en charge est enregistrée à ton nom.'),ephemeral=True,allowed_mentions=NONE)
@@ -161,19 +161,21 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         self.add_item(box)
 
 class Confirm(discord.ui.LayoutView):
-    def __init__(self,member_id,action,revision,actor_id):
+    def __init__(self,member_id,action,revision,actor_id,*,training=False):
         super().__init__(timeout=180)
         labels={'approve':'Valider le formulaire','ticket':'Créer un ticket privé','close':'Archiver sans expulser le membre'}
         box=discord.ui.Container(discord.ui.TextDisplay('## 🔎 Confirmer cette action'),
             discord.ui.TextDisplay(f'**{labels[action]}** pour <@{member_id}>.\nLe résultat sera confirmé dans le dossier une fois les étapes Discord terminées.'),accent_colour=0x5B8171)
+        if training:box.add_item(discord.ui.TextDisplay('### 🧪 Simulation de formation\nAucun rôle ne sera modifié et aucun message de bienvenue ne sera envoyé.'))
         button=discord.ui.Button(label='Confirmer',style=discord.ButtonStyle.primary)
         async def confirm(interaction):
             try:
                 check_guild(interaction)
                 if str(interaction.user.id)!=actor_id:raise HTTPException(403,'Cette confirmation appartient à un autre membre.')
                 await interaction.response.defer(ephemeral=True,thinking=True)
-                await service.act(member_id,actor_id,{'action':action,'revision':revision,'request_id':f'discord:{interaction.id}'},origin='discord')
+                result=await service.act(member_id,actor_id,{'action':action,'revision':revision,'request_id':f'discord:{interaction.id}'},origin='discord')
                 self.stop()
-                await interaction.followup.send(view=message('⏳ Action enregistrée','Le dossier indique les étapes en attente et celles qui sont confirmées. Une panne de message privé ne bloque pas le traitement.'),ephemeral=True,allowed_mentions=NONE)
+                simulated=result.get('training',False)
+                await interaction.followup.send(view=message('🧪 Simulation enregistrée' if simulated else '⏳ Action enregistrée','Mode formation : aucun rôle ni message de bienvenue réel ne sera appliqué.' if simulated else 'Le dossier indique les étapes en attente et celles qui sont confirmées. Une panne de message privé ne bloque pas le traitement.'),ephemeral=True,allowed_mentions=NONE)
             except Exception as exc:await error(interaction,exc)
         button.callback=confirm;box.add_item(discord.ui.ActionRow(button));self.add_item(box)

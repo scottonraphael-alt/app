@@ -46,6 +46,36 @@ def test_admission_read_and_claim_work_before_handover():
     assert client.get(f'/api/staff/verifications/{MEMBER}',cookies=h.session_cookies('helper')).status_code==403
 
 
+@pytest.mark.parametrize('simulated',[True,False])
+def test_dossier_distinguishes_original_simulation_and_links_real_welcome_receipt(monkeypatch,simulated):
+    import hashlib
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:welcome-proof'))
+    h.run(forms.act(MEMBER,STAFF,{'action':'approve','revision':row['revision'],'request_id':'approve-proof'},origin='iris'))
+    row=h.run(forms.load(MEMBER));job=row['jobs'][0]
+    job['payload']['training']=simulated
+    # The current dossier mode cannot rewrite the mode used for a past action.
+    row['training']=not simulated
+    h.run(h.db.verification_cases.replace_one({'_id':row['_id']},row))
+    nonce=hashlib.sha256(f'{forms.key(MEMBER)}:{job["id"]}:welcome'.encode()).hexdigest()[:24]
+    h.run(h.db.workflow_receipts.insert_one({'_id':nonce,'status':'sent','channel_id':'1081957994125860905','message_id':'123456789123456789'}))
+    result=h.run(forms.get(MEMBER,STAFF))['jobs'][0]
+    assert result['training'] is simulated
+    if simulated:assert 'welcome_delivery' not in result
+    else:assert result['welcome_delivery']['url']==f'https://discord.com/channels/{h.GUILD_ID}/1081957994125860905/123456789123456789'
+
+
+def test_discord_views_explain_that_training_does_not_send_real_welcome():
+    from services.verification_discord import StaffPanel,StaffForm,Confirm
+    row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:training-panel'));row['training']=True
+    async def render():
+        return [view.to_components() for view in [StaffPanel(MEMBER,base_url='https://iris.example',row=row),
+            StaffForm(MEMBER,base_url='https://iris.example',row=row),Confirm(MEMBER,'approve',row['revision'],STAFF,training=True)]]
+    panel,form,confirmation=h.run(render())
+    assert 'Formation / test' in str(panel) and 'Formation / test' in str(form)
+    assert 'aucun message de bienvenue ne sera envoyé' in str(confirmation)
+
+
 def test_360_filters_confidential_cases_before_counting(monkeypatch):
     monkeypatch.setattr(policy,'admin_role',lambda:'1321630097744199721')
     public=Reader();private=Reader('⚜️・｜cstaff-alex');private.data['id']='600000000000000002'
@@ -240,7 +270,7 @@ def test_existing_panel_migrates_to_one_thread_and_resumes_lost_creation(monkeyp
     h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
     row=h.run(forms.load(MEMBER))
     assert row['staff_delivery']['thread_id']=='555' and row['staff_delivery']['form_message_id']=='777'
-    assert row['staff_delivery']['layout_version']==3
+    assert row['staff_delivery']['layout_version']==4
     assert any(call.kwargs['message_id']==777 for call in client.add_view.call_args_list)
     h.run(transport.publish_staff(client,row))
     starter.create_thread.assert_awaited_once();post.assert_awaited_once()

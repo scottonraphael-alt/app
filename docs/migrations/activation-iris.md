@@ -34,6 +34,11 @@ conserve les étapes déjà confirmées, donc ne réattribue pas les rôles déj
 Un envoi explicitement refusé peut être retenté ; un délai réseau ambigu doit être
 réconcilié avec Discord avant répétition. Les dossiers en mode Formation / test
 n'appliquent aucun rôle et n'envoient aucun accueil réel.
+Les étapes d'une action de formation sont affichées « Simulé » et gardent ce statut
+même après un retour du dossier en mode réel. Pour tester une admission réelle,
+un Responsable repasse le dossier en mode réel puis le membre soumet un nouveau
+formulaire : les décisions simulées ne sont jamais rejouées. Une validation réelle
+avec reçu d'envoi affiche le lien du message de bienvenue et son salon dans Iris.
 
 ### Lecture du salon des formulaires
 

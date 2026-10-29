@@ -46,3 +46,17 @@ test('shows the exact welcome failure so Staff can repair the destination and re
  expect(container.textContent).toContain('OasisLink doit pouvoir joindre les GIF dans général (1081957994125860905).');
  expect(button('Vérifier et reprendre l’action')).toBeTruthy();
 });
+test('past training actions say simulated even after the dossier returns to real mode',async()=>{
+ api.get.mockResolvedValue({data:{...row,training:false,status:'approved',active:false,jobs:[{id:'job-test',action:'approve',status:'completed',training:true,steps:[{name:'welcome',status:'done'}]}]}});
+ await render(<VerificationDetailPage/>);
+ expect(container.textContent).toContain('Message de bienvenue : Simulé');
+ expect(container.textContent).toContain('Aucun rôle ni message de bienvenue réel');
+ expect(container.textContent).not.toContain('Message de bienvenue : Confirmé');
+});
+test('real welcome shows the recorded message link and destination channel',async()=>{
+ const url='https://discord.com/channels/1/1081957994125860905/555';
+ api.get.mockResolvedValue({data:{...row,status:'approved',active:false,jobs:[{id:'job-real',action:'approve',status:'completed',training:false,steps:[{name:'welcome',status:'done'}],welcome_delivery:{url,channel_id:'1081957994125860905',message_id:'555'}}]}});
+ await render(<VerificationDetailPage/>);
+ expect(container.querySelector(`a[href="${url}"]`).textContent).toContain('Voir le message de bienvenue');
+ expect(container.textContent).toContain('Salon : 1081957994125860905');
+});

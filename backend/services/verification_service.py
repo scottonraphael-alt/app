@@ -64,7 +64,8 @@ def public(row,*,detail=True):
     result['last_form_at']=forms[-1]['submitted_at'] if forms else None
     if detail:
         result['forms']=copy.deepcopy(forms);result['events']=copy.deepcopy(row.get('events',[]))
-        result['jobs']=[{k:copy.deepcopy(job.get(k)) for k in ('id','action','form_id','status','steps','created_at','actor_id')} for job in row.get('jobs',[])]
+        result['jobs']=[{**{k:copy.deepcopy(job.get(k)) for k in ('id','action','form_id','status','steps','created_at','actor_id')},
+            'training':bool((job.get('payload') or {}).get('training'))} for job in row.get('jobs',[])]
     return result
 
 async def save(old,new):
@@ -123,7 +124,17 @@ async def get(member_id,actor_id):
     await authority(actor_id)
     row=await load(member_id)
     if not row['forms']:raise HTTPException(404,'Aucun formulaire conservé.')
-    return public(row)
+    result=public(row)
+    # Receipts also resolve older completed jobs, without re-running their effects.
+    jobs_by_nonce={hashlib.sha256(f'{key(member_id)}:{job["id"]}:welcome'.encode()).hexdigest()[:24]:job
+        for job in result['jobs'] if job['action']=='approve' and not job['training']}
+    if jobs_by_nonce:
+        async for receipt in db.workflow_receipts.find({'_id':{'$in':list(jobs_by_nonce)},'status':'sent'}):
+            channel_id=str(receipt.get('channel_id',''));message_id=str(receipt.get('message_id',''))
+            if not all(value.isascii() and value.isdigit() for value in (channel_id,message_id)):continue
+            jobs_by_nonce[receipt['_id']]['welcome_delivery']={'channel_id':channel_id,'message_id':message_id,
+                'url':f'https://discord.com/channels/{guild()}/{channel_id}/{message_id}'}
+    return result
 
 async def listing(actor_id,*,archive=False,offset=0,limit=25):
     await authority(actor_id)
