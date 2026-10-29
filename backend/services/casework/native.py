@@ -167,7 +167,7 @@ async def create(request_id,client):
             {'id':str(member.id),'username':member.name,'display_name':member.display_name,**cached},settings,assigned={'id':actor} if actor else None,initiator_id=row['actor_id'])
         await db.case_tickets.update_one({'_id':case['_id']},{'$set':{'source':'iris','request_id':request_id,'sync.due':True,'opening_context.triggers':row['triggers'] if support else None}})
         await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'status':'open','stage':'ready','channel_id':str(channel.id),'case_id':case['_id'],
-            'room_panel_message_id':receipt['message_id'],'room_panel_version':2}})
+            'room_panel_message_id':receipt['message_id'],'room_panel_version':3}})
         if support:
             from services.ticket_import import import_ticket_channel
             from services.discord_service import DiscordService
@@ -197,7 +197,7 @@ async def refresh_room_panel(client,row):
     panel=RoomPanel(row['_id'],row=row)
     await channel.get_partial_message(int(message_id)).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
     client.add_view(panel,message_id=int(message_id))
-    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':2},'$unset':{'room_panel_error':''}})
+    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':3},'$unset':{'room_panel_error':''}})
 
 
 async def tick(client):
@@ -217,7 +217,7 @@ async def tick(client):
                 receipt=await db.workflow_receipts.find_one({'_id':nonce})
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}}})
             except Exception:pass
-        if row['status']=='open' and row.get('room_panel_version')!=2:
+        if row['status']=='open' and row.get('room_panel_version')!=3:
             try:await refresh_room_panel(client,row)
             except Exception as exc:
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})

@@ -113,17 +113,32 @@ class SupportDecision(discord.ui.LayoutView):
         box.add_item(buttons);self.add_item(box)
 
 
+ROOM_STYLE={
+ 'verification':('📋',0x8B7AA8,'Ce ticket permet de compléter ton formulaire avec le Staff, de préciser tes réponses et de poser tes questions avant la décision sur ton accès au serveur.'),
+ 'contact_staff':('💬',0x648778,'Une question, un signalement ou une situation à clarifier ? Cet espace te permet d’échanger directement avec le Staff et de trouver la suite adaptée.'),
+ 'summons':('🛡️',0xC69D65,'Le Staff souhaite échanger avec toi au sujet d’une situation. Cet espace permet de présenter les faits, de t’écouter et de clarifier ensemble la suite.'),
+ 'bubble':('🫧',0xC893AC,'Tu n’as rien fait de mal. Cette bulle est simplement un espace pour discuter tranquillement en privé avec le Staff.'),
+ 'support':('🌸',0x73A594,'Un espace pour parler de ce que tu traverses, à ton rythme, avec ton interlocuteur. Tu peux prendre le temps de t’exprimer et demander du soutien.'),
+}
+
+
 class RoomPanel(discord.ui.LayoutView):
     def __init__(self,request_id,*,row):
         super().__init__(timeout=None)
         title=native.TITLES[row['kind']]
-        content=f'## {"🌸" if row["kind"]=="support" else "💬"} {title} de <@{row["member_id"]}>'
-        if row.get('assigned_id'):content+=f'\nTon Interlocuteur est <@{row["assigned_id"]}>'
-        elif row['kind'] in ('summons','bubble','verification'):content+=f'\nOuvert par <@{row["actor_id"]}>'
-        box=discord.ui.Container(discord.ui.TextDisplay(content),discord.ui.Separator(),discord.ui.TextDisplay('### Motif de l’échange\n'+fenced(row['reason'])),accent_colour=0x78618C if row['kind']=='bubble' else 0x527668)
-        if row['kind']=='support':box.add_item(discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])+'\n-# Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
-        if row['kind']=='bubble':box.add_item(discord.ui.TextDisplay('🫧 Tu n’as rien fait de mal. Cet espace sert simplement à discuter tranquillement en privé.'))
-        select=discord.ui.Select(placeholder='Gérer ce ticket · choisir une action',custom_id=f'iris:room:{request_id}:actions',options=room_options(row['kind']))
+        emoji,colour,purpose=ROOM_STYLE[row['kind']]
+        if row['kind']=='contact_staff' and row.get('confidential'):
+            emoji='🔐';purpose='Cet espace te permet de discuter confidentiellement avec les Responsables et les Administrateurs. Les autres membres du Staff n’ont pas accès à ce ticket.'
+        content=f'## {emoji} {title}\n### 👤 Espace de <@{row["member_id"]}>'
+        if row.get('assigned_id'):content+=f'\n🤝 Ton Interlocuteur est <@{row["assigned_id"]}>'
+        elif row['kind'] in ('summons','bubble','verification'):content+=f'\n👋 Échange ouvert par <@{row["actor_id"]}>'
+        box=discord.ui.Container(discord.ui.TextDisplay(content),discord.ui.Separator(),
+            discord.ui.TextDisplay('### ✨ Pourquoi ce ticket ?\n'+purpose),
+            discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])),accent_colour=colour)
+        if row['kind']=='support':box.add_item(discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row['triggers'])+'\n-# 👥 Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
+        box.add_item(discord.ui.Separator())
+        box.add_item(discord.ui.TextDisplay('### 🧭 Gestion du ticket\n**Pour le Staff :** choisis une action ci-dessous pour gérer les participants, les accès ou la clôture.'))
+        select=discord.ui.Select(placeholder='🧭 Choisir une action sur ce ticket',custom_id=f'iris:room:{request_id}:actions',options=room_options(row['kind']))
         async def chosen(interaction):
             try:
                 check(interaction)
@@ -132,7 +147,9 @@ class RoomPanel(discord.ui.LayoutView):
                 if str(interaction.channel_id)!=str(request.get('channel_id')):raise HTTPException(403,'Ce menu appartient à un autre salon.')
                 await choose_room_action(interaction,request['case_id'],select.values[0])
             except Exception as exc:await error(interaction,exc)
-        select.callback=chosen;box.add_item(discord.ui.ActionRow(select));self.add_item(box)
+        select.callback=chosen;box.add_item(discord.ui.ActionRow(select))
+        box.add_item(discord.ui.TextDisplay('-# 🗂️ Le dossier et son historique sont consultables dans Iris.'))
+        self.add_item(box)
 
 
 class ReasonAction(discord.ui.Modal):
@@ -196,11 +213,12 @@ ACTION_DESCRIPTIONS={'claim':'Devenir l’intervenant principal de ce ticket.',
  'restrict':'Réserver la lecture aux Administrateurs (Admin uniquement).', 'unrestrict':'Restaurer les accès précédant la restriction (Admin).',
  'suspend':'Suspendre les échanges et conserver les accès précédents.', 'reopen':'Rouvrir le ticket et rétablir ses participants.',
  'assign':'Choisir un nouvel intervenant (direction uniquement).', 'archive':'Sauvegarder dans Iris avant de supprimer le salon.'}
+ACTION_EMOJIS={'claim':'🤝','archive':'🗂️','suspend':'⏸️','reopen':'▶️','restrict':'🔒','unrestrict':'🔓','add_member':'➕','remove_member':'➖','assign':'🔄'}
 
 
 def room_options(kind):
     labels={'claim':'Prendre en charge',**ACTION_LABELS}
-    return [discord.SelectOption(label=label,value=action,description=ACTION_DESCRIPTIONS[action])
+    return [discord.SelectOption(label=label,value=action,description=ACTION_DESCRIPTIONS[action],emoji=ACTION_EMOJIS[action])
         for action,label in labels.items() if not (kind=='support' and action in ('restrict','unrestrict'))]
 
 

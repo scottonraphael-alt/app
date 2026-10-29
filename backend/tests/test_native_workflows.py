@@ -108,17 +108,18 @@ def menu_interaction(world,case,actor=STAFF,ident=777):
 def test_room_panel_has_persistent_selector_and_is_registered_at_creation(world):
     case=opened(world,kind='verification',actor=STAFF)
     row=h.run(h.db.case_requests.find_one({'_id':case['request_id']}))
-    assert row['room_panel_version']==2
+    assert row['room_panel_version']==3
     assert any(call.kwargs['message_id']==int(row['room_panel_message_id']) for call in world[1].add_view.call_args_list)
     async def render():
         panel=commands.RoomPanel(row['_id'],row=row)
         select=next(child for child in panel.walk_children() if isinstance(child,discord.ui.Select))
         assert panel.is_persistent()
         assert {'claim','restrict','unrestrict','add_member','remove_member','suspend','reopen','assign','archive'}=={option.value for option in select.options}
-        assert all(option.description for option in select.options)
+        assert all(option.description and option.emoji for option in select.options)
         return panel.to_components()
     content=str(h.run(render()))
-    assert 'Gérer le dossier' not in content and 'Choisir une action' not in content
+    assert 'Gérer le dossier' not in content and 'Pourquoi ce ticket ?' in content
+    assert 'compléter ton formulaire avec le Staff' in content
 
 
 def test_add_member_selector_opens_one_modal_and_applies_confirmed_change(world):
@@ -167,7 +168,7 @@ def test_existing_room_panel_is_upgraded_in_place(world):
     guild.channels[int(case['channel_id'])].get_partial_message=lambda ident:partial
     row=h.run(h.db.case_requests.find_one({'_id':row['_id']}));h.run(native.refresh_room_panel(client,row))
     updated=h.run(h.db.case_requests.find_one({'_id':row['_id']}))
-    assert updated['room_panel_message_id']==message_id and updated['room_panel_version']==2
+    assert updated['room_panel_message_id']==message_id and updated['room_panel_version']==3
     partial.edit.assert_awaited_once()
     from services import announcement_publishing
     announcement_publishing.discord_request.assert_awaited_once()  # Original opening only.
