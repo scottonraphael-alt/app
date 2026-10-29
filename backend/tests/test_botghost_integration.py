@@ -132,6 +132,37 @@ def test_verification_delivery_retries_after_worker_failure(monkeypatch):
     assert delivery.await_count==2
 
 
+def test_verification_worker_wakes_immediately_after_confirmation(monkeypatch):
+    import asyncio
+    from services import workflow_settings
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    monkeypatch.setattr(workflow_settings,'apply',AsyncMock())
+    async def check():
+        stop=asyncio.Event();first=asyncio.Event();calls=[]
+        async def tick(client):
+            calls.append(True)
+            if len(calls)==1:first.set()
+            else:stop.set()
+        monkeypatch.setattr(transport,'tick',tick)
+        task=asyncio.create_task(runtime.run_verifications(SimpleNamespace(is_ready=lambda:True),stop))
+        try:
+            await asyncio.wait_for(first.wait(),1)
+            runtime.wake_verifications()
+            await asyncio.wait_for(task,1)
+            assert len(calls)==2 and runtime._verification_wakeup is None
+        finally:
+            if not task.done():task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+    h.run(check())
+
+
+def test_submission_and_staff_action_notify_existing_worker(monkeypatch):
+    wake=Mock();monkeypatch.setattr(runtime,'wake_verifications',wake)
+    row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:wakeup'))
+    h.run(forms.act(MEMBER,STAFF,{'action':'claim','revision':row['revision'],'request_id':'claim-wake'},origin='discord'))
+    assert wake.call_count==2
+
+
 def test_staff_panel_is_compact_and_answers_only_appear_in_thread():
     from services.verification_discord import StaffPanel,StaffForm
     row=h.run(forms.submit({'id':MEMBER},ANS,'interaction:live'))
@@ -243,7 +274,7 @@ def thread_delivery_fixture(monkeypatch,*,lost_thread=False):
     guild=SimpleNamespace(id=int(h.GUILD_ID))
     channel=Mock(spec=discord.TextChannel);channel.id=888;channel.guild=guild
     thread=Mock(spec=discord.Thread);thread.id=555;thread.parent_id=888;thread.guild=guild;thread.archived=False;thread.locked=False
-    starter=SimpleNamespace(edit=AsyncMock(),create_thread=AsyncMock())
+    starter=SimpleNamespace(edit=AsyncMock(),create_thread=AsyncMock(),delete=AsyncMock())
     detail=SimpleNamespace(edit=AsyncMock());thread.get_partial_message.return_value=detail
     channel.get_partial_message.return_value=starter
     state={'created':False}
@@ -310,6 +341,46 @@ def test_lost_thread_message_is_reconciled_instead_of_duplicated(monkeypatch):
     h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
     assert h.run(forms.load(MEMBER))['staff_delivery']['form_message_id']=='777'
     post.assert_awaited_once();starter.create_thread.assert_awaited_once()
+
+
+@pytest.mark.parametrize('training',[True,False])
+def test_final_decision_deletes_discord_thread_and_panel_but_keeps_iris(monkeypatch,training):
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    client,starter,detail,thread,post=thread_delivery_fixture(monkeypatch)
+    h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    channel=transport.private_review_channel.return_value
+    thread.delete=AsyncMock()
+    thread.guild.fetch_channel=AsyncMock(side_effect=lambda cid:channel if cid==888 else thread)
+    row=h.run(forms.load(MEMBER));row.update(status='approved',active=False,training=training)
+    h.run(h.db.verification_cases.replace_one({'_id':row['_id']},row))
+    h.run(transport.publish_staff(client,row))
+    current=h.run(forms.load(MEMBER));h.run(transport.publish_staff(client,current))
+    assert current['staff_delivery']['cleanup_status']=='done'
+    assert current['forms'][0]['answers']==ANS
+    thread.delete.assert_awaited_once();starter.delete.assert_awaited_once()
+    post.assert_awaited_once()  # No archived form or panel is recreated.
+    assert h.run(forms.get(MEMBER,STAFF))['discord_cleanup']['status']=='done'
+
+
+def test_cleanup_recovers_after_lost_parent_deletion_without_deleting_thread_twice(monkeypatch):
+    import discord
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    client,starter,detail,thread,post=thread_delivery_fixture(monkeypatch)
+    h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
+    channel=transport.private_review_channel.return_value
+    thread.delete=AsyncMock();thread.guild.fetch_channel=AsyncMock(side_effect=lambda cid:channel if cid==888 else thread)
+    missing=discord.NotFound(SimpleNamespace(status=404,reason='Not Found'),{'code':10008,'message':'Unknown Message'})
+    starter.delete.side_effect=[TimeoutError('deleted but response lost'),missing]
+    row=h.run(forms.load(MEMBER));row.update(status='closed',active=False)
+    h.run(h.db.verification_cases.replace_one({'_id':row['_id']},row))
+    with pytest.raises(TimeoutError):h.run(transport.cleanup_staff(client,row))
+    current=h.run(forms.load(MEMBER))
+    assert current['staff_delivery']['cleanup_status']=='failed' and current['staff_delivery']['thread_deleted'] is True
+    with pytest.raises(HTTPException) as exc:h.run(forms.submit({'id':MEMBER},ANS,'interaction:during-cleanup'))
+    assert exc.value.status_code==409
+    h.run(transport.cleanup_staff(client,current))
+    assert h.run(forms.load(MEMBER))['staff_delivery']['cleanup_status']=='done'
+    thread.delete.assert_awaited_once()
 
 
 @pytest.mark.parametrize('lost',[True,False])

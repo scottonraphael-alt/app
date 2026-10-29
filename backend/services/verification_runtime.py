@@ -105,6 +105,9 @@ async def delivery_diagnostic(client):
 
 async def publish_staff(client, row, advisory=None, reference_ids=None):
     """One durable delivery per case, edits thereafter. Explicit nonce prevents quick retries."""
+    if not row.get('active') and row.get('status') in service.FINAL:
+        await cleanup_staff(client,row)
+        return
     guild = await guild_for(client)
     channel = await private_review_channel(guild)
     view = StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,advisory=advisory) if row.get('forms') else message('📁 Formulaire supprimé', 'Les réponses de ce dossier ont été supprimées par un Responsable.')
@@ -162,6 +165,57 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
         'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':5, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
+
+
+async def cleanup_staff(client,row):
+    """Remove only the tracked Staff panel/thread; the Iris archive stays intact.
+
+    This also removes the real training UI after a simulated final decision,
+    without ever replaying its simulated roles, welcome or sanctions.
+    """
+    require_native_workflows()
+    record=dict(row.get('staff_delivery') or {})
+    if not record:return
+    form_id=row['forms'][-1]['id'] if row.get('forms') else None
+    if record.get('cleanup_status')=='done' and record.get('cleanup_form_id')==form_id:return
+    record.update(cleanup_status='pending',cleanup_form_id=form_id)
+    async def persist():
+        result=await db.verification_cases.update_one({'_id':row['_id'],'revision':row['revision']},{'$set':{'staff_delivery':record}})
+        if not result.matched_count:raise HTTPException(409,'Le dossier a changé pendant le nettoyage Discord.')
+    await persist()
+    try:
+        guild=await guild_for(client)
+        channel=None
+        if record.get('channel_id'):
+            try:channel=await guild.fetch_channel(int(record['channel_id']))
+            except discord.NotFound:pass
+        if channel is not None and (not isinstance(channel,discord.TextChannel) or channel.guild.id!=guild.id):
+            raise HTTPException(409,'Le panneau à nettoyer ne correspond pas à un salon textuel du serveur.')
+        if channel is not None and record.get('thread_id') and not record.get('thread_deleted'):
+            try:
+                thread=await guild.fetch_channel(int(record['thread_id']))
+                if not isinstance(thread,discord.Thread) or thread.parent_id!=channel.id or thread.guild.id!=guild.id:
+                    raise HTTPException(409,'Le fil à nettoyer ne correspond pas au panneau de ce formulaire.')
+                await thread.delete(reason='Iris : formulaire traité et conservé dans les archives Iris')
+            except discord.NotFound:pass
+            record['thread_deleted']=True
+            await persist()
+        if channel is not None and record.get('message_id') and not record.get('panel_deleted'):
+            try:await channel.get_partial_message(int(record['message_id'])).delete()
+            except discord.NotFound:pass
+        record.update(panel_deleted=True,thread_deleted=True,cleanup_status='done',cleaned_at=service.stamp())
+        record.pop('cleanup_error',None)
+        await persist()
+    except Exception as exc:
+        record.update(cleanup_status='failed',cleanup_error=(str(exc.detail) if isinstance(exc,HTTPException) else
+            'OasisLink doit pouvoir gérer les fils et supprimer son panneau dans le salon des formulaires.' if isinstance(exc,discord.Forbidden) else
+            'Nettoyage Discord interrompu : '+type(exc).__name__)[:2200])
+        await persist()
+        raise
+    try:
+        await audit('verification.discord.cleaned',row.get('claimed_by'),member_id=row['member_id'],form_id=form_id,
+            channel_id=record.get('channel_id'),thread_id=record.get('thread_id'),message_id=record.get('message_id'))
+    except Exception:logger.exception('Nettoyage du formulaire confirmé, journalisation à vérifier (%s).',row['member_id'])
 
 
 async def review_thread(channel, record, row):
@@ -454,6 +508,8 @@ async def tick(client):
     require_native_workflows()
     adapter = Adapter(client)
     async for row in db.verification_cases.find({'guild_id': service.guild(), '$or': [{'active': True, 'forms.0': {'$exists': True}}, {'staff_delivery': {'$exists': True}}]}):
+        if not row.get('active') and row.get('status') in service.FINAL and (row.get('staff_delivery') or {}).get('cleanup_status')=='done':
+            continue
         for job in row.get('jobs', []):
             # Uncertain effects need an explicit human retry, not a once-per-minute sanction loop.
             if job['status'] == 'pending' or (job['status'] == 'running' and (job.get('lease_until') or '') <= service.stamp()):
@@ -462,6 +518,10 @@ async def tick(client):
                 except Exception:
                     logger.exception('Traitement de vérification différé (%s).', job['id'])
         current = await service.load(row['member_id'])
+        if not current.get('active') and current.get('status') in service.FINAL:
+            try:await cleanup_staff(client,current)
+            except Exception:logger.exception('Nettoyage Discord du formulaire à reprendre (%s).',row['member_id'])
+            continue
         if (current.get('staff_delivery') or {}).get('layout_version') != 5 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
@@ -490,6 +550,7 @@ async def install(client):
         tree.add_command(command, guild=guild_obj)
     client.add_view(Panel())
     async for row in db.verification_cases.find({'guild_id': service.guild(), 'staff_delivery.message_id': {'$exists': True}}):
+        if not row.get('active') and row.get('status') in service.FINAL:continue
         thread_id=row['staff_delivery'].get('thread_id')
         client.add_view(StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,
             thread_url=f'https://discord.com/channels/{service.guild()}/{thread_id}' if thread_id else None), message_id=int(row['staff_delivery']['message_id']))

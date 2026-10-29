@@ -52,6 +52,20 @@ Les IDs du fil et du message de réponses sont conservés pour actualiser le mê
 formulaire, retrouver un fil créé malgré une réponse réseau perdue et retirer les
 réponses Discord si le dernier formulaire est supprimé dans Iris.
 
+Après une décision finale (validation, refus ou clôture), le mini panneau et son
+fil sont supprimés de Discord ; le dossier complet reste archivé dans Iris. Le
+nettoyage reprend après une coupure et traite une disparition déjà effective comme
+un succès. Son état et les erreurs de permissions sont visibles dans Iris. Il
+nettoie aussi les panneaux des exercices terminés, sans appliquer leurs effets
+simulés. Un nouveau formulaire attend la fin d'un nettoyage en cours pour éviter
+de mélanger les panneaux de deux tentatives.
+
+La soumission, une action Staff et une reprise réveillent immédiatement le worker
+de vérification existant, sans lancer de second exécuteur. Le contrôle périodique
+reste un secours ; Iris actualise les étapes et le nettoyage toutes les trois
+secondes pendant leur traitement. Les limites et temps de réponse Discord restent
+applicables.
+
 Le contrôle de publication reconnaît les rôles Opérateur/Opérateur en formation
 configurés dans les variables existantes. Pour le serveur Oasis uniquement
 (`1081957992188088391`), il reconnaît également les lecteurs déjà présents et

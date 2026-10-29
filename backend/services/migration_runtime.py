@@ -12,6 +12,13 @@ from services.casework import policy, service, sync, worker
 from services.casework.discord_gateway import DiscordGateway
 
 logger = logging.getLogger(__name__)
+_verification_wakeup = None
+
+
+def wake_verifications():
+    """Wake the existing supervised worker; never spawn duplicate effect runners."""
+    if _verification_wakeup is not None:
+        _verification_wakeup.set()
 
 
 def discord_actions_enabled():
@@ -106,16 +113,27 @@ async def run_verifications(client, stop):
     Durable delivery receipts in verification_runtime handle retries.
     """
     from services import verification_service, verification_runtime, workflow_settings
-    await verification_service.indexes()
-    while not stop.is_set():
-        if client.is_ready():
+    global _verification_wakeup
+    wakeup=asyncio.Event()
+    _verification_wakeup=wakeup
+    try:
+        await verification_service.indexes()
+        while not stop.is_set():
+            wakeup.clear()
+            if client.is_ready():
+                try:
+                    await workflow_settings.apply()
+                    if policy.Settings().enabled and discord_actions_enabled():
+                        await verification_runtime.tick(client)
+                except Exception:
+                    logger.exception('Traitement autonome des formulaires interrompu ; reprise au prochain passage.')
+            if wakeup.is_set():continue
+            waits=[asyncio.create_task(stop.wait()),asyncio.create_task(wakeup.wait())]
             try:
-                await workflow_settings.apply()
-                if policy.Settings().enabled and discord_actions_enabled():
-                    await verification_runtime.tick(client)
-            except Exception:
-                logger.exception('Traitement autonome des formulaires interrompu ; reprise au prochain passage.')
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=10)
-        except asyncio.TimeoutError:
-            pass
+                await asyncio.wait(waits,timeout=10,return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in waits:
+                    if not task.done():task.cancel()
+                await asyncio.gather(*waits,return_exceptions=True)
+    finally:
+        if _verification_wakeup is wakeup:_verification_wakeup=None

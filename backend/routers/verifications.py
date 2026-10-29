@@ -77,7 +77,10 @@ async def retry_job(member_id:str,job_id:str,payload:ExampleReview,request:Reque
     job.update(status='pending',lease_until=None,actor_id=str(helper.id))
     job['payload']['actor_id']=str(helper.id)
     changed['events'].append(service.event('effect.retry_requested',helper.id,job['form_id'],rationale=payload.reason))
-    return service.public(await service.save(row,changed))
+    result=service.public(await service.save(row,changed))
+    from services.migration_runtime import wake_verifications
+    wake_verifications()
+    return result
 
 
 @router.post('/{member_id}/advisory')

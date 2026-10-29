@@ -66,6 +66,10 @@ def public(row,*,detail=True):
         result['forms']=copy.deepcopy(forms);result['events']=copy.deepcopy(row.get('events',[]))
         result['jobs']=[{**{k:copy.deepcopy(job.get(k)) for k in ('id','action','form_id','status','steps','created_at','actor_id')},
             'training':bool((job.get('payload') or {}).get('training'))} for job in row.get('jobs',[])]
+        delivery=row.get('staff_delivery') or {}
+        if delivery and not row.get('active') and row.get('status') in FINAL:
+            result['discord_cleanup']={'status':delivery.get('cleanup_status','pending'),
+                'error_message':delivery.get('cleanup_error'),'at':delivery.get('cleaned_at')}
     return result
 
 async def save(old,new):
@@ -93,6 +97,8 @@ async def submit(member,answers,source,*,imported=False,submitted_at=None,import
             except DuplicateKeyError:continue
         if source in row.get('tombstones',[]):return {'ignored':'deleted_source'}
         if any(form['id']==form_id for form in row['forms']):return public(row)
+        if not imported and (row.get('staff_delivery') or {}).get('cleanup_status') in ('pending','failed'):
+            raise HTTPException(409,'Le nettoyage du précédent formulaire Discord est en cours ou à reprendre. Réessaie après son traitement.')
         if any(job['status'] in ('pending','running','uncertain','retry') for job in row['jobs']):raise HTTPException(409,'Une action est en cours sur ce dossier. Réessaie après son traitement.')
         if len(row['forms'])>=200:raise HTTPException(409,'Trop de tentatives : contacte un Responsable.')
         if not imported and row['active'] and row['status']!='clarification':
@@ -115,7 +121,12 @@ async def submit(member,answers,source,*,imported=False,submitted_at=None,import
         elif not row['active'] and not any(not existing['imported'] for existing in row['forms']):
             changed.update(status=status if not row['forms'] else 'historical_unknown',active=False)
         changed['events'].append(event('form.imported' if imported else 'form.submitted',member_id,form_id))
-        try:return public(await save(row,changed))
+        try:
+            result=public(await save(row,changed))
+            if not imported:
+                from services.migration_runtime import wake_verifications
+                wake_verifications()
+            return result
         except HTTPException as error:
             if error.status_code!=409:raise
     raise HTTPException(409,'Envois simultanés : réessaie.')
@@ -189,7 +200,10 @@ async def act(member_id,actor_id,payload,*,origin):
             'steps':[{'name':step,'status':'pending'} for step in PLANS[payload.action]]})
         changed['status']='processing'
     changed['events'].append(event('action.'+payload.action,actor_id,current['id'],origin=origin,request_id=payload.request_id,rationale=payload.rationale,assignee_id=payload.assignee_id))
-    return public(await save(row,changed))
+    result=public(await save(row,changed))
+    from services.migration_runtime import wake_verifications
+    wake_verifications()
+    return result
 
 async def delete_form(member_id,form_id,actor_id,payload):
     await authority(actor_id,responsable=True);payload=DeleteForm.model_validate(payload)

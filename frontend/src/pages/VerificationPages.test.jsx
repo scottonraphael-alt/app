@@ -60,3 +60,10 @@ test('real welcome shows the recorded message link and destination channel',asyn
  expect(container.querySelector(`a[href="${url}"]`).textContent).toContain('Voir le message de bienvenue');
  expect(container.textContent).toContain('Salon : 1081957994125860905');
 });
+test('shows Discord cleanup errors while keeping the Iris archive readable',async()=>{
+ api.get.mockResolvedValue({data:{...row,status:'closed',active:false,discord_cleanup:{status:'failed',error_message:'OasisLink doit pouvoir gérer les fils.'}}});
+ await render(<VerificationDetailPage/>);
+ expect(container.textContent).toContain('Nettoyage Discord : À reprendre');
+ expect(container.textContent).toContain('OasisLink doit pouvoir gérer les fils.');
+ expect(container.textContent).toContain('Présentation personnelle');
+});
