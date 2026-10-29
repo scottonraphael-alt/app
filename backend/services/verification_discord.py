@@ -127,6 +127,9 @@ class StaffForm(StaffActions,discord.ui.LayoutView):
         self.member_id=str(member_id)
         from services.verification_runtime import fence
         box=discord.ui.Container(discord.ui.TextDisplay(f'## 📝 Formulaire de <@{member_id}>'),accent_colour=0x846594)
+        staff_role=str(service.config.DISCORD_STAFF_ROLE_ID or '')
+        if row.get('active') and staff_role.isascii() and staff_role.isdigit():
+            box.add_item(discord.ui.TextDisplay(f'<@&{staff_role}> · Un formulaire attend votre lecture.'))
         box.add_item(discord.ui.TextDisplay(staff_status(row)))
         box.add_item(discord.ui.Separator())
         form=row['forms'][-1]

@@ -270,12 +270,14 @@ def test_existing_panel_migrates_to_one_thread_and_resumes_lost_creation(monkeyp
     h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
     row=h.run(forms.load(MEMBER))
     assert row['staff_delivery']['thread_id']=='555' and row['staff_delivery']['form_message_id']=='777'
-    assert row['staff_delivery']['layout_version']==4
+    assert row['staff_delivery']['layout_version']==5
     assert any(call.kwargs['message_id']==777 for call in client.add_view.call_args_list)
     h.run(transport.publish_staff(client,row))
     starter.create_thread.assert_awaited_once();post.assert_awaited_once()
     assert 'Alex' in starter.create_thread.await_args.kwargs['name']
     assert ANS['reason'] in str(post.await_args.args[2])
+    assert post.await_args.args[2]['allowed_mentions']=={'parse':[],'roles':[h.ROLE_IDS['staff']],'users':[]}
+    assert f'<@&{h.ROLE_IDS["staff"]}>' in str(post.await_args.args[2]['components'])
     assert ANS['reason'] not in str(starter.edit.await_args.kwargs['view'].to_components())
     assert f'https://discord.com/channels/{h.GUILD_ID}/555' in str(starter.edit.await_args.kwargs['view'].to_components())
 
@@ -459,6 +461,8 @@ def test_native_approval_changes_only_access_and_age_roles(monkeypatch,tmp_path)
     assert {role.id for role in member.roles}=={10,14,77}
     post.assert_awaited_once()
     assert post.await_args.args[1]=='1081957994125860905'
+    assert "Bienvenue sur L'Oasis" in str(post.await_args.args[2]['components'])
+    assert post.await_args.args[2]['allowed_mentions']=={'parse':[],'roles':[],'users':[MEMBER]}
     assert 'attachment://welcome.gif' in str(post.await_args.args[2]['components'])
     asset=post.await_args.args[3][0]
     assert storage_service._resolve_inside_root(asset['storage_path']).read_bytes().startswith((b'GIF87a',b'GIF89a'))

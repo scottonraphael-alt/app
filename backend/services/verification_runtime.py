@@ -159,7 +159,7 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':4, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':5, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
 
@@ -203,7 +203,7 @@ async def publish_thread_form(client, thread, row, record):
     if receipt and receipt.get('message_id'):
         await thread.get_partial_message(int(receipt['message_id'])).edit(view=view,allowed_mentions=NONE)
     else:
-        await Adapter(client).send_once(thread,view,key)
+        await Adapter(client).send_once(thread,view,key,allowed_roles=list(policy.ids(str(config.DISCORD_STAFF_ROLE_ID or ''))))
         receipt=await db.workflow_receipts.find_one({'_id':key})
     record['form_message_id']=str(receipt['message_id'])
     client.add_view(view,message_id=int(record['form_message_id']))
@@ -289,11 +289,11 @@ class Adapter:
         elif step == 'welcome':
             channel = await welcome_channel(self.guild)
             gifs = self.welcome_gifs()
-            view = message('🌸 Bienvenue dans Oasis', f'Bienvenue <@{member_id}> ! Ton formulaire a été validé. Tu peux maintenant découvrir les salons et rejoindre les échanges.')
+            view = message("🌸 Bienvenue sur L'Oasis", f'<@{member_id}>, ton formulaire a été validé ! Tu peux maintenant découvrir les salons et rejoindre les échanges.')
             from services.workflow_media import asset_for
             asset=await asset_for(secrets.choice(gifs))
             view.children[0].add_item(discord.ui.MediaGallery(discord.MediaGalleryItem('attachment://'+asset['discord_filename'])))
-            await self.send_once(channel, view, nonce, assets=[asset])
+            await self.send_once(channel, view, nonce, assets=[asset], allowed_users=[member_id])
         elif step == 'create_ticket':
             await self.create_ticket(payload, nonce)
         elif step.startswith('notify_'):
@@ -328,7 +328,7 @@ class Adapter:
         await audit('verification.effect.confirmed', payload['actor_id'], member_id=member_id, step=step, form_id=payload['form_id'])
         return {'confirmed': True}
 
-    async def send_once(self, channel, view, nonce, assets=None, allowed_roles=None):
+    async def send_once(self, channel, view, nonce, assets=None, allowed_roles=None, allowed_users=None):
         receipt = await db.workflow_receipts.find_one({'_id': nonce})
         if receipt:
             if receipt.get('status') == 'sent':
@@ -341,7 +341,7 @@ class Adapter:
         from services.announcement_publishing import discord_request
         try:
             sent = await discord_request('POST', str(channel.id), {'flags': 32768, 'components': view.to_components(),
-                'allowed_mentions': {'parse': [],'roles':allowed_roles or []}, 'nonce': nonce, 'enforce_nonce': True}, assets or [])
+                'allowed_mentions': {'parse': [],'roles':allowed_roles or [],'users':allowed_users or []}, 'nonce': nonce, 'enforce_nonce': True}, assets or [])
         except HTTPException as exc:
             # A definite Discord rejection/local validation error proves nothing
             # was sent. Timeouts and 5xx remain inflight and require reconciliation.
@@ -462,7 +462,7 @@ async def tick(client):
                 except Exception:
                     logger.exception('Traitement de vérification différé (%s).', job['id'])
         current = await service.load(row['member_id'])
-        if (current.get('staff_delivery') or {}).get('layout_version') != 4 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
+        if (current.get('staff_delivery') or {}).get('layout_version') != 5 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
             except Exception:
