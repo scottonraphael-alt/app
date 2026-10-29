@@ -135,8 +135,8 @@ class RoomPanel(discord.ui.LayoutView):
         if row.get('status')=='suspended':content+='\n⏸️ **Échanges suspendus — les participants seront restaurés à la réouverture.**'
         if row.get('visibility')=='restricted':content+='\n🔒 **Accès restreint à l’administration.**'
         box=discord.ui.Container(discord.ui.TextDisplay(content),discord.ui.Separator(),
-            discord.ui.TextDisplay('### ✨ Pourquoi ce ticket ?\n'+purpose),
-            discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])),accent_colour=colour)
+            discord.ui.TextDisplay('### ✨ Pourquoi ce ticket ?\n'+purpose),accent_colour=colour)
+        if row['kind']!='verification':box.add_item(discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])))
         if row['kind']=='support':box.add_item(discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row['triggers'])+'\n-# 👥 Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
         box.add_item(discord.ui.Separator())
         box.add_item(discord.ui.TextDisplay('### 🧭 Gestion du ticket\n**Pour le Staff :** choisis une action ci-dessous pour gérer les participants, les accès ou la clôture.'))
