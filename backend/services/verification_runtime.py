@@ -48,7 +48,12 @@ async def private_review_channel(guild):
         raise HTTPException(503, 'Le suivi des formulaires doit être un salon textuel du serveur.')
     if channel.permissions_for(guild.default_role).view_channel:
         raise HTTPException(503, f'Le salon {channel.name} ({channel.id}) est visible par @everyone. Désactive Voir le salon pour @everyone.')
-    permitted = {str(config.DISCORD_STAFF_ROLE_ID), str(config.DISCORD_RESPONSABLE_ROLE_ID), policy.admin_role()}
+    from services.workflow_defaults import VERIFICATION_REVIEW_READERS
+    defaults = ','.join(VERIFICATION_REVIEW_READERS.get(str(guild.id), ()))
+    permitted = {
+        str(config.DISCORD_STAFF_ROLE_ID), str(config.DISCORD_RESPONSABLE_ROLE_ID), policy.admin_role(),
+        str(config.DISCORD_OPERATEUR_ROLE_ID), str(config.DISCORD_OPERATEUR_ROLE2_ID),
+    } | policy.ids(os.getenv('VERIFICATION_REVIEW_READER_ROLE_IDS', defaults))
     unexpected = []
     for role in guild.roles:
         if role.is_default() or str(role.id) in permitted or role.permissions.administrator or getattr(getattr(role,'tags',None),'bot_id',None):
@@ -56,7 +61,7 @@ async def private_review_channel(guild):
         if channel.permissions_for(role).view_channel:
             unexpected.append(f'{role.name} ({role.id})')
     if unexpected:
-        raise HTTPException(503, f'Publication bloquée dans {channel.name} ({channel.id}). Rôles ayant accès sans autorisation aux vérifications : '+', '.join(unexpected)+'. Désactive Voir le salon pour ces rôles ou vérifie les IDs Staff/Responsable configurés.')
+        raise HTTPException(503, f'Publication bloquée dans {channel.name} ({channel.id}). Rôles ayant accès sans autorisation aux vérifications : '+', '.join(unexpected)+'. Désactive Voir le salon pour ces rôles ou vérifie les rôles de lecture configurés (VERIFICATION_REVIEW_READER_ROLE_IDS).')
     permissions = channel.permissions_for(guild.me)
     if not permissions.view_channel or not permissions.send_messages:
         raise HTTPException(503, f'OasisLink ne peut pas voir ou envoyer des messages dans {channel.name} ({channel.id}).')

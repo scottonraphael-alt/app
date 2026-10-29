@@ -136,6 +136,41 @@ def test_form_delivery_names_the_role_and_channel_that_block_publication(monkeyp
     assert 'Visiteurs (22)' in exc.value.detail and 'formulaires (1425589415165558825)' in exc.value.detail
 
 
+def test_known_oasis_form_readers_do_not_block_staff_publication(monkeypatch):
+    guild=review_guild(monkeypatch,unexpected=True)
+    guild.id=1081957992188088391
+    from services.workflow_defaults import VERIFICATION_REVIEW_READERS
+    guild.roles=[guild.default_role,*[
+        SimpleNamespace(id=int(role_id),name='Existing reader',is_default=lambda:False,
+            permissions=SimpleNamespace(administrator=False),tags=None)
+        for role_id in VERIFICATION_REVIEW_READERS[str(guild.id)]]]
+    guild.fetch_channel.return_value.permissions_for.return_value=SimpleNamespace(view_channel=True,send_messages=True)
+    guild.fetch_channel.return_value.permissions_for.side_effect=lambda role:SimpleNamespace(
+        view_channel=role is not guild.default_role,send_messages=True)
+    monkeypatch.delenv('VERIFICATION_REVIEW_READER_ROLE_IDS',raising=False)
+    assert h.run(transport.private_review_channel(guild)).name=='formulaires'
+    # These defaults cannot permit a similarly named role or leak to another guild.
+    guild.id=2
+    with pytest.raises(HTTPException):h.run(transport.private_review_channel(guild))
+
+
+@pytest.mark.parametrize('field',['DISCORD_OPERATEUR_ROLE_ID','DISCORD_OPERATEUR_ROLE2_ID'])
+def test_configured_operator_can_read_without_becoming_an_admission_decider(monkeypatch,field):
+    guild=review_guild(monkeypatch,unexpected=True)
+    monkeypatch.setattr(transport.config,field,'22')
+    assert h.run(transport.private_review_channel(guild)).name=='formulaires'
+    with pytest.raises(HTTPException) as exc:h.run(forms.authority(h.USER_IDS['operateur']))
+    assert exc.value.status_code==403
+
+
+def test_explicit_reader_override_can_remove_default_readers(monkeypatch):
+    guild=review_guild(monkeypatch,unexpected=True)
+    monkeypatch.setenv('VERIFICATION_REVIEW_READER_ROLE_IDS','22')
+    assert h.run(transport.private_review_channel(guild)).name=='formulaires'
+    monkeypatch.setenv('VERIFICATION_REVIEW_READER_ROLE_IDS','')
+    with pytest.raises(HTTPException):h.run(transport.private_review_channel(guild))
+
+
 @pytest.mark.parametrize('bot_allowed',[True,False])
 def test_form_delivery_requires_bot_read_and_send_permissions(monkeypatch,bot_allowed):
     guild=review_guild(monkeypatch,bot_allowed=bot_allowed)

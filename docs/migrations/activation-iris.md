@@ -25,6 +25,19 @@ qui supprimerait les autres commandes du bot. Un échec de l’un des modules n�
 pas les autres commandes de s’enregistrer. L’activation est celle du code déployé :
 la modification locale ne redémarre pas elle-même le serveur d’hébergement.
 
+### Lecture du salon des formulaires
+
+Le contrôle de publication reconnaît les rôles Opérateur/Opérateur en formation
+configurés dans les variables existantes. Pour le serveur Oasis uniquement
+(`1081957992188088391`), il reconnaît également les lecteurs déjà présents et
+identifiés dans les logs : Bots `1081957992381042821`, Opérateur en formation
+`1323371858686382100`, Opérateur `1321629751840084040`.
+`VERIFICATION_REVIEW_READER_ROLE_IDS` permet de remplacer cette liste complémentaire
+par des IDs séparés par des virgules (une valeur vide supprime ces défauts).
+Cette liste autorise la publication dans un salon que ces rôles peuvent déjà lire :
+elle ne modifie aucune permission Discord et n'accorde aucun droit de décision
+ou d'accès aux pages Iris. Les contrôles Staff/Responsable des actions restent actifs.
+
 ## Commandes disponibles
 
 | Commande OasisLink | Usage et droits |
