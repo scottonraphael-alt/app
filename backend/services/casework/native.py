@@ -1,6 +1,7 @@
 """Native ticket producers and durable intake. No network side effects at import."""
 import copy
 import hashlib
+import logging
 import os
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -16,6 +17,7 @@ from services.migration_runtime import audit, require_native_workflows
 
 PREFIX={'contact_staff':'💬・｜contact-staff-','summons':'🛡️・｜convocation-','bubble':'🫧・｜discussion-','verification':'📋・｜verification-','support':'🌸・｜iris-soutien-'}
 TITLES={'contact_staff':'Contact Staff','summons':'Convocation','bubble':'Bulle d’échange','verification':'Vérification','support':'Soutien'}
+logger=logging.getLogger(__name__)
 
 
 def slot_key(kind, member_id):
@@ -150,9 +152,11 @@ async def create(request_id,client):
         target_name=('🔒・｜contact-staff-' if row['confidential'] else PREFIX[row['kind']])+member.name[:60]
         nonce=hashlib.sha256(('opening:'+request_id).encode()).hexdigest()[:24]
         adapter=Adapter(client)
-        await adapter.send_once(channel,RoomPanel(request_id,row=row),nonce)
+        panel=RoomPanel(request_id,row=row)
+        await adapter.send_once(channel,panel,nonce)
         receipt=await db.workflow_receipts.find_one({'_id':nonce})
         if not receipt or receipt.get('status')!='sent':raise HTTPException(409,'Le panneau d’ouverture n’est pas confirmé.')
+        client.add_view(panel,message_id=int(receipt['message_id']))
         support=row['kind']=='support'
         settings=policy.Settings();settings=replace(settings,managed_kinds=settings.managed_kinds|{'support'},contact_categories=settings.contact_categories|{str(channel.category_id)})
         if channel.name!=target_name:await channel.edit(name=target_name,reason='Iris : ouverture du dossier enregistrée')
@@ -162,7 +166,8 @@ async def create(request_id,client):
         case=await service.enroll({'id':str(channel.id),'guild_id':str(server.id),'name':target_name,'parent_id':str(channel.category_id),'type':0},opening,
             {'id':str(member.id),'username':member.name,'display_name':member.display_name,**cached},settings,assigned={'id':actor} if actor else None,initiator_id=row['actor_id'])
         await db.case_tickets.update_one({'_id':case['_id']},{'$set':{'source':'iris','request_id':request_id,'sync.due':True,'opening_context.triggers':row['triggers'] if support else None}})
-        await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'status':'open','stage':'ready','channel_id':str(channel.id),'case_id':case['_id']}})
+        await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'status':'open','stage':'ready','channel_id':str(channel.id),'case_id':case['_id'],
+            'room_panel_message_id':receipt['message_id'],'room_panel_version':2}})
         if support:
             from services.ticket_import import import_ticket_channel
             from services.discord_service import DiscordService
@@ -174,6 +179,25 @@ async def create(request_id,client):
         raise
     finally:
         await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'lease_until':None}})
+
+
+async def refresh_room_panel(client,row):
+    """Upgrade a tracked opening message in place; never post a second panel."""
+    require_native_workflows()
+    case=await service.load(row['case_id'],str(config.DISCORD_GUILD_ID))
+    if case['status'] in ('archived','closing','reopening'):return
+    nonce=hashlib.sha256(('opening:'+row['_id']).encode()).hexdigest()[:24]
+    receipt=await db.workflow_receipts.find_one({'_id':nonce,'status':'sent'})
+    message_id=row.get('room_panel_message_id') or (receipt or {}).get('message_id')
+    if not message_id:raise HTTPException(409,'Le message d’ouverture du ticket n’est pas identifié.')
+    server=await guild(client);channel=await server.fetch_channel(int(row['channel_id']))
+    if not isinstance(channel,discord.TextChannel) or channel.guild.id!=server.id or str(channel.id)!=case['channel_id']:
+        raise HTTPException(409,'Le panneau ne correspond pas au salon du dossier.')
+    from services.casework.commands import RoomPanel
+    panel=RoomPanel(row['_id'],row=row)
+    await channel.get_partial_message(int(message_id)).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
+    client.add_view(panel,message_id=int(message_id))
+    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':2},'$unset':{'room_panel_error':''}})
 
 
 async def tick(client):
@@ -193,6 +217,11 @@ async def tick(client):
                 receipt=await db.workflow_receipts.find_one({'_id':nonce})
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}}})
             except Exception:pass
+        if row['status']=='open' and row.get('room_panel_version')!=2:
+            try:await refresh_room_panel(client,row)
+            except Exception as exc:
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
+                logger.exception('Mise à jour du menu de ticket à reprendre (%s).',row['_id'])
         if row['status'] in ('refused','open') and row['kind']!='verification' and not row.get('member_notice'):
             try:
                 user=await client.fetch_user(int(row['member_id']));dm=await user.create_dm()

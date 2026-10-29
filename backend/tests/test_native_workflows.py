@@ -2,7 +2,7 @@
 import security_harness as h
 import asyncio,json,os
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock,Mock
 from pathlib import Path
 import pytest
 from fastapi import HTTPException
@@ -83,7 +83,7 @@ class Guild:
 @pytest.fixture
 def world(monkeypatch):
     monkeypatch.setattr(discord,'Role',Role);monkeypatch.setattr(discord,'Member',Member);monkeypatch.setattr(discord,'TextChannel',Channel);monkeypatch.setattr(discord,'CategoryChannel',Category)
-    guild=Guild();client=SimpleNamespace(user=guild.me,is_ready=lambda:True,get_guild=lambda ident:guild,fetch_channel=guild.fetch_channel)
+    guild=Guild();client=SimpleNamespace(user=guild.me,is_ready=lambda:True,get_guild=lambda ident:guild,fetch_channel=guild.fetch_channel,add_view=Mock())
     from services import announcement_publishing
     counter=iter(range(800000000000000001,800000000000000100))
     monkeypatch.setattr(announcement_publishing,'discord_request',AsyncMock(side_effect=lambda *args,**kwargs:{'id':str(next(counter))}))
@@ -95,6 +95,82 @@ def reserve(kind='contact_staff',actor=MEMBER,source='source-001',**kw):
 
 def opened(world,kind='contact_staff',actor=MEMBER,**kw):
     row=reserve(kind,actor=actor,**kw);done=h.run(native.create(row['_id'],world[1]));return h.run(service.load(done['case_id'],h.GUILD_ID))
+
+
+def menu_interaction(world,case,actor=STAFF,ident=777):
+    state={'done':False}
+    response=SimpleNamespace(is_done=lambda:state['done'],send_modal=AsyncMock(),send_message=AsyncMock(),
+        defer=AsyncMock(side_effect=lambda **kwargs:state.update(done=True)))
+    return SimpleNamespace(id=ident,guild_id=int(h.GUILD_ID),channel_id=int(case['channel_id']),user=SimpleNamespace(id=int(actor)),
+        client=world[1],response=response,followup=SimpleNamespace(send=AsyncMock()))
+
+
+def test_room_panel_has_persistent_selector_and_is_registered_at_creation(world):
+    case=opened(world,kind='verification',actor=STAFF)
+    row=h.run(h.db.case_requests.find_one({'_id':case['request_id']}))
+    assert row['room_panel_version']==2
+    assert any(call.kwargs['message_id']==int(row['room_panel_message_id']) for call in world[1].add_view.call_args_list)
+    async def render():
+        panel=commands.RoomPanel(row['_id'],row=row)
+        select=next(child for child in panel.walk_children() if isinstance(child,discord.ui.Select))
+        assert panel.is_persistent()
+        assert {'claim','restrict','unrestrict','add_member','remove_member','suspend','reopen','assign','archive'}=={option.value for option in select.options}
+        assert all(option.description for option in select.options)
+        return panel.to_components()
+    content=str(h.run(render()))
+    assert 'Gérer le dossier' not in content and 'Choisir une action' not in content
+
+
+def test_add_member_selector_opens_one_modal_and_applies_confirmed_change(world):
+    guild,client=world;case=opened(world,kind='verification',actor=STAFF)
+    target=Member('700000000000000099');guild.members[target.id]=target
+    row=h.run(h.db.case_requests.find_one({'_id':case['request_id']}))
+    async def exercise():
+        panel=commands.RoomPanel(row['_id'],row=row)
+        select=next(child for child in panel.walk_children() if isinstance(child,discord.ui.Select));select._values=['add_member']
+        it=menu_interaction(world,case)
+        await select.callback(it)
+        modal=it.response.send_modal.await_args.args[0]
+        assert isinstance(modal.users,discord.ui.UserSelect) and modal.users.required
+        assert modal.reason.required and modal.users.max_values==1
+        assert modal.to_components()[0]['component']['type']==5
+        modal.users._values=[target];modal.reason._value='Ce membre doit contribuer à cet échange.'
+        submit=menu_interaction(world,case,ident=778);await modal.on_submit(submit)
+        confirmation=submit.response.send_message.await_args.kwargs['view']
+        button=next(child for child in confirmation.walk_children() if isinstance(child,discord.ui.Button))
+        applied=menu_interaction(world,case,ident=779)
+        await button.callback(applied)
+        assert 'Action appliquée' in str(applied.followup.send.await_args.kwargs['view'].to_components())
+    h.run(exercise())
+    assert str(target.id) in h.run(service.load(case['id'],h.GUILD_ID))['participants']
+    assert guild.channels[int(case['channel_id'])].overwrites[target].view_channel is True
+
+
+def test_room_menu_rechecks_permissions_before_opening_form(world):
+    case=opened(world,kind='verification',actor=STAFF)
+    h.fake_discord.member_roles[STAFF]=[]
+    with pytest.raises(HTTPException):h.run(commands.choose_room_action(menu_interaction(world,case),case['id'],'add_member'))
+    assert h.run(service.load(case['id'],h.GUILD_ID)).get('operation') is None
+
+
+def test_restriction_stays_admin_only(world):
+    case=opened(world,kind='verification',actor=STAFF)
+    with pytest.raises(HTTPException) as exc:h.run(commands.choose_room_action(menu_interaction(world,case),case['id'],'restrict'))
+    assert exc.value.status_code==403
+
+
+def test_existing_room_panel_is_upgraded_in_place(world):
+    guild,client=world;case=opened(world,kind='verification',actor=STAFF)
+    row=h.run(h.db.case_requests.find_one({'_id':case['request_id']}));message_id=row['room_panel_message_id']
+    h.run(h.db.case_requests.update_one({'_id':row['_id']},{'$unset':{'room_panel_message_id':'','room_panel_version':''}}))
+    partial=SimpleNamespace(edit=AsyncMock())
+    guild.channels[int(case['channel_id'])].get_partial_message=lambda ident:partial
+    row=h.run(h.db.case_requests.find_one({'_id':row['_id']}));h.run(native.refresh_room_panel(client,row))
+    updated=h.run(h.db.case_requests.find_one({'_id':row['_id']}))
+    assert updated['room_panel_message_id']==message_id and updated['room_panel_version']==2
+    partial.edit.assert_awaited_once()
+    from services import announcement_publishing
+    announcement_publishing.discord_request.assert_awaited_once()  # Original opening only.
 
 
 def test_owner_defaults_and_four_packaged_gifs():

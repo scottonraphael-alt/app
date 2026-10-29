@@ -123,35 +123,35 @@ class RoomPanel(discord.ui.LayoutView):
         box=discord.ui.Container(discord.ui.TextDisplay(content),discord.ui.Separator(),discord.ui.TextDisplay('### Motif de l’échange\n'+fenced(row['reason'])),accent_colour=0x78618C if row['kind']=='bubble' else 0x527668)
         if row['kind']=='support':box.add_item(discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])+'\n-# Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
         if row['kind']=='bubble':box.add_item(discord.ui.TextDisplay('🫧 Tu n’as rien fait de mal. Cet espace sert simplement à discuter tranquillement en privé.'))
-        buttons=discord.ui.ActionRow()
-        for action,label in [('claim','Prendre en charge'),('manage','Gérer le dossier')]:
-            button=discord.ui.Button(label=label,style=discord.ButtonStyle.secondary,custom_id=f'iris:room:{request_id}:{action}')
-            async def callback(interaction,action=action):
-                try:
-                    check(interaction);await interaction.response.defer(ephemeral=True,thinking=True)
-                    request=await db.case_requests.find_one({'_id':request_id,'guild_id':str(config.DISCORD_GUILD_ID)})
-                    if not request or not request.get('case_id'):raise HTTPException(409,'Le salon termine son initialisation.')
-                    case=await service.load(request['case_id'],str(config.DISCORD_GUILD_ID));await policy.authorize(str(interaction.user.id),case)
-                    if action=='claim':
-                        await audit('casework.action_requested',str(interaction.user.id),case_id=case['id'],action='claim')
-                        result=await service.change(case['id'],str(interaction.user.id),{'action':'claim','revision':case['revision'],'request_id':f'discord:{interaction.id}'},policy.Settings())
-                        await respond(interaction,message('🤝 Dossier attribué','La prise en charge est enregistrée à ton nom.'));return
-                    await audit('casework.viewed',str(interaction.user.id),case_id=case['id'])
-                    await respond(interaction,RoomControls(case,str(interaction.user.id)))
-                except Exception as exc:await error(interaction,exc)
-            button.callback=callback;buttons.add_item(button)
-        box.add_item(buttons);self.add_item(box)
+        select=discord.ui.Select(placeholder='Gérer ce ticket · choisir une action',custom_id=f'iris:room:{request_id}:actions',options=room_options(row['kind']))
+        async def chosen(interaction):
+            try:
+                check(interaction)
+                request=await db.case_requests.find_one({'_id':request_id,'guild_id':str(interaction.guild_id)})
+                if not request or not request.get('case_id'):raise HTTPException(409,'Le salon termine son initialisation.')
+                if str(interaction.channel_id)!=str(request.get('channel_id')):raise HTTPException(403,'Ce menu appartient à un autre salon.')
+                await choose_room_action(interaction,request['case_id'],select.values[0])
+            except Exception as exc:await error(interaction,exc)
+        select.callback=chosen;box.add_item(discord.ui.ActionRow(select));self.add_item(box)
 
 
 class ReasonAction(discord.ui.Modal):
     def __init__(self,case,action,actor_id,*,participant_id=None):
         super().__init__(title='Expliquer et confirmer l’action');self.case=case;self.action=action;self.actor_id=actor_id;self.participant_id=participant_id
-        self.reason=discord.ui.TextInput(label='Motif de l’action',style=discord.TextStyle.paragraph,required=True,min_length=10,max_length=1000);self.add_item(self.reason)
+        self.users=None
+        if action in ('add_member','remove_member','assign') and not participant_id:
+            self.users=discord.ui.UserSelect(placeholder='Rechercher un membre du serveur',required=True,min_values=1,max_values=1)
+            self.add_item(discord.ui.Label(text='Membre concerné' if action!='assign' else 'Nouvel intervenant',component=self.users))
+        self.reason=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,min_length=10,max_length=1000)
+        self.add_item(discord.ui.Label(text='Motif de l’action',component=self.reason))
     async def on_submit(self,interaction):
         try:
             check(interaction)
             if str(interaction.user.id)!=self.actor_id:raise HTTPException(403,'Ce formulaire appartient à un autre intervenant.')
-            await respond(interaction,ConfirmAction(self.case,self.action,self.actor_id,self.reason.value,self.participant_id))
+            case=await service.load(self.case['id'],str(interaction.guild_id))
+            await policy.authorize(self.actor_id,case)
+            participant_id=str(self.users.values[0].id) if self.users else self.participant_id
+            await respond(interaction,ConfirmAction(case,self.action,self.actor_id,self.reason.value,participant_id))
         except Exception as exc:await error(interaction,exc)
 
 
@@ -159,6 +159,7 @@ class ConfirmAction(discord.ui.LayoutView):
     def __init__(self,case,action,actor_id,reason,participant_id=None):
         super().__init__(timeout=180)
         box=discord.ui.Container(discord.ui.TextDisplay('## 🔎 Vérifier avant d’appliquer'),discord.ui.TextDisplay(f'**{ACTION_LABELS[action]}**\n'+fenced(reason)),accent_colour=0xB39A56)
+        if participant_id:box.add_item(discord.ui.TextDisplay(f'Membre sélectionné : <@{participant_id}>'))
         button=discord.ui.Button(label='Confirmer',style=discord.ButtonStyle.danger if action in ('archive','remove_member') else discord.ButtonStyle.primary)
         async def confirm(interaction):
             try:
@@ -166,44 +167,70 @@ class ConfirmAction(discord.ui.LayoutView):
                 if str(interaction.user.id)!=actor_id:raise HTTPException(403,'Confirmation réservée à son auteur.')
                 await interaction.response.defer(ephemeral=True,thinking=True)
                 from services.casework.operations import request_action
-                await request_action(case['id'],actor_id,action,reason,f'discord:{interaction.id}',revision=case['revision'],participant_id=participant_id)
-                self.stop();await respond(interaction,message('⏳ Action enregistrée','Le résultat sera confirmé dans Iris. Une clôture vérifie les messages et fichiers avant de supprimer le salon.'))
+                if action=='assign':
+                    await audit('casework.action_requested',actor_id,case_id=case['id'],action=action,reason=reason)
+                    await service.change(case['id'],actor_id,{'action':'assign','text':reason,'revision':case['revision'],
+                        'request_id':f'discord:{interaction.id}','assignee_id':participant_id},policy.Settings())
+                else:
+                    await request_action(case['id'],actor_id,action,reason,f'discord:{interaction.id}',revision=case['revision'],participant_id=participant_id)
+                    if action!='archive':
+                        from services.casework import operations
+                        from services.casework.discord_gateway import DiscordGateway
+                        await operations.run(case['id'],DiscordGateway(interaction.client,policy.Settings()),policy.Settings())
+                current=await service.load(case['id'],str(interaction.guild_id))
+                applied=action=='assign' or (action!='archive' and (current.get('operation') or {}).get('status')=='completed')
+                self.stop();await respond(interaction,message('✅ Action appliquée' if applied else '⏳ Action enregistrée',
+                    'La modification est appliquée et enregistrée dans Iris.' if applied else
+                    'La clôture vérifie les messages et fichiers avant de supprimer le salon. Le résultat est suivi dans Iris.' if action=='archive' else
+                    'La modification est en cours de traitement. Le résultat est suivi dans Iris.'))
             except Exception as exc:await error(interaction,exc)
+        button.callback=confirm
         box.add_item(discord.ui.ActionRow(button));self.add_item(box)
 
 
 ACTION_LABELS={'archive':'Clôturer et archiver','suspend':'Suspendre les échanges','reopen':'Rouvrir et restaurer les participants',
  'restrict':'Restreindre à l’administration','unrestrict':'Lever la restriction','add_member':'Ajouter un participant','remove_member':'Retirer un participant','assign':'Réattribuer'}
 
+ACTION_DESCRIPTIONS={'claim':'Devenir l’intervenant principal de ce ticket.',
+ 'add_member':'Choisir une personne à ajouter dans un formulaire.', 'remove_member':'Choisir une personne à retirer dans un formulaire.',
+ 'restrict':'Réserver la lecture aux Administrateurs (Admin uniquement).', 'unrestrict':'Restaurer les accès précédant la restriction (Admin).',
+ 'suspend':'Suspendre les échanges et conserver les accès précédents.', 'reopen':'Rouvrir le ticket et rétablir ses participants.',
+ 'assign':'Choisir un nouvel intervenant (direction uniquement).', 'archive':'Sauvegarder dans Iris avant de supprimer le salon.'}
+
+
+def room_options(kind):
+    labels={'claim':'Prendre en charge',**ACTION_LABELS}
+    return [discord.SelectOption(label=label,value=action,description=ACTION_DESCRIPTIONS[action])
+        for action,label in labels.items() if not (kind=='support' and action in ('restrict','unrestrict'))]
+
+
+async def choose_room_action(interaction,case_id,action):
+    if action not in {'claim',*ACTION_LABELS}:raise HTTPException(422,'Action inconnue.')
+    case=await service.load(case_id,str(interaction.guild_id))
+    actor_id=str(interaction.user.id);roles=await policy.authorize(actor_id,case)
+    await audit('casework.viewed',actor_id,case_id=case['id'],source='discord_menu',action=action)
+    if action in ('restrict','unrestrict') and (case['kind']=='support' or policy.admin_role() not in roles):
+        raise HTTPException(403,'Restriction réservée aux Administrateurs, hors soutiens.')
+    if action=='assign' and not policy.may_reassign(roles,case):raise HTTPException(403,'Réattribution réservée à la direction.')
+    if action=='claim':
+        await interaction.response.defer(ephemeral=True,thinking=True)
+        await audit('casework.action_requested',actor_id,case_id=case['id'],action=action)
+        await service.change(case['id'],actor_id,{'action':'claim','revision':case['revision'],'request_id':f'discord:{interaction.id}'},policy.Settings())
+        await respond(interaction,message('🤝 Dossier attribué','La prise en charge est enregistrée à ton nom.'))
+    else:
+        await interaction.response.send_modal(ReasonAction(case,action,actor_id))
+
 
 class RoomControls(discord.ui.LayoutView):
     def __init__(self,case,actor_id):
         super().__init__(timeout=300)
-        box=discord.ui.Container(discord.ui.TextDisplay('## 📁 Actions sur le dossier'),discord.ui.TextDisplay('Les droits sont recontrôlés à chaque action. Les accès de supervision restent protégés.'),accent_colour=0x527668)
-        options=[discord.SelectOption(label=label,value=key) for key,label in ACTION_LABELS.items() if not (case['kind']=='support' and key in ('restrict','unrestrict'))]
-        select=discord.ui.Select(placeholder='Choisir une action',options=options)
+        box=discord.ui.Container(discord.ui.TextDisplay('## 📁 Actions sur le ticket'),discord.ui.TextDisplay('Choisis une action. Pour ajouter ou retirer une personne, le formulaire propose la liste des membres Discord.'),accent_colour=0x527668)
+        select=discord.ui.Select(placeholder='Choisir une action',options=room_options(case['kind']))
         async def chosen(interaction):
             try:
                 check(interaction)
                 if str(interaction.user.id)!=actor_id:raise HTTPException(403,'Ce menu appartient à un autre intervenant.')
-                await policy.authorize(actor_id,await service.load(case['id'],str(config.DISCORD_GUILD_ID)))
-                action=select.values[0]
-                if action in ('add_member','remove_member','assign'):
-                    view=discord.ui.LayoutView(timeout=180);user_select=discord.ui.UserSelect(placeholder='Choisir le membre',min_values=1,max_values=1)
-                    async def member_chosen(next_interaction):
-                        try:
-                            check(next_interaction)
-                            if str(next_interaction.user.id)!=actor_id:raise HTTPException(403,'Sélection réservée à son auteur.')
-                            target=str(user_select.values[0].id)
-                            if action=='assign':
-                                await next_interaction.response.defer(ephemeral=True,thinking=True)
-                                await audit('casework.action_requested',actor_id,case_id=case['id'],action='assign')
-                                await service.change(case['id'],actor_id,{'action':'assign','revision':case['revision'],'request_id':f'discord:{next_interaction.id}','assignee_id':target},policy.Settings())
-                                await respond(next_interaction,message('🤝 Réattribution enregistrée','L’attribution manuelle sera conservée lors des actualisations.'))
-                            else:await next_interaction.response.send_modal(ReasonAction(case,action,actor_id,participant_id=target))
-                        except Exception as exc:await error(next_interaction,exc)
-                    user_select.callback=member_chosen;view.add_item(discord.ui.ActionRow(user_select));await respond(interaction,view)
-                else:await interaction.response.send_modal(ReasonAction(case,action,actor_id))
+                await choose_room_action(interaction,case['id'],select.values[0])
             except Exception as exc:await error(interaction,exc)
         select.callback=chosen;box.add_item(discord.ui.ActionRow(select))
         if config.FRONTEND_URL.startswith('https://'):box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Ouvrir dans Iris',style=discord.ButtonStyle.link,url=f'{config.FRONTEND_URL}/staff/dossiers/{case["kind"]}/{case["id"]}')))

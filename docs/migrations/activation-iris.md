@@ -79,6 +79,17 @@ ou d'accès aux pages Iris. Les contrôles Staff/Responsable des actions restent
 
 ## Commandes disponibles
 
+Les tickets natifs, notamment ceux des formulaires, proposent un sélecteur permanent
+dans leur message d'ouverture : prise en charge, ajout/retrait d'un participant,
+réattribution, suspension/réouverture, restriction/levée et clôture. L'ajout, le
+retrait et la réattribution ouvrent un modal avec sélecteur Discord de membre et
+motif requis, suivi d'une confirmation privée. Les opérations de permissions sont
+traitées à la confirmation ; la clôture conserve sa sauvegarde complète en arrière-plan.
+La restriction reste réservée aux Administrateurs et indisponible pour les soutiens.
+Les droits sont recontrôlés au choix, à la soumission et avant application. Les
+panneaux existants sont modifiés sur place et leurs interactions sont enregistrées
+dès la création d'un nouveau salon, sans attendre un redémarrage du bot.
+
 | Commande OasisLink | Usage et droits |
 | --- | --- |
 | `/panel verification` | Admission ; Responsable ou Administrateur |
