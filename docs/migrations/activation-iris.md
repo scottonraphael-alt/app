@@ -237,3 +237,14 @@ un salon dont les droits sont trop larges est refusé. Aucune sanction automatiq
 - Dix anciennes suites exigent un serveur de preview et/ou `/app` ; elles ne sont
   pas exécutées dans ce workspace. Aucun envoi ou rôle réel n’a servi de test.
 - Les PDF ont été rendus et vérifiés ; aucune capture d’écran du site n’a été faite.
+
+### Audit des tickets — 29 octobre 2026
+
+- Une suspension ou restriction répétée ne remplace plus l’instantané des accès initiaux. Rouvrir un ticket suspendu avant de modifier ses participants ou sa confidentialité.
+- Une action refusée avant toute mutation ne bloque plus le dossier : Iris affiche « Non appliquée » et son motif. Une réponse Discord incertaine conserve la reprise obligatoire de la même action et du même participant.
+- La synchronisation ne démarre pas pendant une opération de permissions en attente, en cours ou incertaine. L’exécuteur respecte également le commutateur de désactivation des actions natives.
+- Annuler une clôture restaure le statut précédent (suspendu ou restreint compris).
+- Le panneau Discord suit l’intervenant actuel et l’état des accès, sans nouvelle mention lors des éditions. La réception d’un formulaire d’action est acquittée avant les vérifications réseau.
+- Les motifs des opérations et leur participant restent dans les événements du dossier ; les réattributions et clôtures conservent aussi leur justification.
+
+Validation hors ligne : 254 tests backend sur tickets, workflows natifs et préparation des vérifications ; 21 tests d’interface sur les pages de dossiers, suivis et rappels. Discord est simulé : cette validation ne confirme pas les permissions ni la disponibilité du déploiement réel. Aucune action n’a été appliquée aux tickets du serveur pendant cet audit.

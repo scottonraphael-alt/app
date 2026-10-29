@@ -73,3 +73,13 @@ test('a prepared archive does not claim a still-open Discord channel has disappe
   expect(container.textContent).toContain('La clôture demande une vérification');
   expect(container.textContent).not.toContain('Le salon Discord a disparu');
 });
+
+test('rejected permission action displays its reason instead of remaining in progress', async () => {
+  mockCaseId = 'case-1';
+  api.get.mockImplementation(async url => ({ data: url.endsWith('/messages') ? { items: [], total: 0 } : {
+    ...row, operation: { action: 'remove_member', status: 'failed', error_message: 'Le bénéficiaire ne peut pas être retiré.' },
+  } }));
+  await render(<ContactsStaffPage />);
+  expect(container.textContent).toContain('Non appliquée');
+  expect(container.textContent).toContain('Le bénéficiaire ne peut pas être retiré.');
+});

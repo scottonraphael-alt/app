@@ -109,7 +109,9 @@ async def cancel(case_id, gateway, settings):
         if current['status'] != 'reopening' or current['closure'].get('token') != token:
             raise HTTPException(409, 'Le dossier a changé pendant le rétablissement.')
         changed = copy.deepcopy(current)
-        changed.update(status='open', closure=None, archive=None)
+        previous = current['closure'].get('previous_status')
+        restored_status = 'suspended' if previous == 'suspended' or current.get('suspension') else ('restricted' if current['visibility'] == 'restricted' else 'open')
+        changed.update(status=restored_status, closure=None, archive=None)
         changed['events'].append(service.event('closure.cancelled', row['closure']['cancel_actor_id']))
         return await service.save(current, changed)
     except Exception as error:

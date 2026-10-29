@@ -132,6 +132,8 @@ class RoomPanel(discord.ui.LayoutView):
         content=f'## {emoji} {title}\n### 👤 Espace de <@{row["member_id"]}>'
         if row.get('assigned_id'):content+=f'\n🤝 Ton Interlocuteur est <@{row["assigned_id"]}>'
         elif row['kind'] in ('summons','bubble','verification'):content+=f'\n👋 Échange ouvert par <@{row["actor_id"]}>'
+        if row.get('status')=='suspended':content+='\n⏸️ **Échanges suspendus — les participants seront restaurés à la réouverture.**'
+        if row.get('visibility')=='restricted':content+='\n🔒 **Accès restreint à l’administration.**'
         box=discord.ui.Container(discord.ui.TextDisplay(content),discord.ui.Separator(),
             discord.ui.TextDisplay('### ✨ Pourquoi ce ticket ?\n'+purpose),
             discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])),accent_colour=colour)
@@ -165,6 +167,7 @@ class ReasonAction(discord.ui.Modal):
         try:
             check(interaction)
             if str(interaction.user.id)!=self.actor_id:raise HTTPException(403,'Ce formulaire appartient à un autre intervenant.')
+            await interaction.response.defer(ephemeral=True,thinking=True)
             case=await service.load(self.case['id'],str(interaction.guild_id))
             await policy.authorize(self.actor_id,case)
             participant_id=str(self.users.values[0].id) if self.users else self.participant_id

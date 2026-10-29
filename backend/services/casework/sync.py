@@ -86,6 +86,7 @@ async def acquire(case_id, settings):
     stamp = service.now()
     row = await db.case_tickets.find_one_and_update(
         {'_id': case_id, 'guild_id': settings.guild_id, 'status': {'$ne': 'archived'},
+         'operation.status': {'$nin': ['pending', 'running', 'uncertain']},
          '$or': [{'lease': None}, {'lease.until': {'$lte': stamp}}]},
         {'$set': {'lease': {'token': token, 'until': (datetime.now(timezone.utc) + timedelta(minutes=3)).isoformat()},
                   'sync.status': 'running'}, '$inc': {'revision': 1}},

@@ -60,7 +60,7 @@ def public(row, detail=True):
         for name in ('notes', 'events', 'participants'):
             result[name] = copy.deepcopy(row.get(name, []))
     result['closure'] = {k: copy.deepcopy((row.get('closure') or {}).get(k)) for k in ('stage', 'error_type', 'cancel_error', 'requested_at')} if row.get('closure') else None
-    result['operation'] = {k: copy.deepcopy((row.get('operation') or {}).get(k)) for k in ('action','status','error_type','participant_id')} if row.get('operation') else None
+    result['operation'] = {k: copy.deepcopy((row.get('operation') or {}).get(k)) for k in ('action','status','error_type','error_message','participant_id')} if row.get('operation') else None
     # Source URLs and filesystem paths live only in case_messages / private fields.
     return result
 
@@ -165,6 +165,8 @@ async def change(case_id, actor_id, data, settings):
         raise HTTPException(409, 'Le rétablissement du salon est en cours.')
     changed = copy.deepcopy(row)
     details = {'request_id': data.request_id, 'action': data.action}
+    if data.action in ('assign','archive','cancel_close'):
+        details['reason'] = data.text.strip()
     if data.action in ('claim', 'assign'):
         if data.action == 'claim' and row.get('assigned') and row['assigned']['id'] != str(actor_id):
             raise HTTPException(409, 'Un intervenant est déjà attribué. Utilise la réattribution autorisée.')
@@ -205,7 +207,7 @@ async def change(case_id, actor_id, data, settings):
             raise HTTPException(409, 'Une clôture est déjà exécutée.')
         changed['closure'] = {**(row.get('closure') or {}), 'id': (row.get('closure') or {}).get('id') or uuid4().hex,
                               'actor_id': str(actor_id), 'reason': data.text,
-                              'stage': (row.get('closure') or {}).get('stage', 'requested'), 'requested_at': now()}
+                              'stage': (row.get('closure') or {}).get('stage', 'requested'), 'previous_status': (row.get('closure') or {}).get('previous_status', row['status']), 'requested_at': now()}
     changed['events'].append(event('action', str(actor_id), **details))
     saved=await save(row, changed)
     if saved['kind']=='support' and data.action in ('claim','assign'):

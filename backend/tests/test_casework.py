@@ -244,3 +244,19 @@ def test_module_can_be_mounted_but_remain_disabled():
     casework.settings=replace(SETTINGS,enabled=False)
     response=client.get('/api/casework?kind=contact_staff',cookies=h.session_cookies('staff'))
     assert response.status_code==503
+
+
+@pytest.mark.parametrize('previous,visibility', [('suspended','staff'),('restricted','restricted')])
+def test_cancel_closure_restores_previous_ticket_state(previous,visibility):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    reader,case_id=seed()
+    h.run(h.db.case_tickets.update_one({'_id':case_id},{'$set':{'status':previous,'visibility':visibility}}))
+    act(case_id,'archive',actor=ADMIN,text='Clôturer cet échange avec une sauvegarde.')
+    row=h.run(service.load(case_id,SETTINGS.guild_id))
+    assert row['closure']['previous_status']==previous
+    act(case_id,'cancel_close',actor=ADMIN,text='Le dossier doit finalement rester disponible.')
+    gateway=SimpleNamespace(restore_access=AsyncMock())
+    result=h.run(closure.cancel(case_id,gateway,SETTINGS))
+    assert result['status']==previous and result['closure'] is None
+    gateway.restore_access.assert_awaited_once()

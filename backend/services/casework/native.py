@@ -181,6 +181,10 @@ async def create(request_id,client):
         await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'lease_until':None}})
 
 
+def room_panel_state(case):
+    return {'status':case['status'],'visibility':case['visibility'],'assigned_id':(case.get('assigned') or {}).get('id')}
+
+
 async def refresh_room_panel(client,row):
     """Upgrade a tracked opening message in place; never post a second panel."""
     require_native_workflows()
@@ -194,10 +198,11 @@ async def refresh_room_panel(client,row):
     if not isinstance(channel,discord.TextChannel) or channel.guild.id!=server.id or str(channel.id)!=case['channel_id']:
         raise HTTPException(409,'Le panneau ne correspond pas au salon du dossier.')
     from services.casework.commands import RoomPanel
-    panel=RoomPanel(row['_id'],row=row)
+    state=room_panel_state(case)
+    panel=RoomPanel(row['_id'],row={**row,**state})
     await channel.get_partial_message(int(message_id)).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
     client.add_view(panel,message_id=int(message_id))
-    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':3},'$unset':{'room_panel_error':''}})
+    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':3,'room_panel_state':state},'$unset':{'room_panel_error':''}})
 
 
 async def tick(client):
@@ -217,8 +222,11 @@ async def tick(client):
                 receipt=await db.workflow_receipts.find_one({'_id':nonce})
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}}})
             except Exception:pass
-        if row['status']=='open' and row.get('room_panel_version')!=3:
-            try:await refresh_room_panel(client,row)
+        if row['status']=='open':
+            try:
+                case=await service.load(row['case_id'],str(server.id))
+                if row.get('room_panel_version')!=3 or row.get('room_panel_state')!=room_panel_state(case):
+                    await refresh_room_panel(client,row)
             except Exception as exc:
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
                 logger.exception('Mise à jour du menu de ticket à reprendre (%s).',row['_id'])

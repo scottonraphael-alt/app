@@ -41,15 +41,19 @@ async def request_action(case_id,actor_id,action,reason,request_id,*,revision,pa
     if action in ('restrict','unrestrict') and (row['kind']=='support' or policy.admin_role() not in roles):raise HTTPException(403,'Restriction réservée aux Administrateurs, hors soutiens.')
     op=row.get('operation') or {}
     if op.get('status') in ('pending','running'):raise HTTPException(409,'Une action est déjà en cours.')
-    if op.get('status')=='uncertain' and action!=op['action']:raise HTTPException(409,'Reprends d’abord l’action interrompue avec le même choix.')
+    if op.get('status')=='uncertain' and (action!=op['action'] or str(participant_id or '')!=str(op.get('participant_id') or '')):raise HTTPException(409,'Reprends d’abord l’action interrompue avec le même choix.')
+    if op.get('status')!='uncertain':
+        if action=='suspend' and row['status']=='suspended':raise HTTPException(409,'Le dossier est déjà suspendu.')
+        if action=='restrict' and row['visibility']=='restricted':raise HTTPException(409,'Le dossier est déjà restreint.')
+        if row['status']=='suspended' and action!='reopen':raise HTTPException(409,'Rouvre le dossier avant de modifier ses participants ou sa confidentialité.')
     if action=='reopen' and row['status']!='suspended' and op.get('action')!='reopen':raise HTTPException(409,'Le dossier n’est pas suspendu.')
     if action=='unrestrict' and row['visibility']!='restricted' and op.get('action')!='unrestrict':raise HTTPException(409,'Le dossier n’est pas restreint.')
     if action in ('add_member','remove_member') and (not participant_id or not str(participant_id).isdigit()):raise HTTPException(422,'Sélectionne un participant.')
-    await audit('casework.operation.requested',str(actor_id),case_id=case_id,action=action,participant_id=participant_id)
+    await audit('casework.operation.requested',str(actor_id),case_id=case_id,action=action,participant_id=participant_id,reason=reason.strip())
     changed=copy.deepcopy(row)
     changed['operation']={**(op if op.get('status')=='uncertain' else {}),'id':op.get('id') if op.get('status')=='uncertain' else uuid4().hex,
         'actor_id':str(actor_id),'action':action,'reason':reason.strip(),'participant_id':participant_id,'status':'pending','lease_until':None,'requested_at':service.now()}
-    changed['events'].append(service.event('action',str(actor_id),action=action,request_id=request_id))
+    changed['events'].append(service.event('action',str(actor_id),action=action,request_id=request_id,participant_id=participant_id,reason=reason.strip()))
     return service.public(await service.save(row,changed))
 
 
@@ -81,11 +85,13 @@ async def restored(channel,backup,row):
 
 
 async def run(case_id,gateway,settings):
+    require_native_workflows()
     token=uuid4().hex
     row=await db.case_tickets.find_one_and_update({'_id':case_id,'guild_id':settings.guild_id,'status':{'$nin':['archived','closing']},
         'operation.status':{'$in':['pending','running']},'$or':[{'operation.lease_until':None},{'operation.lease_until':{'$lte':service.now()}}]},
         {'$set':{'operation.status':'running','operation.token':token,'operation.lease_until':(datetime.now(timezone.utc)+timedelta(minutes=10)).isoformat()},'$inc':{'revision':1}},return_document=ReturnDocument.AFTER)
     if not row:return
+    mutation_started=False
     try:
         await check_purgatory(row,(row.get('operation') or {}).get('participant_id'))
         op=row['operation'];roles=await policy.authorize(op['actor_id'],row);channel=await gateway.text_channel(row);action=op['action']
@@ -102,11 +108,13 @@ async def run(case_id,gateway,settings):
             beneficiary=await channel.guild.fetch_member(int(row['member']['id']))
             if not policy.can_read({str(r.id) for r in beneficiary.roles},row):
                 value=overwrites.get(beneficiary,discord.PermissionOverwrite());value.view_channel=False;overwrites[beneficiary]=value
+            mutation_started=True
             await channel.edit(overwrites=overwrites,reason='Iris : suspension du dossier')
             changed['suspension']=op['backup'];changed['status']='suspended'
         elif action=='reopen':
             backup=row.get('suspension')
             if not backup:raise HTTPException(409,'Aucun instantané de suspension disponible ; ne pas restaurer des accès supposés.')
+            mutation_started=True
             await channel.edit(overwrites=await restored(channel,backup,row),reason='Iris : restauration des participants')
             changed['status']='restricted' if row['visibility']=='restricted' else 'open';changed['suspension']=None
         elif action=='restrict':
@@ -121,12 +129,14 @@ async def run(case_id,gateway,settings):
             if not admin:raise HTTPException(503,'Rôle Administrateur absent.')
             overwrites[admin]=discord.PermissionOverwrite(view_channel=True,send_messages=True,read_message_history=True)
             overwrites[channel.guild.me]=discord.PermissionOverwrite(view_channel=True,send_messages=True,read_message_history=True,manage_channels=True)
+            mutation_started=True
             await channel.edit(overwrites=overwrites,reason='Iris : restriction à l’administration')
             changed['restriction']=op['backup'];changed['status']='restricted' if row['status']!='suspended' else 'suspended'
         elif action=='unrestrict':
             backup=row.get('restriction')
             if not backup:raise HTTPException(409,'Instantané de restriction absent.')
             destination={**row,'visibility':backup['visibility']}
+            mutation_started=True
             await channel.edit(overwrites=await restored(channel,backup,destination),reason='Iris : levée de restriction')
             changed['visibility']=backup['visibility'];changed['status']='suspended' if row['status']=='suspended' else 'open';changed['restriction']=None
         elif action in ('add_member','remove_member'):
@@ -141,6 +151,7 @@ async def run(case_id,gateway,settings):
                 if str(member.id) not in guests and len(guests)>=2:raise HTTPException(409,'Deux invités au maximum dans un soutien.')
                 guests.add(str(member.id));changed['guest_ids']=sorted(guests)
             value=overwrites.get(member,discord.PermissionOverwrite());value.view_channel=action=='add_member';value.send_messages=action=='add_member';value.read_message_history=action=='add_member';overwrites[member]=value
+            mutation_started=True
             await channel.edit(overwrites=overwrites,reason='Iris : participant du dossier')
             participants=set(row.get('participants',[]))
             if action=='add_member':participants.add(str(member.id))
@@ -148,12 +159,12 @@ async def run(case_id,gateway,settings):
             changed['participants']=sorted(participants)
         current=await service.load(case_id,settings.guild_id)
         if current['status']=='archived' or (current.get('operation') or {}).get('token')!=token:raise HTTPException(409,'Le dossier a changé.')
-        changed['revision']=current['revision'];changed['operation'].update(status='completed',lease_until=None,error_type=None)
+        changed['revision']=current['revision'];changed['operation'].update(status='completed',lease_until=None,error_type=None,error_message=None)
         changed['events'].append(service.event('operation.confirmed',op['actor_id'],action=action,participant_id=op.get('participant_id')))
         await service.save(current,changed)
         await audit('casework.operation.confirmed',op['actor_id'],case_id=case_id,action=action,participant_id=op.get('participant_id'))
     except Exception as error:
-        await db.case_tickets.update_one({'_id':case_id,'operation.token':token,'status':{'$ne':'archived'}},{'$set':{'operation.status':'uncertain','operation.error_type':type(error).__name__,'operation.lease_until':None},'$inc':{'revision':1}})
+        await db.case_tickets.update_one({'_id':case_id,'operation.token':token,'status':{'$ne':'archived'}},{'$set':{'operation.status':'uncertain' if mutation_started or row['operation'].get('backup') else 'failed','operation.error_type':type(error).__name__,'operation.error_message':str(error.detail) if isinstance(error,HTTPException) else 'Discord n’a pas confirmé cette modification. Réessaie la même action.','operation.lease_until':None},'$inc':{'revision':1}})
         raise
 
 

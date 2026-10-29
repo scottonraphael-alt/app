@@ -137,7 +137,8 @@ def test_add_member_selector_opens_one_modal_and_applies_confirmed_change(world)
         assert modal.to_components()[0]['component']['type']==5
         modal.users._values=[target];modal.reason._value='Ce membre doit contribuer à cet échange.'
         submit=menu_interaction(world,case,ident=778);await modal.on_submit(submit)
-        confirmation=submit.response.send_message.await_args.kwargs['view']
+        submit.response.defer.assert_awaited_once()
+        confirmation=submit.followup.send.await_args.kwargs['view']
         button=next(child for child in confirmation.walk_children() if isinstance(child,discord.ui.Button))
         applied=menu_interaction(world,case,ident=779)
         await button.callback(applied)
@@ -417,3 +418,71 @@ def test_staff_menu_shows_recent_reasons_and_active_fiche():
     h.run(h.db.casiers.insert_one({'discord_id':MEMBER,'sanctions':[{'type':'avertissement','reason':'Spam répété','created_at':'2026-10-20T10:00:00+00:00'}],'fiches_s':[{'active':True}]}))
     excerpt=h.run(commands.casier_excerpt(MEMBER,STAFF,{h.ROLE_IDS['staff']}))
     assert 'Spam répété' in excerpt and '20/10/2026' in excerpt and 'Fiche S active : oui' in excerpt
+
+
+def perform(world,case,action,*,actor=STAFF,participant=None):
+    current=h.run(service.load(case['id'],h.GUILD_ID))
+    h.run(operations.request_action(case['id'],actor,action,'Motif suffisamment détaillé pour cette action.',f'{action}-{current["revision"]}',revision=current['revision'],participant_id=participant))
+    gateway=SimpleNamespace(text_channel=AsyncMock(return_value=world[0].channels[int(case['channel_id'])]))
+    h.run(operations.run(case['id'],gateway,policy.Settings()))
+    return h.run(service.load(case['id'],h.GUILD_ID))
+
+
+def test_suspended_ticket_keeps_original_backup_and_requires_reopening(world):
+    case=opened(world);suspended=perform(world,case,'suspend')
+    for action in ('suspend','add_member','remove_member'):
+        with pytest.raises(HTTPException):
+            h.run(operations.request_action(case['id'],STAFF,action,'Ne pas écraser la sauvegarde des permissions.',f'blocked-{action}',revision=suspended['revision'],participant_id=MEMBER))
+    assert h.run(service.load(case['id'],h.GUILD_ID))['suspension']==suspended['suspension']
+    restored=perform(world,case,'reopen')
+    assert restored['status']=='open'
+    assert world[0].channels[int(case['channel_id'])].overwrites[world[0].members[int(MEMBER)]].view_channel
+
+
+def test_repeated_restriction_preserves_original_access(world,monkeypatch):
+    monkeypatch.setattr(policy,'admin_role',lambda:h.ROLE_IDS['admin'])
+    admin=h.USER_IDS['admin'];case=opened(world)
+    restricted=perform(world,case,'restrict',actor=admin)
+    with pytest.raises(HTTPException):
+        h.run(operations.request_action(case['id'],admin,'restrict','Conserver la sauvegarde initiale des accès.','restrict-again',revision=restricted['revision']))
+    restored=perform(world,case,'unrestrict',actor=admin)
+    assert restored['visibility']=='staff'
+    assert world[0].channels[int(case['channel_id'])].overwrites[world[0].get_role(int(h.ROLE_IDS['staff']))].view_channel
+
+
+def test_invalid_member_action_does_not_lock_other_actions(world):
+    case=opened(world)
+    with pytest.raises(HTTPException):perform(world,case,'remove_member',participant=MEMBER)
+    current=h.run(service.load(case['id'],h.GUILD_ID))
+    assert current['operation']['status']=='failed'
+    entry=next(e for e in current['events'] if e.get('action')=='remove_member')
+    assert entry['participant_id']==MEMBER and entry['reason']=='Motif suffisamment détaillé pour cette action.'
+    assert 'ne peuvent pas être retirés' in service.public(current)['operation']['error_message']
+    assert perform(world,case,'suspend')['status']=='suspended'
+
+
+def test_uncertain_retry_cannot_change_target_and_sync_waits(world):
+    from services.casework import sync
+    case=opened(world);channel=world[0].channels[int(case['channel_id'])]
+    target=Member('700000000000000099');world[0].members[target.id]=target
+    channel.edit=AsyncMock(side_effect=TimeoutError())
+    with pytest.raises(TimeoutError):perform(world,case,'add_member',participant=str(target.id))
+    current=h.run(service.load(case['id'],h.GUILD_ID))
+    assert current['operation']['status']=='uncertain'
+    assert h.run(sync.acquire(case['id'],policy.Settings()))[0] is None
+    with pytest.raises(HTTPException):
+        h.run(operations.request_action(case['id'],STAFF,'add_member','Il faut reprendre la même opération.','different-target',revision=current['revision'],participant_id=MEMBER))
+
+
+def test_panel_uses_current_assignment_and_status_without_ping(world):
+    case=opened(world);guild,client=world
+    h.run(h.db.case_tickets.update_one({'_id':case['id']},{'$set':{'assigned':{'id':STAFF},'status':'suspended'}}))
+    row=h.run(h.db.case_requests.find_one({'_id':case['request_id']}))
+    partial=SimpleNamespace(edit=AsyncMock());guild.channels[int(case['channel_id'])].get_partial_message=lambda ident:partial
+    h.run(native.refresh_room_panel(client,row))
+    sent=partial.edit.await_args.kwargs
+    assert f'<@{STAFF}>' in str(sent['view'].to_components())
+    assert 'Échanges suspendus' in str(sent['view'].to_components())
+    assert sent['allowed_mentions'].to_dict()['parse']==[]
+    saved=h.run(h.db.case_requests.find_one({'_id':row['_id']}))
+    assert saved['room_panel_state']['assigned_id']==STAFF

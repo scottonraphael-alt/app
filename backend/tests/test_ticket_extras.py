@@ -12,6 +12,7 @@ TID = "t-1"
 
 def setup_function():
     h.reset_db()
+    h.reset_discord()
     h.run(h.db.tickets.insert_one({"id": TID, "title": "Ticket un", "status": "active", "member": {"id": "9"}}))
     h.run(h.db.tickets.insert_one({"id": "demo", "title": "Démo", "demo_ticket": True}))
 
