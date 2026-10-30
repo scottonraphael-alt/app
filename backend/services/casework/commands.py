@@ -298,15 +298,18 @@ async def casier_excerpt(member_id,actor_id,roles):
 
 
 class StaffMenu(discord.ui.LayoutView):
-    def __init__(self,actor_id):
-        super().__init__(timeout=300);select=discord.ui.UserSelect(placeholder='Choisir le membre concerné',min_values=1,max_values=1)
+    def __init__(self,owner_id=None):
+        super().__init__(timeout=None);select=discord.ui.UserSelect(placeholder='Choisir le membre concerné',min_values=1,max_values=1,custom_id='iris:moderation:member')
         async def chosen(interaction):
             try:
                 check(interaction)
-                if str(interaction.user.id)!=actor_id:raise HTTPException(403,'Ce panneau appartient à son auteur.')
+                member_id=str(select.values[0].id)
+                actor_id=str(interaction.user.id)
+                if owner_id is not None and actor_id!=owner_id:raise HTTPException(403,'Ce panneau appartient à son auteur.')
                 roles=await policy.fresh_roles(actor_id)
                 if not policy.can_read(roles,{'kind':'summons','visibility':'staff'}):raise HTTPException(403,'Rôle Staff requis.')
-                member_id=str(select.values[0].id);view=discord.ui.LayoutView(timeout=300);buttons=discord.ui.ActionRow()
+                await interaction.response.defer(ephemeral=True,thinking=True)
+                view=discord.ui.LayoutView(timeout=300);buttons=discord.ui.ActionRow()
                 for kind,label in [('summons','Préparer une convocation'),('bubble','Ouvrir une bulle')]:
                     button=discord.ui.Button(label=label,style=discord.ButtonStyle.secondary)
                     async def open_form(next_interaction,kind=kind):
@@ -331,6 +334,31 @@ class StaffMenu(discord.ui.LayoutView):
                 await respond(interaction,view)
             except Exception as exc:await error(interaction,exc)
         select.callback=chosen;self.add_item(discord.ui.Container(discord.ui.TextDisplay('## 🛡️ Espace Staff'),discord.ui.ActionRow(select),accent_colour=0x78618C))
+
+
+async def publish_moderation_panel(interaction):
+    channel=interaction.channel
+    if not isinstance(channel,discord.TextChannel) or channel.guild.id!=interaction.guild_id:
+        raise HTTPException(422,'Publie le panneau dans un salon textuel du serveur.')
+    await interaction.response.defer(ephemeral=True,thinking=True)
+    await audit('casework.panel.publish_requested',str(interaction.user.id),kind='moderation',channel_id=str(channel.id))
+    key='moderation:'+str(channel.id)
+    record=await db.workflow_panels.find_one({'_id':key})
+    panel=StaffMenu()
+    sent=None
+    if record:
+        try:sent=await channel.get_partial_message(int(record['message_id'])).edit(view=panel,allowed_mentions=NONE)
+        except discord.NotFound:pass
+    if sent is None:
+        from services.verification_runtime import Adapter
+        nonce=hashlib.sha256(f'moderation-panel:{interaction.id}'.encode()).hexdigest()[:24]
+        await Adapter(interaction.client).send_once(channel,panel,nonce)
+        receipt=await db.workflow_receipts.find_one({'_id':nonce})
+        sent=channel.get_partial_message(int(receipt['message_id']))
+    await db.workflow_panels.replace_one({'_id':key},{'_id':key,'channel_id':str(channel.id),'message_id':str(sent.id)},upsert=True)
+    interaction.client.add_view(panel,message_id=int(sent.id))
+    await audit('casework.panel.published',str(interaction.user.id),kind='moderation',channel_id=str(channel.id))
+    await respond(interaction,message('✅ Panneau publié','Le sélecteur reste disponible dans ce salon. Chaque Staff reçoit ses actions et les informations du casier en privé.'))
 
 
 async def publish_panel(interaction,kind):
@@ -381,9 +409,9 @@ async def install(client):
             try:
                 check(interaction);roles=await policy.fresh_roles(str(interaction.user.id))
                 if not policy.can_read(roles,{'kind':'summons','visibility':'staff'}):raise HTTPException(403,'Rôle Staff requis.')
-                await respond(interaction,StaffMenu(str(interaction.user.id)))
+                await publish_moderation_panel(interaction)
             except Exception as exc:await error(interaction,exc)
-        group.add_command(app_commands.Command(name='moderation',description='Ouvrir le panneau Staff privé',callback=moderation));tree.add_command(group,guild=scope)
+        group.add_command(app_commands.Command(name='moderation',description='Publier le panneau de modération permanent',callback=moderation));tree.add_command(group,guild=scope)
     for name,kind in [('convocation','summons'),('bulle','bubble')]:
         if tree.get_command(name,guild=scope):continue
         def invitation(kind):
@@ -404,6 +432,7 @@ async def install(client):
     if not tree.get_command('dossier',guild=scope):tree.add_command(app_commands.Command(name='dossier',description='Gérer le dossier du salon actuel',callback=dossier),guild=scope)
     from services import purgatory
     purgatory.register(tree,scope)
+    client.add_view(StaffMenu())
     client.add_view(PublicPanel('support'));client.add_view(PublicPanel('contact_staff'))
     async for row in db.case_requests.find({'guild_id':str(config.DISCORD_GUILD_ID),'status':{'$in':['waiting','open']}}):
         if row.get('notification') and row['status']=='waiting':client.add_view(SupportDecision(row),message_id=int(row['notification']['message_id']))

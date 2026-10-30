@@ -595,3 +595,35 @@ def test_support_panel_reads_current_helper_followup_and_respects_unassignment()
     assert h.run(native.current_panel_state(case))['assigned_id']=='new-helper'
     h.run(h.db.tickets.update_one({'channel_id':'123'},{'$set':{'assigned_helper':None}}))
     assert h.run(native.current_panel_state(case))['assigned_id'] is None
+
+def test_permanent_moderation_selector_authorizes_each_click_and_keeps_casier_private(world):
+    async def check():
+        panel=commands.StaffMenu()
+        assert panel.is_persistent()
+        select=next(c for c in panel.walk_children() if isinstance(c,discord.ui.UserSelect))
+        select._values=[SimpleNamespace(id=int(MEMBER))]
+        it=menu_interaction(world,{'channel_id':'123'},actor=STAFF)
+        await select.callback(it)
+        it.response.defer.assert_awaited_once_with(ephemeral=True,thinking=True)
+        assert it.followup.send.await_args.kwargs['ephemeral'] is True
+        h.fake_discord.member_roles[STAFF]=[]
+        denied=menu_interaction(world,{'channel_id':'123'},actor=STAFF)
+        await select.callback(denied)
+        assert 'Rôle Staff requis' in str(denied.response.send_message.await_args.kwargs['view'].to_components())
+    h.run(check())
+
+def test_moderation_publication_reuses_existing_message(world):
+    async def check():
+        guild,client=world
+        channel=Channel(guild,'600000000000000123')
+        partial=SimpleNamespace(id=800000000000000077,edit=AsyncMock())
+        partial.edit.return_value=partial
+        channel.get_partial_message=lambda ident:partial
+        await h.db.workflow_panels.insert_one({'_id':'moderation:'+str(channel.id),'message_id':str(partial.id),'channel_id':str(channel.id)})
+        it=menu_interaction(world,{'channel_id':str(channel.id)},actor=STAFF)
+        it.channel=channel
+        await commands.publish_moderation_panel(it)
+        partial.edit.assert_awaited_once()
+        assert partial.edit.await_args.kwargs['view'].is_persistent()
+        client.add_view.assert_called_once()
+    h.run(check())
