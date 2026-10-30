@@ -97,7 +97,7 @@ class SupportDecision(discord.ui.LayoutView):
             discord.ui.TextDisplay(f'Membre : <@{row["member_id"]}>\n### Motif\n'+fenced(row['reason'])),
             discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])),accent_colour=0x78618C)
         from services.workflow_panels import apply as apply_panel
-        apply_panel(box,'request:support',member_id=row['member_id'])
+        apply_panel(box,'request:support',row=row)
         buttons=discord.ui.ActionRow()
         for accept,label in [(True,'Accepter et devenir interlocuteur'),(False,'Refuser avec une explication')]:
             button=discord.ui.Button(label=label,style=discord.ButtonStyle.primary if accept else discord.ButtonStyle.secondary,custom_id=f'iris:support:{row["_id"]}:{accept}')
@@ -137,6 +137,7 @@ class RoomPanel(discord.ui.LayoutView):
             emoji='🔐';purpose='Cet espace te permet de discuter confidentiellement avec les Responsables et les Administrateurs. Les autres membres du Staff n’ont pas accès à ce ticket.'
         content=f'## {emoji} {title}\n### 👤 Espace de <@{row["member_id"]}>'
         if row.get('assigned_id'):content+=f'\n🤝 Ton Interlocuteur est <@{row["assigned_id"]}>'
+        elif row['kind']=='support':content+='\n🤝 Interlocuteur : **Non attribué pour le moment**'
         elif row['kind'] in ('summons','bubble','verification'):content+=f'\n👋 Échange ouvert par <@{row["actor_id"]}>'
         if row.get('status')=='suspended':content+='\n⏸️ **Échanges suspendus — les participants seront restaurés à la réouverture.**'
         if row.get('visibility')=='restricted':content+='\n🔒 **Accès restreint à l’administration.**'
@@ -147,7 +148,7 @@ class RoomPanel(discord.ui.LayoutView):
         presentation=discord.ui.Container()
         from services.workflow_panels import replaces_heading
         custom_heading=replaces_heading('room:'+row['kind'])
-        if apply_panel(presentation,'room:'+row['kind'],member_id=row['member_id']):
+        if apply_panel(presentation,'room:'+row['kind'],row=row):
             if custom_heading:
                 box.clear_items()
             else:

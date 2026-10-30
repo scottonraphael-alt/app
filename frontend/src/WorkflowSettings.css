@@ -16,3 +16,8 @@
 .wf-section-preview>img,.wf-thumbnail-empty{width:96px;height:96px;object-fit:cover;border-radius:12px}
 .wf-thumbnail-empty{display:grid;place-items:center;background:#38383f;color:#c8c8d0;font-size:12px}
 .wf-page .wf-heading-option{display:flex;align-items:center;gap:10px;margin:18px 0}.wf-page .wf-heading-option input{width:18px;height:18px}
+.wf-variable-help{margin:20px 0;padding:18px 20px;background:var(--cz-violet-soft,#eee8f5);border-radius:16px;line-height:1.6}
+.wf-variable-help summary{cursor:pointer;font-weight:600;color:var(--cz-violet,#846594)}
+.wf-variable-help dl>div{display:grid;grid-template-columns:160px 1fr;gap:12px;padding:6px 0}
+.wf-variable-help dd{margin:0}.wf-variable-help code{overflow-wrap:anywhere}
+@media(max-width:600px){.wf-variable-help dl>div{grid-template-columns:1fr;gap:2px}}

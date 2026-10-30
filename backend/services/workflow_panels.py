@@ -1,5 +1,7 @@
 """Editable presentation blocks; functional controls and permissions stay server-owned."""
 import copy
+import re
+from datetime import datetime
 import discord
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -19,6 +21,28 @@ KEYS = {
     'review:support':'Demande de soutien traitée',
 }
 _cache = {}
+VARIABLES={'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95}
+TOKEN=re.compile(r'\{(membre|interlocuteur|traite_par|date_traitement|salon)\}')
+
+
+def values(row):
+    def mention(value,fallback):
+        return f'<@{value}>' if value and str(value).isascii() and str(value).isdigit() else fallback
+    stamp='Décision en attente'
+    try:
+        if row.get('decided_at'):stamp=f"<t:{int(datetime.fromisoformat(row['decided_at']).timestamp())}:F>"
+    except (ValueError,TypeError):pass
+    return {'membre':mention(row.get('member_id'),'Membre à sélectionner'),
+        'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
+        'traite_par':mention(row.get('decision_by'),'Décision en attente'),
+        'date_traitement':stamp,
+        'salon':f"<#{row['channel_id']}>" if str(row.get('channel_id','')).isdigit() else 'Salon en préparation'}
+
+
+def render_text(text,row):
+    replacements=values(row)
+    return TOKEN.sub(lambda match:replacements[match.group(1)],text)
+
 
 
 class Block(BaseModel):
@@ -56,8 +80,11 @@ def validate(panels):
                 raise HTTPException(422,'Le bouton de lien doit avoir un libellé.')
         if panel.replace_heading and (not key.startswith('room:') or not any('{membre}' in b.text for b in panel.blocks if b.kind in ('text','section'))):
             raise HTTPException(422,'Un en-tête de ticket personnalisé doit contenir {membre}.')
-        # Reserve the maximum expansion of each supported mention.
-        expanded=sum(len((b.text+b.label).encode('utf-16-le'))//2 + b.text.count('{membre}')*16 for b in panel.blocks)
+        for b in panel.blocks:
+            if key.startswith('public:') and TOKEN.search(b.text):
+                raise HTTPException(422,'Un panneau public ne connaît pas encore le membre : utilisez les variables dans un ticket ou une demande.')
+        # Budget the maximum expansion before Discord receives a message.
+        expanded=sum(len((b.text+b.label).encode('utf-16-le'))//2 + sum(b.text.count('{'+name+'}')*max(0,size-len(name)-2) for name,size in VARIABLES.items()) for b in panel.blocks)
         if expanded>700:
             raise HTTPException(422,'Le texte, mentions comprises, dépasse la place disponible (700 caractères).')
         result[key]=panel.model_dump()
@@ -73,7 +100,7 @@ def replaces_heading(key):
     return bool(_cache.get(key,{}).get('replace_heading'))
 
 
-def apply(box,key,*,replace=False,member_id=None):
+def apply(box,key,*,replace=False,member_id=None,row=None):
     panel=_cache.get(key)
     if not panel or not panel.get('blocks'):
         return False
@@ -81,9 +108,7 @@ def apply(box,key,*,replace=False,member_id=None):
         box.clear_items()
     box.accent_colour=int(panel['color'][1:],16)
     for b in panel['blocks']:
-        text=b['text']
-        if member_id is not None and str(member_id).isascii() and str(member_id).isdigit():
-            text=text.replace('{membre}',f'<@{member_id}>')
+        text=render_text(b['text'],row or {'member_id':member_id})
         if b['kind']=='text':box.add_item(discord.ui.TextDisplay(text))
         elif b['kind']=='section':box.add_item(discord.ui.Section(discord.ui.TextDisplay(text),accessory=discord.ui.Thumbnail(b['url'])))
         elif b['kind']=='separator':box.add_item(discord.ui.Separator())

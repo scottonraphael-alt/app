@@ -70,3 +70,14 @@ def test_custom_heading_requires_member_and_section_requires_image():
         panels.validate({'room:summons':{'replace_heading':True,'blocks':[{'text':'Titre sans membre'}]}})
     with pytest.raises(HTTPException):
         panels.validate({'room:summons':{'blocks':[{'kind':'section','text':'Texte','url':''}]}})
+
+def test_all_variables_resolve_and_unassigned_is_explicit():
+    row={'member_id':'123','assigned_id':'456','decision_by':'789',
+         'decided_at':'2026-10-30T14:00:00+00:00','channel_id':'987'}
+    text=panels.render_text('{membre} {interlocuteur} {traite_par} {date_traitement} {salon}',row)
+    assert '<@123>' in text and '<@456>' in text and '<@789>' in text
+    assert '<t:' in text and '<#987>' in text and '{' not in text
+    assert panels.render_text('{interlocuteur}',{'member_id':'123'})=='Non attribué'
+    assert panels.render_text('{traite_par}',{'member_id':'123'})=='Décision en attente'
+    with pytest.raises(HTTPException):
+        panels.validate({'public:support':{'blocks':[{'text':'Bonjour {interlocuteur}'}]}})

@@ -191,6 +191,16 @@ def room_panel_state(case):
     return {'status':case['status'],'visibility':case['visibility'],'assigned_id':(case.get('assigned') or {}).get('id')}
 
 
+async def current_panel_state(case):
+    state=room_panel_state(case)
+    if case['kind']=='support':
+        # The Helper follow-up is authoritative, including an intentional unassignment.
+        ticket=await db.tickets.find_one({'channel_id':case['channel_id']},{'assigned_helper':1})
+        if ticket is not None:
+            state['assigned_id']=(ticket.get('assigned_helper') or {}).get('id')
+    return state
+
+
 async def refresh_room_panel(client,row):
     """Upgrade a tracked opening message in place; never post a second panel."""
     require_native_workflows()
@@ -204,7 +214,7 @@ async def refresh_room_panel(client,row):
     if not isinstance(channel,discord.TextChannel) or channel.guild.id!=server.id or str(channel.id)!=case['channel_id']:
         raise HTTPException(409,'Le panneau ne correspond pas au salon du dossier.')
     from services.casework.commands import RoomPanel
-    state=room_panel_state(case)
+    state=await current_panel_state(case)
     panel=RoomPanel(row['_id'],row={**row,**state})
     await channel.get_partial_message(int(message_id)).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
     client.add_view(panel,message_id=int(message_id))
@@ -250,7 +260,7 @@ async def tick(client):
                     logger.exception('Liaison vers le suivi Helper à reprendre (%s).',row['_id'])
             try:
                 case=await service.load(row['case_id'],str(server.id))
-                if row.get('room_panel_version')!=4 or row.get('room_panel_state')!=room_panel_state(case):
+                if row.get('room_panel_version')!=4 or row.get('room_panel_state')!=await current_panel_state(case):
                     await refresh_room_panel(client,row)
             except Exception as exc:
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
@@ -303,7 +313,7 @@ def support_receipt(row):
         discord.ui.TextDisplay(('### 🤝 Acceptée par ' if accepted else '### Décision de ')+f"<@{row.get('decision_by') or row.get('assigned_id')}>"),
         accent_colour=0x73A594 if accepted else 0xB78B58)
     from services.workflow_panels import apply as apply_panel
-    apply_panel(box,'review:support',member_id=row['member_id'])
+    apply_panel(box,'review:support',row=row)
     if row.get('decided_at'):
         stamp=int(datetime.fromisoformat(row['decided_at']).timestamp())
         box.add_item(discord.ui.TextDisplay(f'📅 <t:{stamp}:F>'))

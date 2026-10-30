@@ -587,3 +587,11 @@ def test_support_receipt_keeps_context_and_actor_without_action_buttons():
         assert all(c.style==discord.ButtonStyle.link for c in view.walk_children() if isinstance(c,discord.ui.Button))
         assert '<t:' in text
     h.run(render())
+
+def test_support_panel_reads_current_helper_followup_and_respects_unassignment():
+    case={'status':'open','visibility':'staff','kind':'support','channel_id':'123',
+          'assigned':{'id':'old-helper'}}
+    h.run(h.db.tickets.insert_one({'channel_id':'123','assigned_helper':{'id':'new-helper'}}))
+    assert h.run(native.current_panel_state(case))['assigned_id']=='new-helper'
+    h.run(h.db.tickets.update_one({'channel_id':'123'},{'$set':{'assigned_helper':None}}))
+    assert h.run(native.current_panel_state(case))['assigned_id'] is None
