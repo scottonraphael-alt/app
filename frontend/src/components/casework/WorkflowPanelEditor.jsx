@@ -4,7 +4,7 @@ import {Markdown} from '../announcements/Preview';
 import {safeUrl} from '../announcements/document';
 import '../../DiscordAnnouncements.css';
 const PANELS={
- 'public:verification':'Accueil · Vérification','public:contact_staff':'Accueil · Contact Staff','public:support':'Accueil · Soutien',
+ 'public:verification':'Accueil · Vérification','public:contact_staff':'Accueil · Contact Staff','public:support':'Accueil · Soutien','public:moderation':'Accueil · Modération',
  'room:verification':'Ticket · Vérification','room:contact_staff':'Ticket · Contact Staff','room:summons':'Ticket · Convocation',
  'request:support':'Demande de soutien en attente','room:bubble':'Ticket · Bulle','room:support':'Ticket · Soutien','review:support':'Demande de soutien traitée',
 };

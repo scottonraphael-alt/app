@@ -100,3 +100,14 @@ def test_avatar_variable_falls_back_without_exposing_private_iris_url():
     assert panels.member_avatar({'member_id':'123','member_avatar_url':'/api/tickets/avatars/private'}).startswith('https://cdn.discordapp.com/embed/avatars/')
     with pytest.raises(HTTPException):
         panels.validate({'public:support':{'blocks':[{'kind':'image','url':'{avatar_membre}'}]}})
+
+def test_moderation_custom_presentation_preserves_persistent_member_selector():
+    panels.configure(panels.validate({'public:moderation':{'color':'#123456','blocks':[{'text':'# Notre espace modération'}]}}))
+    async def check():
+        view=commands.StaffMenu()
+        payload=str(view.to_components())
+        assert 'Notre espace modération' in payload
+        assert 'Espace Staff' not in payload
+        assert view.is_persistent()
+        assert any(isinstance(c,discord.ui.UserSelect) and c.custom_id=='iris:moderation:member' for c in view.walk_children())
+    h.run(check())

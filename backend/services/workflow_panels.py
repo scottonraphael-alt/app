@@ -15,6 +15,7 @@ KEYS = {
     'public:verification':'Accueil · Vérification',
     'public:contact_staff':'Accueil · Contact Staff',
     'public:support':'Accueil · Soutien',
+    'public:moderation':'Accueil · Modération',
     'room:verification':'Ticket · Vérification',
     'room:contact_staff':'Ticket · Contact Staff',
     'room:summons':'Ticket · Convocation',

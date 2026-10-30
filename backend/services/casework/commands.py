@@ -333,7 +333,12 @@ class StaffMenu(discord.ui.LayoutView):
                 box.add_item(buttons);view.add_item(box)
                 await respond(interaction,view)
             except Exception as exc:await error(interaction,exc)
-        select.callback=chosen;self.add_item(discord.ui.Container(discord.ui.TextDisplay('## 🛡️ Espace Staff'),discord.ui.ActionRow(select),accent_colour=0x78618C))
+        select.callback=chosen
+        box=discord.ui.Container(discord.ui.TextDisplay('## 🛡️ Espace Staff'),accent_colour=0x78618C)
+        from services.workflow_panels import apply as apply_panel
+        apply_panel(box,'public:moderation',replace=True)
+        box.add_item(discord.ui.ActionRow(select))
+        self.add_item(box)
 
 
 async def publish_moderation_panel(interaction):
