@@ -336,7 +336,12 @@ async def on_guild_channel_update(before, after):
 
 @moderation_client.event
 async def on_member_join(member):
+    from services.member_join_roles import assign
     await server_statistics.safely(statistics_members.record_join, member)
+    try:
+        await assign(member)
+    except Exception:
+        logger.exception("Attribution des rôles d’arrivée interrompue (membre %s).", member.id)
 
 
 @moderation_client.event

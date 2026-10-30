@@ -258,3 +258,9 @@ Le bot doit avoir Voir le salon, Voir les anciens messages, Gérer les messages 
 Pour suspendre ce nettoyage : `DEFOULOIR_RESET_ENABLED=false`, puis redémarrer le backend. Désactiver l’ancien nettoyage BotGhost avant d’activer celui d’OasisLink pour éviter deux publications. Le texte de la capture est conservé ; l’emoji personnalisé non identifiable sur la capture est représenté par 🐕.
 
 Validation : 9 tests hors ligne (horaire Paris/hiver/été, déduplication, désactivation, guilde, reprise après refus de publication et échec de purge). Aucune suppression réelle effectuée pendant le développement.
+
+### Rôles à l’arrivée des membres
+
+OasisLink attribue aux nouveaux membres humains du serveur configuré les rôles `1081957992401997827`, `1453835191067082793`, `1081957992381042818`, `1081957992297140303`, `1081957992246808693`, `1081957992209068162` et `1321608880052113428`. Les rôles déjà présents sont conservés. L’enregistrement statistique de l’arrivée reste actif. Les ajouts et rôles non attribuables sont consignés dans le journal Iris.
+
+Le rôle du bot doit être au-dessus de ces sept rôles et disposer de Gérer les rôles. Un rôle absent ou non attribuable n’empêche pas l’attribution des autres. Cette fonctionnalité ne réattribue pas les rôles aux membres déjà présents au déploiement.
