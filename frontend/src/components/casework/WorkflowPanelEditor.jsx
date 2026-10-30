@@ -9,6 +9,8 @@ const PANELS={
  'request:support':'Demande de soutien en attente','room:bubble':'Ticket · Bulle','room:support':'Ticket · Soutien','review:support':'Demande de soutien traitée',
 };
 const empty=()=>({color:'#78618c',blocks:[]});
+const previewText=text=>(text||'').replaceAll('{membre}','@Membre');
+
 export default function WorkflowPanelEditor({value={},onChange,catalogue}){
  const [key,setKey]=useState('public:support');
  const panel=value[key]||empty();
@@ -18,25 +20,28 @@ export default function WorkflowPanelEditor({value={},onChange,catalogue}){
  const move=(index,delta)=>{const next=[...blocks];[next[index],next[index+delta]]=[next[index+delta],next[index]];update({...panel,blocks:next});};
  return <section className="wf-panel-editor">
  <p className="cz-eyebrow">COMPOSER · MESSAGES DISCORD</p><h2>Vos panneaux, votre ton</h2>
- <p>Composez les textes, séparateurs, images et liens. Les identités, motifs, permissions et actions du dossier restent ajoutés automatiquement. Sans bloc personnalisé, le texte d’origine est conservé.</p>
+ <p>Composez les textes, vignettes à droite, séparateurs, images et liens. Les identités, motifs, permissions et actions du dossier restent ajoutés automatiquement. Sans bloc personnalisé, le texte d’origine est conservé.</p>
  <div className="wf-grid"><label>Panneau à personnaliser<select value={key} onChange={e=>setKey(e.target.value)}>{Object.entries(PANELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
  <label>Couleur du panneau<input type="color" value={panel.color} onChange={e=>update({...panel,color:e.target.value})}/></label></div>
+ {key.startsWith('room:')&&<><label className="wf-heading-option"><input type="checkbox" checked={!!panel.replace_heading} onChange={e=>update({...panel,replace_heading:e.target.checked})}/> Personnaliser aussi le titre du ticket</label><p>Insérez <code>{'{membre}'}</code> dans un titre ou un texte : il sera remplacé par la mention du membre concerné.</p></>}
+ {key==='room:summons'&&<button type="button" className="cw-button" onClick={()=>update({color:'#ed4245',replace_heading:true,blocks:[{kind:'section',text:"# 🛡️ Convocation de {membre}\n\nTu fais l'objet d'une convocation par l'équipe de modération. Merci de prendre connaissance de ce message et de rester disponible dans ce ticket afin de faire le point.",url:'',label:''},{kind:'separator',text:'',url:'',label:''}]})}>Utiliser le modèle Convocation avec vignette</button>}
  <div className="wf-panel-grid"><div>{blocks.map((b,index)=><article className="wf-block" key={index}>
- <div className="wf-block-toolbar"><strong>Bloc {index+1} · {({text:'Texte',separator:'Séparateur',image:'Image',link:'Lien'})[b.kind]}</strong>
+ <div className="wf-block-toolbar"><strong>Bloc {index+1} · {({text:'Texte',section:'Texte + vignette à droite',separator:'Séparateur',image:'Image',link:'Lien'})[b.kind]}</strong>
  <button type="button" className="cw-button" disabled={!index} onClick={()=>move(index,-1)} aria-label={'Monter le bloc '+(index+1)}>↑</button>
  <button type="button" className="cw-button" disabled={index===blocks.length-1} onClick={()=>move(index,1)} aria-label={'Descendre le bloc '+(index+1)}>↓</button>
  <button type="button" className="cw-button cw-danger" onClick={()=>update({...panel,blocks:blocks.filter((_,i)=>i!==index)})}>Retirer</button></div>
- {b.kind==='text'&&<MarkdownField label={'Texte du bloc '+(index+1)} value={b.text||''} catalogue={catalogue} onChange={text=>change(index,{text})}/>}
- {['image','link'].includes(b.kind)&&<label>{b.kind==='image'?'Lien HTTPS de l’image':'Destination du bouton'}<input type="url" value={b.url||''} onChange={e=>change(index,{url:e.target.value})}/></label>}
+ {['text','section'].includes(b.kind)&&<MarkdownField label={'Texte du bloc '+(index+1)} value={b.text||''} catalogue={catalogue} onChange={text=>change(index,{text})}/>}
+ {['image','section','link'].includes(b.kind)&&<label>{b.kind!=='link'?'Lien HTTPS de l’image':'Destination du bouton'}<input type="url" value={b.url||''} onChange={e=>change(index,{url:e.target.value})}/></label>}
+ {['text','section'].includes(b.kind)&&!key.startsWith('public:')&&<button type="button" className="cw-button" onClick={()=>change(index,{text:(b.text||'')+' {membre}'})}>Insérer la mention du membre</button>}
  {b.kind==='image'&&<label>Description de l’image<input maxLength={700} value={b.text||''} onChange={e=>change(index,{text:e.target.value})}/></label>}
  {b.kind==='link'&&<label>Texte du bouton<input maxLength={80} value={b.label||''} onChange={e=>change(index,{label:e.target.value})}/></label>}
  </article>)}
- <div className="cw-toolbar">{[['text','Texte'],['separator','Séparateur'],['image','Image'],['link','Lien']].map(([kind,label])=><button type="button" className="cw-button" key={kind} disabled={blocks.length>=5} onClick={()=>update({...panel,blocks:[...blocks,{kind,text:kind==='text'?'Votre message ici.':'',url:'',label:''}]})}>+ {label}</button>)}</div>
+ <div className="cw-toolbar">{[['text','Texte'],['section','Texte + vignette'],['separator','Séparateur'],['image','Image'],['link','Lien']].map(([kind,label])=><button type="button" className="cw-button" key={kind} disabled={blocks.length>=5} onClick={()=>update({...panel,blocks:[...blocks,{kind,text:['text','section'].includes(kind)?'Votre message ici.':'',url:'',label:''}]})}>+ {label}</button>)}</div>
  <small>5 blocs et 700 caractères maximum, pour laisser place aux informations du dossier.</small>
  <p>Enregistrez les réglages ci-dessous. Les nouveaux panneaux utiliseront ce contenu. Pour remplacer un panneau public existant, relancez sa commande /panel.</p>
  <button type="button" className="cw-button" onClick={()=>{const next={...value};delete next[key];onChange(next);}}>Rétablir le contenu d’origine</button>
  </div><aside className="wf-panel-preview an-discord-preview"><p className="cz-eyebrow">APERÇU DU CONTENU PERSONNALISÉ</p><div className="an-preview-container" style={{borderLeftColor:panel.color}}>
  {!blocks.length&&<p>Le panneau conserve sa présentation d’origine.</p>}
- {blocks.map((b,i)=><div key={i}>{b.kind==='text'?<Markdown text={b.text} catalogue={catalogue}/>:b.kind==='separator'?<hr/>:b.kind==='image'?<div className="an-preview-media">{safeUrl(b.url,true)?<img src={b.url} alt={b.text||"Aperçu du média"} referrerPolicy="no-referrer"/>:<span>🖼 Image à choisir</span>}</div>:<span className="an-discord-button">{b.label||'Bouton de lien'} ↗</span>}</div>)}
+ {blocks.map((b,i)=><div key={i}>{b.kind==='text'?<Markdown text={previewText(b.text)} catalogue={catalogue}/>:b.kind==='section'?<div className="wf-section-preview"><Markdown text={previewText(b.text)} catalogue={catalogue}/>{safeUrl(b.url,true)?<img src={b.url} alt="Vignette à droite" referrerPolicy="no-referrer"/>:<span className="wf-thumbnail-empty">Vignette</span>}</div>:b.kind==='separator'?<hr/>:b.kind==='image'?<div className="an-preview-media">{safeUrl(b.url,true)?<img src={b.url} alt={b.text||"Aperçu du média"} referrerPolicy="no-referrer"/>:<span>🖼 Image à choisir</span>}</div>:<span className="an-discord-button">{b.label||'Bouton de lien'} ↗</span>}</div>)}
  <hr/><small>Les informations du dossier et les actions apparaîtront ici dans Discord.</small></div></aside></div></section>;
 }

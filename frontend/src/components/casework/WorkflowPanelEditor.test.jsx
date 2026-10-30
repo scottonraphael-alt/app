@@ -22,3 +22,18 @@ test('edits a panel without submitting settings and preserves other panels',asyn
   expect(latest['public:verification']).toBeDefined();
  }finally{await act(async()=>root.unmount());host.remove();}
 });
+
+test('convocation preset renders a heading with a right thumbnail',async()=>{
+ const host=document.createElement('div');document.body.append(host);const root=createRoot(host);let latest;
+ function Harness(){const [panels,setPanels]=useState({});latest=panels;return <Editor value={panels} onChange={setPanels} catalogue={{roles:[],channels:[]}}/>;}
+ try{
+  await act(async()=>root.render(<Harness/>));
+  await act(async()=>{const select=host.querySelector('select');select.value='room:summons';select.dispatchEvent(new Event('change',{bubbles:true}));});
+  await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Utiliser le modèle Convocation avec vignette').click());
+  expect(latest['room:summons'].replace_heading).toBe(true);
+  expect(latest['room:summons'].blocks[0].kind).toBe('section');
+  expect(latest['room:summons'].blocks[0].text).toContain('{membre}');
+  expect(host.querySelector('.wf-section-preview').textContent).toContain('Convocation de @Membre');
+  expect(host.querySelector('.wf-thumbnail-empty')).not.toBeNull();
+ }finally{await act(async()=>root.unmount());host.remove();}
+});

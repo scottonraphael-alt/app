@@ -97,7 +97,7 @@ class SupportDecision(discord.ui.LayoutView):
             discord.ui.TextDisplay(f'Membre : <@{row["member_id"]}>\n### Motif\n'+fenced(row['reason'])),
             discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])),accent_colour=0x78618C)
         from services.workflow_panels import apply as apply_panel
-        apply_panel(box,'request:support')
+        apply_panel(box,'request:support',member_id=row['member_id'])
         buttons=discord.ui.ActionRow()
         for accept,label in [(True,'Accepter et devenir interlocuteur'),(False,'Refuser avec une explication')]:
             button=discord.ui.Button(label=label,style=discord.ButtonStyle.primary if accept else discord.ButtonStyle.secondary,custom_id=f'iris:support:{row["_id"]}:{accept}')
@@ -145,12 +145,20 @@ class RoomPanel(discord.ui.LayoutView):
         from services.workflow_panels import apply as apply_panel
         # Only the introductory presentation is editable; identity and actions stay authoritative.
         presentation=discord.ui.Container()
-        if apply_panel(presentation,'room:'+row['kind']):
-            box.remove_item(box.children[-1])
+        from services.workflow_panels import replaces_heading
+        custom_heading=replaces_heading('room:'+row['kind'])
+        if apply_panel(presentation,'room:'+row['kind'],member_id=row['member_id']):
+            if custom_heading:
+                box.clear_items()
+            else:
+                box.remove_item(box.children[-1])
             box.accent_colour=presentation.accent_colour
             for item in list(presentation.children):
                 presentation.remove_item(item)
                 box.add_item(item)
+            if custom_heading:
+                metadata='\n'.join(content.split('\n')[2:])
+                if metadata:box.add_item(discord.ui.TextDisplay(metadata))
         if row['kind']=='contact_staff' and row.get('confidential'):
             box.add_item(discord.ui.TextDisplay('🔐 Accès réservé au membre, aux Responsables et aux Administrateurs.'))
         if row['kind']!='verification':box.add_item(discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])))

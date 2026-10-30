@@ -12,3 +12,7 @@
 .wf-block-toolbar strong{margin-right:auto}.wf-panel-preview{position:sticky;top:24px}
 .wf-panel-editor input[type=color]{width:70px;padding:3px;height:40px}
 @media(max-width:850px){.wf-panel-grid{grid-template-columns:1fr}.wf-panel-preview{position:static}}
+.wf-section-preview{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:16px;align-items:start}
+.wf-section-preview>img,.wf-thumbnail-empty{width:96px;height:96px;object-fit:cover;border-radius:12px}
+.wf-thumbnail-empty{display:grid;place-items:center;background:#38383f;color:#c8c8d0;font-size:12px}
+.wf-page .wf-heading-option{display:flex;align-items:center;gap:10px;margin:18px 0}.wf-page .wf-heading-option input{width:18px;height:18px}

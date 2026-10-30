@@ -303,7 +303,7 @@ def support_receipt(row):
         discord.ui.TextDisplay(('### 🤝 Acceptée par ' if accepted else '### Décision de ')+f"<@{row.get('decision_by') or row.get('assigned_id')}>"),
         accent_colour=0x73A594 if accepted else 0xB78B58)
     from services.workflow_panels import apply as apply_panel
-    apply_panel(box,'review:support')
+    apply_panel(box,'review:support',member_id=row['member_id'])
     if row.get('decided_at'):
         stamp=int(datetime.fromisoformat(row['decided_at']).timestamp())
         box.add_item(discord.ui.TextDisplay(f'📅 <t:{stamp}:F>'))
