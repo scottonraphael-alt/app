@@ -264,3 +264,11 @@ Validation : 9 tests hors ligne (horaire Paris/hiver/été, déduplication, dés
 OasisLink attribue aux nouveaux membres humains du serveur configuré les rôles `1081957992401997827`, `1453835191067082793`, `1081957992381042818`, `1081957992297140303`, `1081957992246808693`, `1081957992209068162` et `1321608880052113428`. Les rôles déjà présents sont conservés. L’enregistrement statistique de l’arrivée reste actif. Les ajouts et rôles non attribuables sont consignés dans le journal Iris.
 
 Le rôle du bot doit être au-dessus de ces sept rôles et disposer de Gérer les rôles. Un rôle absent ou non attribuable n’empêche pas l’attribution des autres. Cette fonctionnalité ne réattribue pas les rôles aux membres déjà présents au déploiement.
+
+### Journal des connexions vocales
+
+Les arrivées, départs et transferts vocaux sont publiés en Components V2 dans le post de forum `1550291270662881351` : vert, rouge et jaune, avatar du membre, mentions sans notification, noms/identifiants et date relative. Les changements micro/casque/stream sans changement de salon ne produisent aucun log. Tout événement impliquant `1527450106004115547` est ignoré, y compris les transferts vers ou depuis ce vocal.
+
+Le bot doit pouvoir voir le post et envoyer des messages dans les fils. Un post archivé non verrouillé est rouvert ; un post verrouillé ou d’un autre serveur n’est pas utilisé. Le Gateway active explicitement `voice_states`. Désactiver le journal équivalent dans BotGhost si nécessaire pour éviter les doublons entre bots. Dans la carte de transfert, la première destination est libellée « Ancien Salon » et la seconde « Nouveau Salon » pour lever l’ambiguïté de la capture.
+
+Validation : 15 tests hors ligne sur les transitions, l’exclusion, les trois cartes V2, l’absence de ping et le contrôle du post destinataire. Aucun log envoyé au serveur pendant les tests.

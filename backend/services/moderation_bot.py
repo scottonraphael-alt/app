@@ -108,6 +108,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
+intents.voice_states = True
 
 class IrisModerationClient(discord.Client):
     async def setup_hook(self):
@@ -332,6 +333,12 @@ async def on_guild_channel_delete(channel):
 async def on_guild_channel_update(before, after):
     from services.migration_runtime import channel_updated
     await server_statistics.safely(channel_updated, before, after)
+
+
+@moderation_client.event
+async def on_voice_state_update(member, before, after):
+    from services.voice_logs import record
+    await record(member, before, after, moderation_client)
 
 
 @moderation_client.event
