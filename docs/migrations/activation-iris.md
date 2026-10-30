@@ -272,3 +272,11 @@ Les arrivées, départs et transferts vocaux sont publiés en Components V2 dans
 Le bot doit pouvoir voir le post et envoyer des messages dans les fils. Un post archivé non verrouillé est rouvert ; un post verrouillé ou d’un autre serveur n’est pas utilisé. Le Gateway active explicitement `voice_states`. Désactiver le journal équivalent dans BotGhost si nécessaire pour éviter les doublons entre bots. Dans la carte de transfert, la première destination est libellée « Ancien Salon » et la seconde « Nouveau Salon » pour lever l’ambiguïté de la capture.
 
 Validation : 15 tests hors ligne sur les transitions, l’exclusion, les trois cartes V2, l’absence de ping et le contrôle du post destinataire. Aucun log envoyé au serveur pendant les tests.
+
+### `/iris-oasis` : diagnostic privé des intégrations
+
+Commande réservée aux Responsables et Administrateurs, limitée à une exécution toutes les deux minutes par serveur. Elle est enregistrée indépendamment des parcours natifs pour rester utilisable lorsque ceux-ci sont désactivés. Le rapport V2 est privé, découpé en pages, avec trois états : contrôles OK, avertissements, erreurs. Le lancement et le résultat sont enregistrés dans les logs IRIS.
+
+Contrôles : aller-retour MongoDB sur un témoin isolé nettoyé, fichier temporaire dans le stockage des archives nettoyé, connexion Gateway et intents, commandes locales/distantes, hiérarchie des rôles, catégories des tickets, santé des boucles supervisées et erreurs persistées des tickets, configuration des parcours, accueil web, réception des formulaires, bienvenue, logs vocaux, défouloir, rappels et salons de modération.
+
+Ce diagnostic n’applique aucune sanction, ne crée aucun ticket et ne publie aucun message dans les salons testés. Il ne valide pas le parcours OAuth d’un utilisateur, les interactions complètes ni les réponses réelles de l’IA : la présence de la clé Anthropic est présentée comme une configuration à vérifier, sans appel facturé. Un état OK sur les permissions ne garantit pas à lui seul qu’une action complète réussira. Les erreurs techniques affichées sont filtrées pour ne pas exposer les secrets.
