@@ -301,7 +301,7 @@ def test_existing_panel_migrates_to_one_thread_and_resumes_lost_creation(monkeyp
     h.run(transport.publish_staff(client,h.run(forms.load(MEMBER))))
     row=h.run(forms.load(MEMBER))
     assert row['staff_delivery']['thread_id']=='555' and row['staff_delivery']['form_message_id']=='777'
-    assert row['staff_delivery']['layout_version']==5
+    assert row['staff_delivery']['layout_version']==6
     assert any(call.kwargs['message_id']==777 for call in client.add_view.call_args_list)
     h.run(transport.publish_staff(client,row))
     starter.create_thread.assert_awaited_once();post.assert_awaited_once()

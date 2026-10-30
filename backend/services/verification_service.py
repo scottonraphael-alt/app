@@ -57,9 +57,18 @@ async def load(member_id):
     if not row:raise HTTPException(404,'Dossier de vérification introuvable.')
     return row
 
+def ticket_requested(row):
+    forms=row.get('forms') or []
+    if not forms:return False
+    return any(job.get('action')=='ticket' and job.get('form_id')==forms[-1]['id']
+        and bool((job.get('payload') or {}).get('training',job.get('training',False)))==bool(row.get('training'))
+        for job in row.get('jobs',[]))
+
+
 def public(row,*,detail=True):
     result={name:copy.deepcopy(row.get(name)) for name in ('member_id','member','status','active','revision','claimed_by','training','created_at','updated_at')}
     forms=row.get('forms',[])
+    result['ticket_requested']=ticket_requested(row)
     result['form_count']=len(forms)
     result['last_form_at']=forms[-1]['submitted_at'] if forms else None
     if detail:
@@ -171,6 +180,7 @@ async def act(member_id,actor_id,payload,*,origin):
         if previous.get('actor_id')!=str(actor_id) or previous['kind']!='action.'+payload.action:
             raise HTTPException(409,'Cette référence appartient à une autre action.')
         return public(row)
+    if payload.action=='ticket' and ticket_requested(row):raise HTTPException(409,'Un ticket a déjà été demandé pour ce formulaire. Consulte son historique ; une nouvelle ouverture ne peut pas être demandée depuis ce bouton.')
     if payload.revision!=row['revision']:raise HTTPException(409,'Le dossier a changé. Actualise avant de continuer.')
     if not row['forms']:raise HTTPException(404,'Aucun formulaire conservé.')
     if any(job['status'] in ('pending','running','retry','uncertain') for job in row['jobs']):raise HTTPException(409,'Une action est déjà en cours.')

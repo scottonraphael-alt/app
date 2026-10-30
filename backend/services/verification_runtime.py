@@ -162,7 +162,7 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':5, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':6, 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
 
@@ -522,7 +522,7 @@ async def tick(client):
             try:await cleanup_staff(client,current)
             except Exception:logger.exception('Nettoyage Discord du formulaire à reprendre (%s).',row['member_id'])
             continue
-        if (current.get('staff_delivery') or {}).get('layout_version') != 5 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
+        if (current.get('staff_delivery') or {}).get('layout_version') != 6 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
             except Exception:

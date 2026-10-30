@@ -180,3 +180,19 @@ def test_simultaneous_claims_have_exactly_one_winner(monkeypatch):
         assert sum(isinstance(result,dict) for result in outcomes)==1
         assert sum(isinstance(result,HTTPException) and result.status_code==409 for result in outcomes)==1
     h.run(race())
+
+def test_ticket_cannot_be_requested_twice_for_same_form_even_after_completion():
+    submit()
+    first=act('ticket')
+    assert first['ticket_requested'] is True
+    row=h.run(s.load(MID))
+    row['jobs'][0]['status']='done'
+    h.run(h.db.verification_cases.replace_one({'_id':row['_id']},row))
+    raises(409,lambda:act('ticket',request_id='second-ticket'))
+    from services.verification_discord import staff_buttons
+    async def check():
+        from types import SimpleNamespace
+        owner=SimpleNamespace(member_id=MID,callback_for=lambda action:lambda interaction:None)
+        buttons=staff_buttons(owner,row,[('approve','Valider'),('ticket','Créer un ticket'),('close','Clore')])
+        assert all(button.label!='Créer un ticket' for button in buttons.children)
+    h.run(check())

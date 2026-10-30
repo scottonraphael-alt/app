@@ -146,26 +146,21 @@ class RoomPanel(discord.ui.LayoutView):
         from services.workflow_panels import apply as apply_panel
         # Only the introductory presentation is editable; identity and actions stay authoritative.
         presentation=discord.ui.Container()
-        from services.workflow_panels import replaces_heading
-        custom_heading=replaces_heading('room:'+row['kind'])
-        if apply_panel(presentation,'room:'+row['kind'],row=row):
-            if custom_heading:
-                box.clear_items()
-            else:
-                box.remove_item(box.children[-1])
+        customized=apply_panel(presentation,'room:'+row['kind'],row=row)
+        if customized:
+            box.clear_items()
             box.accent_colour=presentation.accent_colour
             for item in list(presentation.children):
                 presentation.remove_item(item)
                 box.add_item(item)
-            if custom_heading:
-                metadata='\n'.join(content.split('\n')[2:])
-                if metadata:box.add_item(discord.ui.TextDisplay(metadata))
+            if row.get('status')=='suspended':box.add_item(discord.ui.TextDisplay('⏸️ Échanges suspendus.'))
+            if row.get('visibility')=='restricted':box.add_item(discord.ui.TextDisplay('🔒 Accès restreint à l’administration.'))
         if row['kind']=='contact_staff' and row.get('confidential'):
             box.add_item(discord.ui.TextDisplay('🔐 Accès réservé au membre, aux Responsables et aux Administrateurs.'))
-        if row['kind']!='verification':box.add_item(discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])))
-        if row['kind']=='support':box.add_item(discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row['triggers'])+'\n-# 👥 Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
-        box.add_item(discord.ui.Separator())
-        box.add_item(discord.ui.TextDisplay('### 🧭 Gestion du ticket\n**Pour le Staff :** choisis une action ci-dessous pour gérer les participants, les accès ou la clôture.'))
+        if not customized and row['kind']!='verification':box.add_item(discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])))
+        if not customized and row['kind']=='support':box.add_item(discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row['triggers'])+'\n-# 👥 Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
+        if not customized:box.add_item(discord.ui.Separator())
+        if not customized:box.add_item(discord.ui.TextDisplay('### 🧭 Gestion du ticket\n**Pour le Staff :** choisis une action ci-dessous pour gérer les participants, les accès ou la clôture.'))
         select=discord.ui.Select(placeholder='🧭 Choisir une action sur ce ticket',custom_id=f'iris:room:{request_id}:actions',options=room_options(row['kind']))
         async def chosen(interaction):
             try:
@@ -176,7 +171,7 @@ class RoomPanel(discord.ui.LayoutView):
                 await choose_room_action(interaction,request['case_id'],select.values[0])
             except Exception as exc:await error(interaction,exc)
         select.callback=chosen;box.add_item(discord.ui.ActionRow(select))
-        box.add_item(discord.ui.TextDisplay('-# 🗂️ Le dossier et son historique sont consultables dans Iris.'))
+        if not customized:box.add_item(discord.ui.TextDisplay('-# 🗂️ Le dossier et son historique sont consultables dans Iris.'))
         self.add_item(box)
 
 

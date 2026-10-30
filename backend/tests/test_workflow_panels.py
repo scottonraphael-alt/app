@@ -41,7 +41,8 @@ def test_room_custom_copy_preserves_privacy_and_management():
         content=str(view.to_components())
         assert 'Bienvenue dans cet espace.' in content
         assert 'Accès réservé au membre' in content
-        assert 'Une demande détaillée' in content
+        assert 'Une demande détaillée' not in content
+        assert 'Gestion du ticket' not in content and 'historique sont consultables' not in content
         assert any(isinstance(c,discord.ui.Select) and c.custom_id=='iris:room:request:actions' for c in view.walk_children())
     h.run(check())
 
@@ -61,7 +62,7 @@ def test_section_heading_uses_real_member_and_preserves_state_and_actions():
         assert '<@123>' in section['components'][0]['content']
         assert '{membre}' not in str(payload)
         assert 'Espace de' not in str(payload)
-        assert '<@456>' in str(payload) and 'Échanges suspendus' in str(payload)
+        assert 'Échanges suspendus' in str(payload)
         assert any(isinstance(c,discord.ui.Select) for c in view.walk_children())
     h.run(check())
 
@@ -81,3 +82,21 @@ def test_all_variables_resolve_and_unassigned_is_explicit():
     assert panels.render_text('{traite_par}',{'member_id':'123'})=='Décision en attente'
     with pytest.raises(HTTPException):
         panels.validate({'public:support':{'blocks':[{'text':'Bonjour {interlocuteur}'}]}})
+
+@pytest.mark.parametrize('kind',['verification','summons','bubble','contact_staff','support'])
+def test_member_avatar_variable_works_in_every_ticket(kind):
+    panels.configure(panels.validate({'room:'+kind:{'blocks':[
+        {'kind':'section','text':'Bonjour {membre}','url':'{avatar_membre}'},
+        {'kind':'image','url':'{avatar_membre}'}]}}))
+    async def check():
+        box=discord.ui.Container()
+        panels.apply(box,'room:'+kind,row={'member_id':'123','member_avatar_url':'https://cdn.discordapp.com/avatars/123456789012345678/abc123.png'})
+        payload=box.to_component_dict()
+        assert 'https://cdn.discordapp.com/avatars/123456789012345678/abc123.png?size=128' in str(payload)
+        assert '{avatar_membre}' not in str(payload)
+    h.run(check())
+
+def test_avatar_variable_falls_back_without_exposing_private_iris_url():
+    assert panels.member_avatar({'member_id':'123','member_avatar_url':'/api/tickets/avatars/private'}).startswith('https://cdn.discordapp.com/embed/avatars/')
+    with pytest.raises(HTTPException):
+        panels.validate({'public:support':{'blocks':[{'kind':'image','url':'{avatar_membre}'}]}})

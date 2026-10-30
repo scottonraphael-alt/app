@@ -1,5 +1,7 @@
 """Editable presentation blocks; functional controls and permissions stay server-owned."""
 import copy
+import hashlib
+import json
 import re
 from datetime import datetime
 import discord
@@ -7,6 +9,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from typing import Literal
 from services.announcement_components import safe_url
+from services.ticket_avatars import avatar_source
 
 KEYS = {
     'public:verification':'Accueil · Vérification',
@@ -37,6 +40,14 @@ def values(row):
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
         'date_traitement':stamp,
         'salon':f"<#{row['channel_id']}>" if str(row.get('channel_id','')).isdigit() else 'Salon en préparation'}
+
+
+def member_avatar(row):
+    source=avatar_source(row.get('member_avatar_url'))
+    if source:return source
+    member_id=str(row.get('member_id','0'))
+    index=(int(member_id)>>22)%6 if member_id.isdigit() else 0
+    return f'https://cdn.discordapp.com/embed/avatars/{index}.png'
 
 
 def render_text(text,row):
@@ -74,6 +85,9 @@ def validate(panels):
         for b in panel.blocks:
             if b.kind in ('text','section') and not b.text.strip():
                 raise HTTPException(422,'Un bloc texte ne peut pas être vide.')
+            if b.kind in ('image','section') and b.url=='{avatar_membre}':
+                if key.startswith('public:'):raise HTTPException(422,'L’avatar du membre est disponible seulement dans un ticket ou une demande.')
+                continue
             if b.kind in ('image','section','link') and not safe_url(b.url,media=b.kind in ('image','section')):
                 raise HTTPException(422,'Le média ou lien doit utiliser une adresse publique valide.')
             if b.kind=='link' and not b.label.strip():
@@ -108,10 +122,16 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
         box.clear_items()
     box.accent_colour=int(panel['color'][1:],16)
     for b in panel['blocks']:
-        text=render_text(b['text'],row or {'member_id':member_id})
+        context=row or {'member_id':member_id}
+        text=render_text(b['text'],context)
+        media_url=member_avatar(context) if b['url']=='{avatar_membre}' else b['url']
         if b['kind']=='text':box.add_item(discord.ui.TextDisplay(text))
-        elif b['kind']=='section':box.add_item(discord.ui.Section(discord.ui.TextDisplay(text),accessory=discord.ui.Thumbnail(b['url'])))
+        elif b['kind']=='section':box.add_item(discord.ui.Section(discord.ui.TextDisplay(text),accessory=discord.ui.Thumbnail(media_url)))
         elif b['kind']=='separator':box.add_item(discord.ui.Separator())
-        elif b['kind']=='image':box.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(b['url'],description=b['text'] or None)))
+        elif b['kind']=='image':box.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media_url,description=b['text'] or None)))
         elif b['kind']=='link':box.add_item(discord.ui.ActionRow(discord.ui.Button(style=discord.ButtonStyle.link,label=b['label'],url=b['url'])))
     return True
+
+
+def revision(key):
+    return hashlib.sha256(json.dumps(_cache.get(key,{}),sort_keys=True).encode()).hexdigest()[:16]

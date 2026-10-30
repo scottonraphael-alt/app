@@ -149,6 +149,8 @@ async def create(request_id,client):
             # The old BotGhost channel-created event sees no legacy prefix and sends no second panel.
             channel=await server.create_text_channel('iris-preparation-'+request_id[:8],category=category,overwrites=overwrites,topic=marker,reason=f'Iris : {TITLES[row["kind"]]}')
             await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'channel_id':str(channel.id),'stage':'channel_ready'}})
+        row['member_avatar_url']=str(member.display_avatar.url)
+        await db.case_requests.update_one({'_id':request_id},{'$set':{'member_avatar_url':row['member_avatar_url']}})
         from services.casework.commands import RoomPanel
         from services.verification_runtime import Adapter
         target_name=('🔒・｜cstaff-' if row['confidential'] else PREFIX[row['kind']])+member.name[:60]
@@ -192,7 +194,9 @@ def room_panel_state(case):
 
 
 async def current_panel_state(case):
+    from services.workflow_panels import revision
     state=room_panel_state(case)
+    state["presentation_revision"]=revision("room:"+case["kind"])
     if case['kind']=='support':
         # The Helper follow-up is authoritative, including an intentional unassignment.
         ticket=await db.tickets.find_one({'channel_id':case['channel_id']},{'assigned_helper':1})
@@ -218,7 +222,7 @@ async def refresh_room_panel(client,row):
     panel=RoomPanel(row['_id'],row={**row,**state})
     await channel.get_partial_message(int(message_id)).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
     client.add_view(panel,message_id=int(message_id))
-    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':4,'room_panel_state':state},'$unset':{'room_panel_error':''}})
+    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':4,'avatar_panel_version':1,'room_panel_state':state},'$unset':{'room_panel_error':''}})
 
 
 async def tick(client):
@@ -226,6 +230,14 @@ async def tick(client):
     from services.verification_runtime import Adapter,message
     server=await guild(client)
     async for row in db.case_requests.find({'guild_id':str(server.id),'status':{'$in':['waiting','refused','pending','creating','open']}}):
+        if 'member_avatar_url' not in row:
+            try:
+                member=await server.fetch_member(int(row['member_id']))
+                row['member_avatar_url']=str(member.display_avatar.url)
+            except discord.NotFound:
+                row['member_avatar_url']=None
+            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_avatar_url':row['member_avatar_url']}})
+
         if row['status'] in ('pending','creating'):
             try:
                 row=await create(row['_id'],client) or row
@@ -260,7 +272,7 @@ async def tick(client):
                     logger.exception('Liaison vers le suivi Helper à reprendre (%s).',row['_id'])
             try:
                 case=await service.load(row['case_id'],str(server.id))
-                if row.get('room_panel_version')!=4 or row.get('room_panel_state')!=await current_panel_state(case):
+                if row.get('avatar_panel_version')!=1 or row.get('room_panel_version')!=4 or row.get('room_panel_state')!=await current_panel_state(case):
                     await refresh_room_panel(client,row)
             except Exception as exc:
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
