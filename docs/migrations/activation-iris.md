@@ -248,3 +248,13 @@ un salon dont les droits sont trop larges est refusé. Aucune sanction automatiq
 - Les motifs des opérations et leur participant restent dans les événements du dossier ; les réattributions et clôtures conservent aussi leur justification.
 
 Validation hors ligne : 254 tests backend sur tickets, workflows natifs et préparation des vérifications ; 21 tests d’interface sur les pages de dossiers, suivis et rappels. Discord est simulé : cette validation ne confirme pas les permissions ni la disponibilité du déploiement réel. Aucune action n’a été appliquée aux tickets du serveur pendant cet audit.
+
+### Défouloir : nettoyage quotidien à 5 h
+
+Le worker `defouloir_reset` est activé par défaut. Chaque jour à 05:00 Europe/Paris (heure d’été/hiver comprise), il supprime tous les messages antérieurs à cette échéance du salon `1111018502552289421`, puis republie le règlement en Components V2, sans ping. Les messages épinglés sont aussi concernés. Les messages plus anciens que quatorze jours sont supprimés individuellement par discord.py.
+
+Le bot doit avoir Voir le salon, Voir les anciens messages, Gérer les messages et Envoyer des messages. Le salon doit appartenir à la guilde configurée. Un redémarrage après 5 h rattrape l’exécution du jour si elle n’a pas été confirmée ; les messages écrits après 5 h restent conservés. Les phases et le verrou sont persistés dans `defouloir_runs`. Un échec de publication ne relance pas la purge. Un envoi à résultat incertain est réconcilié, jamais répété aveuglément.
+
+Pour suspendre ce nettoyage : `DEFOULOIR_RESET_ENABLED=false`, puis redémarrer le backend. Désactiver l’ancien nettoyage BotGhost avant d’activer celui d’OasisLink pour éviter deux publications. Le texte de la capture est conservé ; l’emoji personnalisé non identifiable sur la capture est représenté par 🐕.
+
+Validation : 9 tests hors ligne (horaire Paris/hiver/été, déduplication, désactivation, guilde, reprise après refus de publication et échec de purge). Aucune suppression réelle effectuée pendant le développement.

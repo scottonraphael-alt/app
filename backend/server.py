@@ -25,6 +25,7 @@ from services.storage_service import init_storage
 from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
 from services.ticket_reminders import run_ticket_reminders
+from services.defouloir_reset import run as run_defouloir_reset
 from services.project_reminders import run_project_reminders
 from services.announcement_publishing import run_announcements
 from services.sanction_actions import run as run_sanction_maintenance
@@ -205,6 +206,7 @@ async def startup() -> None:
         logger.exception("Index présence / historique casier impossibles au démarrage")
     _feature_stop_event = asyncio.Event()
     _feature_tasks[:] = [
+        asyncio.create_task(supervise("defouloir_reset", run_defouloir_reset(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("purgatory", run_purgatory(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("member_casework", run_migration_runtime(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("verification_delivery", run_verifications(moderation_client, _feature_stop_event))),
