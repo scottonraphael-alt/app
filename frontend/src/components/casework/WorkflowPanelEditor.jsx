@@ -18,7 +18,7 @@ const VARIABLES=[
 ];
 const previewText=text=>(text||'').replace(/\{(membre|interlocuteur|traite_par|date_traitement|salon)\}/g,(_,key)=>VARIABLES.find(v=>v[0]===key)[2]);
 
-export default function WorkflowPanelEditor({value={},onChange,catalogue}){
+export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCatalogue=PANELS}){
  const [key,setKey]=useState('public:support');
  const panel=value[key]||empty();
  const update=next=>onChange({...value,[key]:next});
@@ -28,7 +28,7 @@ export default function WorkflowPanelEditor({value={},onChange,catalogue}){
  return <section className="wf-panel-editor">
  <p className="cz-eyebrow">COMPOSER · MESSAGES DISCORD</p><h2>Vos panneaux, votre ton</h2>
  <p>Composez les textes, vignettes à droite, séparateurs, images et liens. Dans un ticket personnalisé, votre contenu remplace l’en-tête et le pied de page d’origine. Le sélecteur de gestion et les avertissements d’accès sont conservés. Sans bloc personnalisé, le texte d’origine est conservé.</p>
- <div className="wf-grid"><label>Panneau à personnaliser<select value={key} onChange={e=>setKey(e.target.value)}>{Object.entries(PANELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
+ <div className="wf-grid"><label>Panneau à personnaliser<select value={key} onChange={e=>setKey(e.target.value)}>{Object.entries(panelCatalogue).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
  <label>Couleur du panneau<input type="color" value={panel.color} onChange={e=>update({...panel,color:e.target.value})}/></label></div>
  {key.startsWith('room:')&&<><label className="wf-heading-option"><input type="checkbox" checked={!!panel.replace_heading} onChange={e=>update({...panel,replace_heading:e.target.checked})}/> Exiger la mention du membre dans le titre</label><p>Insérez <code>{'{membre}'}</code> dans un titre ou un texte : il sera remplacé par la mention du membre concerné.</p></>}
  {key==='room:summons'&&<button type="button" className="cw-button" onClick={()=>update({color:'#ed4245',replace_heading:true,blocks:[{kind:'section',text:"# 🛡️ Convocation de {membre}\n\nTu fais l'objet d'une convocation par l'équipe de modération. Merci de prendre connaissance de ce message et de rester disponible dans ce ticket afin de faire le point.",url:'',label:''},{kind:'separator',text:'',url:'',label:''}]})}>Utiliser le modèle Convocation avec vignette</button>}

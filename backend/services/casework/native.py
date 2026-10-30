@@ -227,6 +227,7 @@ async def refresh_room_panel(client,row):
 
 async def tick(client):
     from services.casework.commands import SupportDecision
+    from services.workflow_panels import revision
     from services.verification_runtime import Adapter,message
     server=await guild(client)
     async for row in db.case_requests.find({'guild_id':str(server.id),'status':{'$in':['waiting','refused','pending','creating','open']}}):
@@ -256,6 +257,17 @@ async def tick(client):
             except Exception as exc:
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
                 logger.exception('Publication de la demande de soutien interrompue (%s).',row['_id'])
+        if row['status']=='waiting' and row.get('notification'):
+            current_revision=revision('request:support')
+            if row.get('notification_revision')!=current_revision:
+                try:
+                    channel=await server.fetch_channel(int(row['notification']['channel_id']))
+                    panel=SupportDecision(row)
+                    await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
+                    client.add_view(panel,message_id=int(row['notification']['message_id']))
+                    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_revision':current_revision}})
+                except Exception:
+                    logger.exception('Actualisation du panneau de demande à reprendre (%s).',row['_id'])
         if row['status']=='open':
             if not row.get('name_version'):
                 try:
@@ -289,11 +301,11 @@ async def tick(client):
                 status='sent'
             except Exception:status='unconfirmed'
             await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_notice':status}})
-        if row.get('notification') and row['status'] in ('open','refused') and row.get('review_version')!=2:
+        if row.get('notification') and row['status'] in ('open','refused') and (row.get('review_version')!=2 or row.get('review_revision')!=revision('review:support')):
             try:
                 channel=await server.fetch_channel(int(row['notification']['channel_id']))
                 await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=support_receipt(row),allowed_mentions=discord.AllowedMentions.none())
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'review_updated':True,'review_version':2}})
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'review_updated':True,'review_version':2,'review_revision':revision('review:support')}})
             except Exception:pass
 
 

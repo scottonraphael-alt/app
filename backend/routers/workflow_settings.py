@@ -11,6 +11,8 @@ async def get(request:Request,helper=Depends(current_responsable)):
     result=await service.apply()
     from services.migration_runtime import discord_actions_enabled
     result['native_enabled']=discord_actions_enabled()
+    from services.workflow_panels import KEYS
+    result['panel_catalogue']=KEYS
     result['roles']=[{'id':str(r['id']),'name':r['name']} for r in roles if not r.get('managed')]
     result['channels']=[{'id':str(c['id']),'name':c['name'],'type':c['type']} for c in channels if c['type'] in (0,4)]
     from services.moderation_bot import moderation_client

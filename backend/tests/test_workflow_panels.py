@@ -111,3 +111,25 @@ def test_moderation_custom_presentation_preserves_persistent_member_selector():
         assert view.is_persistent()
         assert any(isinstance(c,discord.ui.UserSelect) and c.custom_id=='iris:moderation:member' for c in view.walk_children())
     h.run(check())
+
+@pytest.mark.parametrize('key',list(panels.KEYS))
+def test_every_editor_entry_is_connected_to_its_discord_renderer(key):
+    panels.configure(panels.validate({key:{'blocks':[{'text':'CONTENU PERSONNALISÉ'}]}}))
+    async def check():
+        if key=='public:moderation':view=commands.StaffMenu()
+        elif key=='public:verification':
+            from services.verification_discord import Panel
+            view=Panel()
+        elif key.startswith('public:'):view=commands.PublicPanel(key.split(':')[1])
+        else:
+            row={'_id':'request','kind':key.split(':')[1],'member_id':'123','actor_id':'456',
+                 'assigned_id':'456','decision_by':'456','reason':'Motif du ticket','triggers':'Aucun',
+                 'guild_id':'987','channel_id':'654','status':'open'}
+            if key.startswith('room:'):view=commands.RoomPanel('request',row=row)
+            elif key=='request:support':view=commands.SupportDecision(row)
+            else:
+                from services.casework.native import support_receipt
+                view=support_receipt(row)
+        assert 'CONTENU PERSONNALISÉ' in str(view.to_components())
+        assert view.is_persistent()
+    h.run(check())

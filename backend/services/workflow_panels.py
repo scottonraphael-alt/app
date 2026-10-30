@@ -129,7 +129,7 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
         if b['kind']=='text':box.add_item(discord.ui.TextDisplay(text))
         elif b['kind']=='section':box.add_item(discord.ui.Section(discord.ui.TextDisplay(text),accessory=discord.ui.Thumbnail(media_url)))
         elif b['kind']=='separator':box.add_item(discord.ui.Separator())
-        elif b['kind']=='image':box.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media_url,description=b['text'] or None)))
+        elif b['kind']=='image':box.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media_url,description=text or None)))
         elif b['kind']=='link':box.add_item(discord.ui.ActionRow(discord.ui.Button(style=discord.ButtonStyle.link,label=b['label'],url=b['url'])))
     return True
 
