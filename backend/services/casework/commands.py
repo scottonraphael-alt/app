@@ -39,12 +39,12 @@ class Intake(discord.ui.Modal):
         self.add_item(discord.ui.Label(text='Pourquoi souhaites-tu cet échange ?',component=self.reason))
         if kind=='contact_staff':
             self.confidential=discord.ui.Checkbox(default=False)
-            self.add_item(discord.ui.Label(text='Échanger uniquement avec l’administration et les Responsables',component=self.confidential))
+            self.add_item(discord.ui.Label(text='Échange confidentiel',description='Visible uniquement par les Administrateurs et les Responsables.',component=self.confidential))
         if kind=='support':
             self.triggers=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,max_length=2000,placeholder='Indique les sujets sensibles, ou « aucun ».')
             self.consent=discord.ui.Checkbox(default=False)
             self.add_item(discord.ui.Label(text='Situations, sujets ou formulations sensibles',component=self.triggers))
-            self.add_item(discord.ui.Label(text='J’accepte que tous les Helpers, Helpers+ et Staff puissent lire le soutien pour l’entraide et la supervision.',component=self.consent))
+            self.add_item(discord.ui.Label(text='J’accepte la lecture par l’équipe',description='Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour l’entraide et la supervision.',component=self.consent))
 
     async def on_submit(self,interaction):
         try:

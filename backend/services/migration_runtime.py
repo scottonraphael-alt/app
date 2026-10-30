@@ -13,6 +13,7 @@ from services.casework.discord_gateway import DiscordGateway
 
 logger = logging.getLogger(__name__)
 _verification_wakeup = None
+_ticket_wakeup = None
 
 
 def wake_verifications():
@@ -89,8 +90,6 @@ async def run(client, stop):
                     await sync.cycle(gateway,settings)
                     discovery_done=True
                 if discord_actions_enabled():
-                    from services.casework import native
-                    await native.tick(client)
                     await worker.tick(gateway, settings)
                 else:
                     await sync.cycle(gateway, settings)
@@ -137,3 +136,44 @@ async def run_verifications(client, stop):
                 await asyncio.gather(*waits,return_exceptions=True)
     finally:
         if _verification_wakeup is wakeup:_verification_wakeup=None
+
+
+def wake_tickets():
+    if _ticket_wakeup is not None:
+        _ticket_wakeup.set()
+
+
+async def run_ticket_delivery(client, stop):
+    """Deliver new tickets independently of slow archive imports and discovery."""
+    from services import workflow_settings
+    from services.casework import native
+    from services.system_health import record_run
+    global _ticket_wakeup
+    wakeup = asyncio.Event()
+    _ticket_wakeup = wakeup
+    try:
+        await service.indexes()
+        while not stop.is_set():
+            wakeup.clear()
+            if client.is_ready():
+                try:
+                    await workflow_settings.apply()
+                    if policy.Settings().enabled and discord_actions_enabled():
+                        await native.tick(client)
+                    record_run('native_ticket_delivery')
+                except Exception:
+                    record_run('native_ticket_delivery', False, 'Livraison des tickets à reprendre.')
+                    logger.exception('Livraison autonome des tickets interrompue.')
+            if wakeup.is_set():
+                continue
+            waits = [asyncio.create_task(stop.wait()), asyncio.create_task(wakeup.wait())]
+            try:
+                await asyncio.wait(waits, timeout=5, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in waits:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*waits, return_exceptions=True)
+    finally:
+        if _ticket_wakeup is wakeup:
+            _ticket_wakeup = None

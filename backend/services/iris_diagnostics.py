@@ -109,7 +109,7 @@ async def run_checks(client):
     async def workers():
         from services.system_health import list_tasks
         rows = {r['name']:r for r in await list_tasks()}
-        expected = ('member_casework','verification_delivery','purgatory','ticket_import','ticket_refresh','ticket_reminders','project_reminders','announcements','sanction_maintenance','defouloir_reset')
+        expected = ('member_casework','native_ticket_delivery','verification_delivery','purgatory','ticket_import','ticket_refresh','ticket_reminders','project_reminders','announcements','sanction_maintenance','defouloir_reset')
         now = datetime.now(timezone.utc)
         bad = []
         for name in expected:

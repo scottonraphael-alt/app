@@ -487,3 +487,60 @@ def test_panel_uses_current_assignment_and_status_without_ping(world):
     assert sent['allowed_mentions'].to_dict()['parse']==[]
     saved=h.run(h.db.case_requests.find_one({'_id':row['_id']}))
     assert saved['room_panel_state']['assigned_id']==STAFF
+
+
+@pytest.mark.parametrize('kind',['support','contact_staff','summons','bubble'])
+def test_intake_modal_matches_discord_label_limits(kind):
+    async def check():
+        modal=commands.Intake(kind)
+        payload=modal.to_dict()
+        assert len(payload['title'])<=45
+        for component in payload['components']:
+            if component['type']==18:
+                assert 1<=len(component['label'])<=45
+                assert len(component.get('description',''))<=100
+    h.run(check())
+
+
+def test_ticket_delivery_is_independent_of_history_and_wakes(monkeypatch):
+    from services import migration_runtime as runtime,verification_history
+    async def check():
+        stop=asyncio.Event()
+        first=asyncio.Event()
+        calls=[]
+        async def tick(client):
+            calls.append(client)
+            if len(calls)==1:first.set()
+            else:stop.set()
+        monkeypatch.setattr(native,'tick',tick)
+        monkeypatch.setattr(workflow_settings,'apply',AsyncMock())
+        monkeypatch.setattr(service,'indexes',AsyncMock())
+        history=AsyncMock(side_effect=AssertionError('History must not block delivery'))
+        monkeypatch.setattr(verification_history,'tick',history)
+        task=asyncio.create_task(runtime.run_ticket_delivery(SimpleNamespace(is_ready=lambda:True),stop))
+        try:
+            await asyncio.wait_for(first.wait(),1)
+            runtime.wake_tickets()
+            await asyncio.wait_for(task,1)
+        finally:
+            stop.set()
+            if not task.done():task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+        assert len(calls)==2
+        history.assert_not_awaited()
+        assert runtime._ticket_wakeup is None
+    h.run(check())
+
+
+def test_support_review_registers_buttons_immediately(world,monkeypatch):
+    guild,client=world
+    review=Channel(guild,'1499496022529806446')
+    guild.channels[review.id]=review
+    monkeypatch.setattr(native,'private_destination',AsyncMock())
+    row=h.run(native.reserve('support',MEMBER,MEMBER,'Une demande de soutien détaillée.','review-registration',consent=True))
+    h.run(native.tick(client))
+    saved=h.run(h.db.case_requests.find_one({'_id':row['_id']}))
+    assert saved['notification']['message_id']
+    assert any(isinstance(call.args[0],commands.SupportDecision) and
+               call.kwargs['message_id']==int(saved['notification']['message_id'])
+               for call in client.add_view.call_args_list)

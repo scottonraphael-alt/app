@@ -13,7 +13,7 @@ from pymongo.errors import DuplicateKeyError
 import config
 from database import db
 from services.casework import policy, service, assets
-from services.migration_runtime import audit, require_native_workflows
+from services.migration_runtime import audit, require_native_workflows, wake_tickets
 
 PREFIX={'contact_staff':'💬・｜contact-staff-','summons':'🛡️・｜convocation-','bubble':'🫧・｜discussion-','verification':'📋・｜verification-','support':'🌸・｜iris-soutien-'}
 TITLES={'contact_staff':'Contact Staff','summons':'Convocation','bubble':'Bulle d’échange','verification':'Vérification','support':'Soutien'}
@@ -74,6 +74,7 @@ async def reserve(kind,member_id,actor_id,reason,source,*,confidential=False,tri
     except Exception:
         # The slot stays reserved after an ambiguous DB response; never admit a second creation.
         raise
+    wake_tickets()
     return row
 
 
@@ -93,6 +94,7 @@ async def decide_support(request_id,actor_id,*,accept,reason=''):
         {'$set':{'status':'pending' if accept else 'refused','assigned_id':str(actor_id) if accept else None,'decision_by':str(actor_id),'decision_reason':reason.strip()}},return_document=ReturnDocument.AFTER)
     if not changed:raise HTTPException(409,'Cette demande est déjà prise en charge.')
     if not accept:await db.case_open_slots.delete_one({'_id':slot_key('support',row['member_id']),'request_id':request_id})
+    wake_tickets()
     return changed
 
 
@@ -211,17 +213,23 @@ async def tick(client):
     server=await guild(client)
     async for row in db.case_requests.find({'guild_id':str(server.id),'status':{'$in':['waiting','refused','pending','creating','open']}}):
         if row['status'] in ('pending','creating'):
-            try:await create(row['_id'],client)
-            except Exception:pass  # The durable row exposes the precise failed stage to the team.
+            try:
+                row=await create(row['_id'],client) or row
+            except Exception:
+                logger.exception('Création du ticket interrompue (%s).',row['_id'])
         elif row['status']=='waiting' and not row.get('notification'):
             try:
                 channel=await server.fetch_channel(int(os.getenv('CASEWORK_SUPPORT_REVIEW_CHANNEL_ID','1499496022529806446')))
                 await private_destination(channel,server,support=True)
                 adapter=Adapter(client);nonce=hashlib.sha256(('support-review:'+row['_id']).encode()).hexdigest()[:24]
-                await adapter.send_once(channel,SupportDecision(row),nonce,allowed_roles=[role for role in (config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if role])
+                panel=SupportDecision(row)
+                await adapter.send_once(channel,panel,nonce,allowed_roles=[role for role in (config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if role])
                 receipt=await db.workflow_receipts.find_one({'_id':nonce})
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}}})
-            except Exception:pass
+                client.add_view(panel,message_id=int(receipt['message_id']))
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}},'$unset':{'notification_error':''}})
+            except Exception as exc:
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
+                logger.exception('Publication de la demande de soutien interrompue (%s).',row['_id'])
         if row['status']=='open':
             try:
                 case=await service.load(row['case_id'],str(server.id))

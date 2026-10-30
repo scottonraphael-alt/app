@@ -9,7 +9,7 @@ from database import client, db, initialize_indexes
 from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report, team_presence, ticket_notes, ticket_tags, ticket_followups, agenda_polls, agenda_move, meeting_extras, casier_bulk, moderation_stats, project_extras, staff_directory, staff_status, kudos, onboarding, team_weather, reflex_sheets, trainings, debriefs, staff_announcements, system_health
 from routers import casework, verifications, workflow_settings
 from services.purgatory import run as run_purgatory
-from services.migration_runtime import run as run_migration_runtime, run_verifications
+from services.migration_runtime import run as run_migration_runtime, run_verifications, run_ticket_delivery
 from services import agenda_indexes, agenda_reminders
 from services.system_health import supervise
 from services import presence as presence_service, casier_history as casier_history_service
@@ -209,6 +209,7 @@ async def startup() -> None:
         asyncio.create_task(supervise("defouloir_reset", run_defouloir_reset(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("purgatory", run_purgatory(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("member_casework", run_migration_runtime(moderation_client, _feature_stop_event))),
+        asyncio.create_task(supervise("native_ticket_delivery", run_ticket_delivery(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("verification_delivery", run_verifications(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_crisis", run_ticket_crisis_loop(_feature_stop_event))),
         asyncio.create_task(supervise("sla", run_sla_loop(_feature_stop_event))),
