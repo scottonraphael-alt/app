@@ -11,6 +11,13 @@ from services.ticket_avatars import cache_ticket_avatars
 from services.ticket_crisis import schedule_crisis_analysis
 
 logger = logging.getLogger(__name__)
+_refresh_wakeup = None
+
+
+def wake_ticket_refresh():
+    if _refresh_wakeup is not None:
+        _refresh_wakeup.set()
+
 
 
 async def refresh_due_tickets() -> None:
@@ -66,9 +73,16 @@ async def refresh_due_tickets() -> None:
 
 
 async def run_ticket_refresh() -> None:
+    global _refresh_wakeup
+    wakeup = asyncio.Event()
+    _refresh_wakeup = wakeup
     while True:
+        wakeup.clear()
         try:
             await refresh_due_tickets()
         except Exception:
             logger.exception("Le cycle d’actualisation des tickets a échoué")
-        await asyncio.sleep(3600)
+        try:
+            await asyncio.wait_for(wakeup.wait(), timeout=3600)
+        except asyncio.TimeoutError:
+            pass

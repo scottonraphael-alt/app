@@ -52,6 +52,8 @@ class Intake(discord.ui.Modal):
             row=await native.reserve(self.kind,str(self.member_id or interaction.user.id),str(interaction.user.id),self.reason.value,f'interaction:{interaction.id}',
                 confidential=self.confidential.value if self.kind=='contact_staff' else False,
                 triggers=self.triggers.value if self.kind=='support' else '',consent=self.consent.value if self.kind=='support' else False,training=self.training)
+            if row['status']!='simulation' and str(row['member_id'])==str(interaction.user.id):
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_name':getattr(interaction.user,'display_name',None) or getattr(interaction.user,'name',None)}})
             if row['status']=='simulation':body='Simulation terminée : aucun salon, MP, rôle ou sanction réelle.'
             elif self.kind=='support':body='Ta demande est enregistrée. Un Helper ou Helper+ pourra la prendre en charge ; aucun salon n’est annoncé avant confirmation.'
             else:body='La préparation du salon est enregistrée. Le lien te sera envoyé en message privé lorsque son ouverture sera confirmée. En cas de MP fermé, le Staff retrouve le dossier dans Iris.'
@@ -66,6 +68,8 @@ class PublicPanel(discord.ui.LayoutView):
         box=discord.ui.Container(discord.ui.TextDisplay('## 🌸 Un espace de soutien' if support else '## 💬 Contacter le Staff'),
             discord.ui.TextDisplay('Besoin d’un échange suivi ? Décris ta demande. Tous les Helpers, Helpers+ et Staff peuvent lire les échanges, pour se conseiller et assurer une supervision collective. Jusqu’à deux invités peuvent être ajoutés.' if support else 'Signaler une situation, poser une question ou discuter d’une sanction : explique ce qui t’amène. Un salon privé sera ouvert. Pour un échange confidentiel avec les Administrateurs et Responsables, coche l’option du formulaire.'),
             discord.ui.Separator(),discord.ui.TextDisplay('-# Un seul dossier actif par membre et par famille. Une demande de soutien attend l’acceptation d’un Helper.' if support else '-# Un seul Contact Staff à la fois, y compris pour la variante confidentielle.'),accent_colour=0x78618C if support else 0x527668)
+        from services.workflow_panels import apply as apply_panel
+        apply_panel(box,'public:'+kind,replace=True)
         button=discord.ui.Button(label='Faire une demande de soutien' if support else 'Contacter le Staff',emoji='🌸' if support else '💬',style=discord.ButtonStyle.primary,custom_id='iris:public:'+kind)
         async def open_form(interaction):
             try:check(interaction);await interaction.response.send_modal(Intake(kind))
@@ -92,6 +96,8 @@ class SupportDecision(discord.ui.LayoutView):
         box=discord.ui.Container(discord.ui.TextDisplay('## 🌸 Une demande de soutien\n'+ ' '.join('<@&'+str(role)+'>' for role in (config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if role)),
             discord.ui.TextDisplay(f'Membre : <@{row["member_id"]}>\n### Motif\n'+fenced(row['reason'])),
             discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])),accent_colour=0x78618C)
+        from services.workflow_panels import apply as apply_panel
+        apply_panel(box,'request:support')
         buttons=discord.ui.ActionRow()
         for accept,label in [(True,'Accepter et devenir interlocuteur'),(False,'Refuser avec une explication')]:
             button=discord.ui.Button(label=label,style=discord.ButtonStyle.primary if accept else discord.ButtonStyle.secondary,custom_id=f'iris:support:{row["_id"]}:{accept}')
@@ -109,7 +115,7 @@ class SupportDecision(discord.ui.LayoutView):
                 except Exception as exc:await error(interaction,exc)
             button.callback=callback;buttons.add_item(button)
         if config.FRONTEND_URL.startswith('https://'):
-            box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Lire la demande complète dans Iris',style=discord.ButtonStyle.link,url=config.FRONTEND_URL+'/staff/dossiers/support')))
+            box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Lire la demande complète dans Iris',style=discord.ButtonStyle.link,url=config.FRONTEND_URL+'/suivis')))
         box.add_item(buttons);self.add_item(box)
 
 
@@ -136,6 +142,17 @@ class RoomPanel(discord.ui.LayoutView):
         if row.get('visibility')=='restricted':content+='\n🔒 **Accès restreint à l’administration.**'
         box=discord.ui.Container(discord.ui.TextDisplay(content),discord.ui.Separator(),
             discord.ui.TextDisplay('### ✨ Pourquoi ce ticket ?\n'+purpose),accent_colour=colour)
+        from services.workflow_panels import apply as apply_panel
+        # Only the introductory presentation is editable; identity and actions stay authoritative.
+        presentation=discord.ui.Container()
+        if apply_panel(presentation,'room:'+row['kind']):
+            box.remove_item(box.children[-1])
+            box.accent_colour=presentation.accent_colour
+            for item in list(presentation.children):
+                presentation.remove_item(item)
+                box.add_item(item)
+        if row['kind']=='contact_staff' and row.get('confidential'):
+            box.add_item(discord.ui.TextDisplay('🔐 Accès réservé au membre, aux Responsables et aux Administrateurs.'))
         if row['kind']!='verification':box.add_item(discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])))
         if row['kind']=='support':box.add_item(discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row['triggers'])+'\n-# 👥 Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
         box.add_item(discord.ui.Separator())

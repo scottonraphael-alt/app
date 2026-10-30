@@ -32,6 +32,7 @@ class SettingsIn(BaseModel):
     ids:dict[str,str]=Field(default_factory=dict,max_length=25)
     gifs:list[str]=Field(default_factory=list,max_length=4)
     admission_rules:str=Field(default='',max_length=10000)
+    panels:dict=Field(default_factory=dict,max_length=10)
     purgatory_responsables:bool=False
 
 
@@ -58,11 +59,14 @@ async def load():
         if age in ages and not os.getenv(FIELDS[key]):ids[key]=ages[age]
     return {'revision':(row or {}).get('revision',0),'ids':{**ids,**(row or {}).get('ids',{})},
         'gifs':(row or {}).get('gifs',gifs),'admission_rules':(row or {}).get('admission_rules',os.getenv('VERIFICATION_ADMISSION_RULES',ADMISSION_RULES)),
+        'panels':(row or {}).get('panels',{}),
         'purgatory_responsables':(row or {}).get('purgatory_responsables',False)}
 
 
 async def apply():
     settings=await load()
+    from services.workflow_panels import configure
+    configure(settings.get("panels",{}))
     for key,value in settings['ids'].items():
         if key in FIELDS:os.environ[FIELDS[key]]=value
     ages={age:settings['ids'][key] for age,key in [('13-15','age_13_15'),('16-17','age_16_17'),('18-25','age_18_25'),('26+','age_26')]}
@@ -78,6 +82,8 @@ async def apply():
 
 async def save(payload):
     data=SettingsIn.model_validate(payload)
+    from services.workflow_panels import validate
+    data.panels=validate(data.panels)
     if set(data.ids)-set(FIELDS):raise HTTPException(422,'Réglage inconnu.')
     if any(value and not re.fullmatch(r'[0-9]{17,20}',value) for value in data.ids.values()):raise HTTPException(422,'Identifiant Discord invalide.')
     if data.gifs and (len(data.gifs)!=4 or len(set(data.gifs))!=4 or any(not (url.startswith('https://') or re.fullmatch(r'iris-asset:[a-f0-9-]{36}',url)) or len(url)>1500 for url in data.gifs)):

@@ -63,7 +63,7 @@ async def requests_list(request:Request,kind:Kind|None=None,helper=Depends(curre
     if not policy.leadership(roles):query['confidential']={'$ne':True}
     rows=await db.case_requests.find(query).sort('created_at',-1).limit(100).to_list(100)
     await audit(request,helper,'requests.viewed')
-    keys=('_id','kind','member_id','status','stage','created_at','channel_id','case_id','error_type','actor_id','assigned_id','reason','triggers')
+    keys=('_id','kind','member_id','status','stage','created_at','channel_id','case_id','error_type','actor_id','assigned_id','reason','triggers','member_name','notification_error')
     return {'items':[{key:row.get(key) for key in keys} for row in rows]}
 
 

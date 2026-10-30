@@ -142,3 +142,22 @@ def test_manual_import_race_returns_conflict(monkeypatch):
     client=h.make_client(tickets.router)
     response=client.post('/api/tickets',json={'member_id':MEMBER,'channel_id':CHANNEL},cookies=h.session_cookies('helper'))
     assert response.status_code==409
+
+
+def test_native_support_import_uses_durable_request_not_panel_copy(monkeypatch):
+    from services import ticket_refresh
+    from unittest.mock import Mock
+    wake=Mock()
+    monkeypatch.setattr(ticket_refresh,'wake_ticket_refresh',wake)
+    h.fake_discord.channels[CHANNEL]['name']='🌸・｜soutient-membre'
+    h.fake_discord.messages[CHANNEL][0]['content']='Un texte personnalisé sans mention technique.'
+    h.run(h.db.case_requests.insert_one({'_id':'native-support','guild_id':h.GUILD_ID,
+        'channel_id':CHANNEL,'kind':'support','status':'open','member_id':MEMBER,'assigned_id':HELPER}))
+    assert run_import()
+    ticket=h.run(h.db.tickets.find_one({'channel_id':CHANNEL}))
+    assert ticket['member']['id']==MEMBER
+    assert ticket['assigned_helper']['id']==HELPER
+    wake.assert_called_once()
+    h.run(h.db.tickets.update_one({'channel_id':CHANNEL},{'$set':{'assigned_helper':None}}))
+    assert not run_import()
+    assert h.run(h.db.tickets.find_one({'channel_id':CHANNEL}))['assigned_helper'] is None

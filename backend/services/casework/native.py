@@ -15,7 +15,7 @@ from database import db
 from services.casework import policy, service, assets
 from services.migration_runtime import audit, require_native_workflows, wake_tickets
 
-PREFIX={'contact_staff':'💬・｜contact-staff-','summons':'🛡️・｜convocation-','bubble':'🫧・｜discussion-','verification':'📋・｜verification-','support':'🌸・｜iris-soutien-'}
+PREFIX={'contact_staff':'💬・｜cstaff-','summons':'🛡️・｜convoc-','bubble':'🫧・｜discussion-','verification':'📋・｜vérif-','support':'🌸・｜soutient-'}
 TITLES={'contact_staff':'Contact Staff','summons':'Convocation','bubble':'Bulle d’échange','verification':'Vérification','support':'Soutien'}
 logger=logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ async def decide_support(request_id,actor_id,*,accept,reason=''):
         if len(reason.strip())<20:raise HTTPException(422,'Explique le refus en au moins 20 caractères.')
     await audit('casework.support.accept_requested' if accept else 'casework.support.refuse_requested',actor_id,request_id=request_id)
     changed=await db.case_requests.find_one_and_update({'_id':request_id,'status':'waiting'},
-        {'$set':{'status':'pending' if accept else 'refused','assigned_id':str(actor_id) if accept else None,'decision_by':str(actor_id),'decision_reason':reason.strip()}},return_document=ReturnDocument.AFTER)
+        {'$set':{'status':'pending' if accept else 'refused','assigned_id':str(actor_id) if accept else None,'decision_by':str(actor_id),'decision_reason':reason.strip(),'decided_at':service.now()}},return_document=ReturnDocument.AFTER)
     if not changed:raise HTTPException(409,'Cette demande est déjà prise en charge.')
     if not accept:await db.case_open_slots.delete_one({'_id':slot_key('support',row['member_id']),'request_id':request_id})
     wake_tickets()
@@ -151,7 +151,7 @@ async def create(request_id,client):
             await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'channel_id':str(channel.id),'stage':'channel_ready'}})
         from services.casework.commands import RoomPanel
         from services.verification_runtime import Adapter
-        target_name=('🔒・｜contact-staff-' if row['confidential'] else PREFIX[row['kind']])+member.name[:60]
+        target_name=('🔒・｜cstaff-' if row['confidential'] else PREFIX[row['kind']])+member.name[:60]
         nonce=hashlib.sha256(('opening:'+request_id).encode()).hexdigest()[:24]
         adapter=Adapter(client)
         panel=RoomPanel(request_id,row=row)
@@ -169,11 +169,15 @@ async def create(request_id,client):
             {'id':str(member.id),'username':member.name,'display_name':member.display_name,**cached},settings,assigned={'id':actor} if actor else None,initiator_id=row['actor_id'])
         await db.case_tickets.update_one({'_id':case['_id']},{'$set':{'source':'iris','request_id':request_id,'sync.due':True,'opening_context.triggers':row['triggers'] if support else None}})
         await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'status':'open','stage':'ready','channel_id':str(channel.id),'case_id':case['_id'],
-            'room_panel_message_id':receipt['message_id'],'room_panel_version':4}})
+            'room_panel_message_id':receipt['message_id'],'room_panel_version':4,'name_version':1}})
         if support:
             from services.ticket_import import import_ticket_channel
             from services.discord_service import DiscordService
-            await import_ticket_channel(str(channel.id),DiscordService())
+            try:
+                await import_ticket_channel(str(channel.id),DiscordService())
+            except Exception:
+                # The Discord room is already confirmed. Retry the helper import independently.
+                logger.exception('Import du suivi Helper à reprendre (%s).',request_id)
         await audit('casework.room.created',row['actor_id'],case_id=case['_id'],kind=row['kind'])
         return await db.case_requests.find_one({'_id':request_id})
     except Exception as error:
@@ -231,6 +235,19 @@ async def tick(client):
                 await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
                 logger.exception('Publication de la demande de soutien interrompue (%s).',row['_id'])
         if row['status']=='open':
+            if not row.get('name_version'):
+                try:
+                    await normalize_room_name(row,server)
+                except Exception:
+                    logger.exception('Mise à jour du nom du salon à reprendre (%s).',row['_id'])
+            if row['kind']=='support':
+                try:
+                    from services.ticket_import import import_ticket_channel
+                    from services.discord_service import DiscordService
+                    if not await db.tickets.find_one({'channel_id':row['channel_id']},{'_id':1}):
+                        await import_ticket_channel(row['channel_id'],DiscordService())
+                except Exception:
+                    logger.exception('Liaison vers le suivi Helper à reprendre (%s).',row['_id'])
             try:
                 case=await service.load(row['case_id'],str(server.id))
                 if row.get('room_panel_version')!=4 or row.get('room_panel_state')!=room_panel_state(case):
@@ -246,15 +263,15 @@ async def tick(client):
                     body=f'Ton espace est ouvert : https://discord.com/channels/{server.id}/{row["channel_id"]}'
                     if row['kind']=='bubble':body='Tu n’as rien fait de mal : nous souhaitons simplement échanger en privé.\n\n'+body
                     elif row['kind']=='summons':body='Le Staff souhaite échanger avec toi. Sans réponse après trois jours, une alerte sera transmise à l’équipe pour une décision humaine.\n\n'+body
-                await Adapter(client).send_once(dm,message('💬 '+TITLES[row['kind']],body),hashlib.sha256(('member-notice:'+row['_id']).encode()).hexdigest()[:24])
+                await Adapter(client).send_once(dm,member_notice(row,body),hashlib.sha256(('member-notice:'+row['_id']).encode()).hexdigest()[:24])
                 status='sent'
             except Exception:status='unconfirmed'
             await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_notice':status}})
-        if row.get('notification') and row['status'] in ('open','refused') and not row.get('review_updated'):
+        if row.get('notification') and row['status'] in ('open','refused') and row.get('review_version')!=2:
             try:
                 channel=await server.fetch_channel(int(row['notification']['channel_id']))
-                await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=message('📋 Demande traitée','Acceptée : salon ouvert.' if row['status']=='open' else 'Refusée par la coordination.'))
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'review_updated':True}})
+                await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=support_receipt(row),allowed_mentions=discord.AllowedMentions.none())
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'review_updated':True,'review_version':2}})
             except Exception:pass
 
 
@@ -271,3 +288,65 @@ async def private_destination(channel,server,*,support=False):
         target_roles={str(role.id) for role in getattr(target,'roles',[])}
         if not policy.can_read(target_roles,{'kind':'support' if support else 'summons','visibility':'staff'}):
             raise HTTPException(503,'Un accès individuel non autorisé existe dans le salon privé.')
+
+
+def support_receipt(row):
+    from services.casework.commands import fenced
+    accepted=row['status']=='open'
+    title='✅ Demande de soutien acceptée' if accepted else '📋 Demande de soutien refusée'
+    box=discord.ui.Container(discord.ui.TextDisplay('## '+title),
+        discord.ui.TextDisplay(f"### 👤 Demande de <@{row['member_id']}>"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay('### 📝 Motif de la demande\n'+fenced(row['reason'][:700])),
+        discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row.get('triggers','')[:700])),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(('### 🤝 Acceptée par ' if accepted else '### Décision de ')+f"<@{row.get('decision_by') or row.get('assigned_id')}>"),
+        accent_colour=0x73A594 if accepted else 0xB78B58)
+    from services.workflow_panels import apply as apply_panel
+    apply_panel(box,'review:support')
+    if row.get('decided_at'):
+        stamp=int(datetime.fromisoformat(row['decided_at']).timestamp())
+        box.add_item(discord.ui.TextDisplay(f'📅 <t:{stamp}:F>'))
+    if not accepted:
+        box.add_item(discord.ui.TextDisplay('### Explication\n'+fenced(row.get('decision_reason','')[:700])))
+    if accepted:
+        box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Ouvrir le salon de soutien',emoji='🌸',
+            style=discord.ButtonStyle.link,url=f"https://discord.com/channels/{row['guild_id']}/{row['channel_id']}")))
+    view=discord.ui.LayoutView(timeout=None);view.add_item(box)
+    return view
+
+
+def member_notice(row,body):
+    from services.casework.commands import ROOM_STYLE
+    emoji,colour,purpose=ROOM_STYLE[row['kind']]
+    if row['status']=='refused':
+        from services.verification_discord import message
+        return message('🌸 Ta demande de soutien',body)
+    box=discord.ui.Container(discord.ui.TextDisplay(f"## {emoji} Ton espace est prêt"),
+        discord.ui.TextDisplay(f"Bonjour <@{row['member_id']}>,\n\n"+purpose),
+        discord.ui.Separator(),accent_colour=colour)
+    if row.get('confidential'):
+        box.add_item(discord.ui.TextDisplay('🔐 Cet échange est réservé à toi, aux Responsables et aux Administrateurs.'))
+    elif row['kind']=='support':
+        box.add_item(discord.ui.TextDisplay(f"### 🤝 Ton interlocuteur\n<@{row['assigned_id']}>\n\nLes Helpers, Helpers+ et le Staff peuvent lire les échanges pour se conseiller et assurer une supervision collective."))
+    elif row['kind']=='summons':
+        box.add_item(discord.ui.TextDisplay('💬 Le Staff attend ton retour dans ce salon. Après trois jours sans réponse, une alerte lui sera transmise pour une décision humaine.'))
+    box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Rejoindre mon espace',emoji=emoji,
+        style=discord.ButtonStyle.link,url=f"https://discord.com/channels/{row['guild_id']}/{row['channel_id']}")))
+    box.add_item(discord.ui.TextDisplay('-# Réponds dans le salon du serveur ; ce message privé est une notification.'))
+    view=discord.ui.LayoutView(timeout=None);view.add_item(box);return view
+
+
+async def normalize_room_name(row,server):
+    """Rename only tracked old native names, never a manually named room."""
+    channel=await server.fetch_channel(int(row['channel_id']))
+    old={'support':'🌸・｜iris-soutien-','summons':'🛡️・｜convocation-',
+         'contact_staff':'🔒・｜contact-staff-' if row.get('confidential') else '💬・｜contact-staff-',
+         'verification':'📋・｜verification-'}.get(row['kind'])
+    if old and channel.name.startswith(old) and getattr(channel,'topic',None)=='iris-workflow:'+row['_id']:
+        prefix='🔒・｜cstaff-' if row.get('confidential') else PREFIX[row['kind']]
+        name=prefix+channel.name[len(old):]
+        await channel.edit(name=name,reason='Iris : nomenclature des tickets')
+        await db.case_tickets.update_one({'request_id':row['_id']},{'$set':{'channel_name':name}})
+        await db.tickets.update_one({'channel_id':str(channel.id)},{'$set':{'channel_name':name}})
+    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'name_version':1}})

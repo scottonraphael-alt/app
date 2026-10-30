@@ -1,6 +1,7 @@
 """Découverte des salons d'aide et import initial idempotent, indépendants du navigateur."""
 import asyncio
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Le message d'ouverture OasisBot distingue explicitement la personne aidée des helpers.
 TICKET_CHANNEL_PREFIX = "🌸・｜soutien-"
 NATIVE_SUPPORT_PREFIX = "🌸・｜iris-soutien-"
+SUPPORT_PREFIXES = (TICKET_CHANNEL_PREFIX, NATIVE_SUPPORT_PREFIX, "🌸・｜soutient-")
 BENEFICIARY = re.compile(r"\bsoutien\s+de\s*:?\s*<@!?([0-9]{15,22})>", re.IGNORECASE)
 
 
@@ -30,19 +32,31 @@ async def import_ticket_channel(channel_id: str, discord: DiscordService) -> boo
     channel = await discord.fetch_text_channel(channel_id, require_ticket_category=True)
     # La catégorie principale désigne les nouveaux tickets ; les catégories d'archives
     # supplémentaires autorisent la lecture mais ne déclenchent pas d'import automatique.
-    if (str(channel.get("parent_id")) != config.DISCORD_TICKET_CATEGORY_ID
-            or not channel.get("name", "").startswith((TICKET_CHANNEL_PREFIX,NATIVE_SUPPORT_PREFIX))):
+    if (str(channel.get("parent_id")) not in {config.DISCORD_TICKET_CATEGORY_ID, os.getenv("CASEWORK_SUPPORT_CATEGORY_ID", config.DISCORD_TICKET_CATEGORY_ID)}
+            or not channel.get("name", "").startswith(SUPPORT_PREFIXES)):
         return False
     messages = await discord.fetch_channel_history(channel_id, require_ticket_category=True)
     if not messages or not messages[0].author.is_bot:
         return False
     opening_text = re.sub(r"[*_`~]", "", messages[0].content)
+    native_request = await db.case_requests.find_one({
+        "guild_id": str(config.DISCORD_GUILD_ID), "channel_id": channel_id,
+        "kind": "support", "status": "open",
+    })
     member_match = BENEFICIARY.search(opening_text)
-    if not member_match:
+    if not member_match and not native_request:
         logger.debug("Salon %s en attente d'un message d'ouverture reconnaissable.", channel_id)
         return False
-    member = await discord.fetch_member(member_match.group(1))
+    member = await discord.fetch_member(native_request["member_id"] if native_request else member_match.group(1))
     assigned = await resolve_import_helper(messages, discord)
+    if native_request and native_request.get("assigned_id"):
+        from models.ticket import HelperIdentity
+        from services.ticket_assignment import ticket_helper_role_ids
+        helper_id = native_request["assigned_id"]
+        if (await discord.fetch_member_role_ids(helper_id)) & ticket_helper_role_ids():
+            helper = await discord.fetch_member(helper_id)
+            assigned = HelperIdentity(id=helper.id, username=helper.username,
+                display_name=helper.display_name, avatar_url=helper.avatar_url)
     timestamp = datetime.now(timezone.utc).isoformat()
     ticket = TicketDetail(
         id=str(uuid4()), title=f"#{channel.get('name', channel_id)} · {member.display_name or member.username}",
@@ -62,6 +76,8 @@ async def import_ticket_channel(channel_id: str, discord: DiscordService) -> boo
     if result.upserted_id is not None:
         logger.info("Ticket Discord importé automatiquement : salon %s.", channel_id)
         schedule_crisis_analysis(document["id"])
+        from services.ticket_refresh import wake_ticket_refresh
+        wake_ticket_refresh()
         return True
     return False
 
@@ -73,8 +89,8 @@ async def discover_tickets() -> None:
     channels = await discord.fetch_guild_channels()
     for channel in channels:
         if (channel.get("type") != 0
-                or str(channel.get("parent_id")) != config.DISCORD_TICKET_CATEGORY_ID
-                or not channel.get("name", "").startswith((TICKET_CHANNEL_PREFIX,NATIVE_SUPPORT_PREFIX))):
+                or str(channel.get("parent_id")) not in {config.DISCORD_TICKET_CATEGORY_ID, os.getenv("CASEWORK_SUPPORT_CATEGORY_ID", config.DISCORD_TICKET_CATEGORY_ID)}
+                or not channel.get("name", "").startswith(SUPPORT_PREFIXES)):
             continue
         try:
             await import_ticket_channel(str(channel["id"]), discord)

@@ -209,11 +209,14 @@ def test_native_creation_has_private_permissions_and_no_double_room(world):
     assert guild.creations==1
 
 
-def test_native_markers_do_not_trigger_old_contains_branches():
+def test_native_names_follow_requested_convention_and_remain_detectable():
     old=['🎫・｜cstaff','⚜️・｜cstaff','🎫・｜convoc','🚧・｜convoc-','🎫・｜vérif','🌸・｜soutien','🎫・｜bulle','🫧・｜bulle-']
     for kind,prefix in native.PREFIX.items():
         assert policy.detect(prefix+'alex')==kind
-        assert not any(marker in prefix for marker in old)
+    assert native.PREFIX['support']=='🌸・｜soutient-'
+    assert native.PREFIX['summons']=='🛡️・｜convoc-'
+    assert native.PREFIX['contact_staff']=='💬・｜cstaff-'
+    assert native.PREFIX['verification']=='📋・｜vérif-'
 
 
 def test_support_requires_consent_and_only_helper_can_accept():
@@ -544,3 +547,43 @@ def test_support_review_registers_buttons_immediately(world,monkeypatch):
     assert any(isinstance(call.args[0],commands.SupportDecision) and
                call.kwargs['message_id']==int(saved['notification']['message_id'])
                for call in client.add_view.call_args_list)
+
+
+@pytest.mark.parametrize('confidential',[False,True])
+def test_contact_staff_complete_intake_to_private_room(world,confidential):
+    async def exercise():
+        interaction=menu_interaction(world,{'channel_id':'123'},actor=MEMBER)
+        interaction.user.name='alex'
+        panel=commands.PublicPanel('contact_staff')
+        button=next(c for c in panel.walk_children() if isinstance(c,discord.ui.Button))
+        await button.callback(interaction)
+        modal=interaction.response.send_modal.await_args.args[0]
+        modal.reason._value='Je souhaite parler à votre équipe de cette situation.'
+        modal.confidential._value=confidential
+        await modal.on_submit(interaction)
+        row=await h.db.case_requests.find_one({'kind':'contact_staff'})
+        assert row and row['confidential']==confidential
+        await native.tick(world[1])
+        saved=await h.db.case_requests.find_one({'_id':row['_id']})
+        assert saved['status']=='open'
+        channel=world[0].channels[int(saved['channel_id'])]
+        assert channel.overwrites[world[0].default_role].view_channel is False
+        staff=world[0].get_role(int(h.ROLE_IDS['staff']))
+        assert (staff in channel.overwrites)==(not confidential)
+        assert channel.name.startswith('🔒・｜cstaff-' if confidential else '💬・｜cstaff-')
+        assert any(isinstance(c.args[0],commands.RoomPanel) for c in world[1].add_view.call_args_list)
+        with pytest.raises(HTTPException):
+            await native.reserve('contact_staff',MEMBER,MEMBER,'Un second contact doit être refusé.','second-contact',confidential=not confidential)
+    h.run(exercise())
+
+
+def test_support_receipt_keeps_context_and_actor_without_action_buttons():
+    async def render():
+        view=native.support_receipt({'status':'open','member_id':MEMBER,'decision_by':STAFF,
+            'reason':'Une demande importante','triggers':'Sujets sensibles','guild_id':h.GUILD_ID,
+            'channel_id':'123','decided_at':'2026-10-30T10:00:00+00:00'})
+        text=str(view.to_components())
+        assert MEMBER in text and STAFF in text and 'Une demande importante' in text and 'Sujets sensibles' in text
+        assert all(c.style==discord.ButtonStyle.link for c in view.walk_children() if isinstance(c,discord.ui.Button))
+        assert '<t:' in text
+    h.run(render())

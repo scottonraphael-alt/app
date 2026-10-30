@@ -9,11 +9,11 @@ KINDS = ('verification', 'summons', 'contact_staff', 'bubble', 'support')
 LABELS = {'verification': 'Vérifications', 'summons': 'Convocations',
           'contact_staff': 'Contacts Staff', 'bubble': 'Bulles d’échange', 'support': 'Soutiens'}
 PREFIXES = {
-    'verification': ('📋・｜verification-', '🎫・｜vérif-', '⚜️・｜vérif-'),
-    'summons': ('🛡️・｜convocation-', '🎫・｜convoc-', '🚧・｜convoc-', '⚜️・｜convoc-'),
-    'contact_staff': ('💬・｜contact-staff-', '🔒・｜contact-staff-', '🎫・｜cstaff-', '⚜️・｜cstaff-'),
+    'verification': ('📋・｜vérif-', '📋・｜verification-', '🎫・｜vérif-', '⚜️・｜vérif-'),
+    'summons': ('🛡️・｜convoc-', '🛡️・｜convocation-', '🎫・｜convoc-', '🚧・｜convoc-', '⚜️・｜convoc-'),
+    'contact_staff': ('💬・｜cstaff-', '🔒・｜cstaff-', '💬・｜contact-staff-', '🔒・｜contact-staff-', '🎫・｜cstaff-', '⚜️・｜cstaff-'),
     'bubble': ('🫧・｜discussion-', '🎫・｜bulle-', '🫧・｜bulle-', '⚜️・｜bulle-'),
-    'support': ('🌸・｜soutien-', '🌸・｜iris-soutien-'),
+    'support': ('🌸・｜soutient-', '🌸・｜soutien-', '🌸・｜iris-soutien-'),
 }
 
 
@@ -93,7 +93,7 @@ def detect(name):
 
 
 def visibility(kind, name):
-    if kind=='contact_staff' and name.startswith('🔒・｜contact-staff-'):return 'leadership'
+    if kind=='contact_staff' and name.startswith(('🔒・｜contact-staff-','🔒・｜cstaff-')):return 'leadership'
     if name.startswith('⚜️'):
         return 'leadership' if kind == 'contact_staff' else 'restricted'
     return 'staff'

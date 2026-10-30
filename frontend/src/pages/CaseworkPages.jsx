@@ -2,7 +2,7 @@ import WorkflowRequests from "../components/casework/WorkflowRequests";
 import "../WorkflowSettings.css";
 // Prepared routes: mount each page behind the existing Staff access guard at integration.
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, RefreshCw, Search, FileText, LockKeyhole } from 'lucide-react';
 import { api, getErrorMessage } from '../api/client';
 import { Modal } from '../components/projects/ProjectUI';
@@ -44,7 +44,7 @@ function Frame({ kind, title, children, back, refresh }) {
         <Link className="cw-button" to="/">Accueil <ArrowRight size={16} /></Link>
       </nav>
     </header>
-    <nav className="cw-families" aria-label="Familles de dossiers">{Object.entries(FAMILIES).map(([value, item]) =>
+    <nav className="cw-families" aria-label="Familles de dossiers">{Object.entries(FAMILIES).filter(([value])=>value!=='support').map(([value, item]) =>
       <Link key={value} to={pathFor(value)} aria-current={kind === value ? 'page' : undefined}>{item.short}</Link>)}</nav>
     {children}
   </main>;
@@ -72,7 +72,7 @@ function CaseList({ kind }) {
   }
   return <Frame kind={kind} refresh={() => setRefresh(n => n + 1)}>
     <WorkflowRequests kind={kind}/>
-    <section className="cw-guide"><FileText size={22} /><div><h2>Du salon au dossier</h2><p>Les conversations restent dans Iris après la suppression du salon Discord. Les archives signalent si leur dernière sauvegarde est incomplète.</p></div></section>
+    <section className="cw-guide"><FileText size={22} /><div><h2>Le suivi des échanges</h2><p>Retrouvez les conversations, leur intervenant et les actions à mener. Les échanges restent consultables après la clôture du salon.</p></div><span className="cw-guide-count"><strong>{data?.total ?? "—"}</strong>dossiers dans cette vue</span></section>
     <div className="cw-toolbar">
       <div className="cw-toolbar" role="group" aria-label="État des dossiers">{[[false, 'Ouverts'], [true, 'Archives']].map(([value, label]) =>
         <button className="cw-button" key={label} aria-pressed={archived === value} onClick={() => { setArchived(value); setOffset(0); }}>{label}</button>)}</div>
@@ -190,4 +190,4 @@ export const ConvocationsPage = props => <FamilyPage kind="summons" {...props} /
 export const ContactsStaffPage = props => <FamilyPage kind="contact_staff" {...props} />;
 export const BullesPage = props => <FamilyPage kind="bubble" {...props} />;
 
-export const SupportDossiersPage = props => <FamilyPage kind="support" {...props} />;
+export const SupportDossiersPage = () => <Navigate to="/suivis" replace />;

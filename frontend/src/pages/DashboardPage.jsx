@@ -1,3 +1,7 @@
+import WorkflowRequests from "../components/casework/WorkflowRequests";
+import "../Casework.css";
+import "../WorkflowSettings.css";
+import "../Casier.css";
 import { ticketEvent, ATTENTION_LABELS } from "../utils/ticketEvents";
 import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useMemo, useState } from "react";
@@ -241,6 +245,7 @@ export default function DashboardPage({
           </Link>
         </div>
       </header>
+      <div className="cz-dialog-root"><WorkflowRequests kind="support"/></div>
 
       <section className="tl-panel" aria-labelledby="tl-list-title">
         <header className="tl-panel-header">

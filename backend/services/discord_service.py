@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 import re
@@ -173,6 +174,7 @@ class DiscordService:
         return channel
 
     async def _ensure_ticket_category(self, channel: dict[str, Any]) -> None:
+        allowed_categories = set(ALLOWED_TICKET_CATEGORY_IDS) | {os.getenv("CASEWORK_SUPPORT_CATEGORY_ID", "")} - {""}
         channel_type = channel.get("type")
         parent_id = channel.get("parent_id")
         category_id = parent_id
@@ -180,7 +182,7 @@ class DiscordService:
         if channel_type in THREAD_CHANNEL_TYPES:
             # Pour un fil, parent_id désigne le salon parent : accepté si ce salon est lui-même
             # dans la liste autorisée, sinon la catégorie retenue est celle de ce salon.
-            if parent_id in ALLOWED_TICKET_CATEGORY_IDS:
+            if parent_id in allowed_categories:
                 return
             parent = await self._get(f"/channels/{ensure_discord_id(parent_id)}") if parent_id else {}
             category_id = parent.get("parent_id") if parent.get("guild_id") == DISCORD_GUILD_ID else None
@@ -191,7 +193,7 @@ class DiscordService:
             )
             raise HTTPException(status_code=422, detail="L’identifiant doit désigner un salon textuel.")
 
-        if not category_id or category_id not in ALLOWED_TICKET_CATEGORY_IDS:
+        if not category_id or category_id not in allowed_categories:
             # Journalisé pour savoir quelle catégorie ajouter à DISCORD_TICKET_CATEGORY_IDS si besoin.
             logger.warning(
                 "Salon %s refusé pour un ticket : type %s, parent %s, catégorie %s absente de "

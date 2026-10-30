@@ -71,6 +71,8 @@ class Panel(discord.ui.LayoutView):
         box=discord.ui.Container(discord.ui.TextDisplay('## 🌸 Bienvenue dans Oasis'),
             discord.ui.TextDisplay('Prends quelques minutes pour te présenter et expliquer ce qui t’amène. Le Staff lira tes réponses avant de te donner accès au serveur.'),
             discord.ui.Separator(),discord.ui.TextDisplay('### 📝 Avant de commencer\nLis le règlement, puis complète les cinq champs du formulaire. En cas de demande de précisions, tu rempliras à nouveau le formulaire complet.'),accent_colour=0x846594)
+        from services.workflow_panels import apply as apply_panel
+        apply_panel(box,'public:verification',replace=True)
         button=discord.ui.Button(label='Remplir le formulaire',emoji='📝',style=discord.ButtonStyle.primary,custom_id='iris:verification:start')
         async def open_form(interaction):
             try:check_guild(interaction);await interaction.response.send_modal(Form())
