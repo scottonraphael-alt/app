@@ -272,3 +272,9 @@ def test_verification_form_action_colors():
         assert buttons['ticket'].style==discord.ButtonStyle.primary
         assert buttons['close'].style==discord.ButtonStyle.danger
     h.run(check())
+
+
+def test_advisory_variable_keeps_the_complete_summary_beyond_300_characters():
+    summary='Une lecture attentive des réponses est nécessaire. '*12+'Fin du préavis.'
+    assert 300<len(summary)<1000
+    assert panels.values({'advisory':summary})['avis_ia']==summary

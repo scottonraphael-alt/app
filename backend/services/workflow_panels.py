@@ -28,7 +28,7 @@ KEYS = {
     'review:support':'Demande de soutien traitée',
 }
 _cache = {}
-VARIABLES={'membre_id':20,'membre_username':32,'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':300,'identifiant_anonyme':11,'message_anonyme':3000,'motif':1000,'triggers':1000,'motif_refus':1000,'statut':40,'reponses_formulaire':2200}
+VARIABLES={'membre_id':20,'membre_username':32,'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':1000,'identifiant_anonyme':11,'message_anonyme':3000,'motif':1000,'triggers':1000,'motif_refus':1000,'statut':40,'reponses_formulaire':2200}
 TOKEN=re.compile(r'\{('+ '|'.join(VARIABLES) +r')\}')
 
 
@@ -51,7 +51,7 @@ def values(row):
         'statut':short(row.get('status_label') or {'waiting':'En attente','claimed':'Pris en charge','pending':'En attente','approved':'Publication en cours','published':'Publié','rejected':'Refusé','open':'Ouvert','suspended':'Suspendu','restricted':'Accès restreint','archived':'Archivé'}.get(row.get('status'),'À vérifier'),40),
         'reponses_formulaire':response,
         'identifiant_anonyme':str(row.get('alias') or 'ANO-XXXX-XX'),'message_anonyme':str(row.get('text') or ''),
-        'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:600].decode('utf-16-le','ignore'),
+        'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:2000].decode('utf-16-le','ignore'),
         'membre':mention(row.get('member_id'),'Membre à sélectionner'),
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
@@ -174,4 +174,4 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 
 def revision(key):
-    return hashlib.sha256(json.dumps({'layout':4,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps({'layout':5,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]

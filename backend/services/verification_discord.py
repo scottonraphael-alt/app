@@ -176,7 +176,7 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
             for item in list(presentation.children):
                 presentation.remove_item(item);box.add_item(item)
         if advisory and not custom:
-            short=str(advisory).encode('utf-16-le')[:600].decode('utf-16-le','ignore')
+            short=str(advisory).encode('utf-16-le')[:2000].decode('utf-16-le','ignore')
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+short+'\n-# Analyse complète dans Iris. Ce préavis ne prend aucune décision.'))
         box.add_item(staff_buttons(self,row,[('claim','Je m’en occupe')]))
         links=discord.ui.ActionRow(discord.ui.Button(label='Gérer dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id)))

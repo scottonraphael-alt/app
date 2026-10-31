@@ -57,6 +57,7 @@ def validate(text,context):
     fenced=re.fullmatch(r'```(?:json)?\s*\n?(.*?)\n?```',text,re.DOTALL|re.IGNORECASE)
     if fenced:text=fenced.group(1).strip()
     result=Advisory.model_validate(json.loads(text))
+    if len(result.summary.encode('utf-16-le'))//2>1000:raise ValueError('Résumé trop long.')
     candidate='\n'.join(str(value) for value in context['candidate'].values())
     if any(point.quote not in candidate for point in result.points):raise ValueError('Citation absente du formulaire.')
     available={item['id'] for item in context['references']}
@@ -74,6 +75,7 @@ async def _generate(member_id,actor_id,*,rules):
                 'Les exemples sélectionnés sont indicatifs et peuvent être contradictoires. Ne recopie aucune donnée des exemples dans ta réponse. '
                 'Respecte exactement ce schéma JSON et toutes ses limites : '+json.dumps(Advisory.model_json_schema(),ensure_ascii=False)+'. '
                 'Si les réponses sont incompréhensibles, demande une clarification ; cite un court extrait exact, sans le corriger ni inventer de citation. Les listes peuvent être vides. '
+                'Rédige en français naturel pour le Staff. Dans summary, utilise « motif de venue », « avis sur la psychiatrie » et « règlement accepté », jamais les noms techniques reason, psychiatry, rules ou true. Le règlement accepté indique une case cochée, pas une preuve de compréhension. Résume en 2 à 4 phrases complètes, sans dépasser 1000 unités UTF-16. '
                 'JSON uniquement : suggestion (human_review, clarification, no_issue_identified), summary, points '
                 '(observation et quote exacte de la réponse candidate), uncertainties (liste), reference_ids (liste).')
     messages=[{'role':'user','content':json.dumps(data,ensure_ascii=False)}]
