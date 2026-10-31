@@ -163,8 +163,8 @@ body.casier-no-nav .app-shell > .app-main {
 
 /* Boutons */
 
-/* `.cz-button` seul = bouton fantôme (blanc, bordure, texte sage) ; `--ghost` l'écrit explicitement. */
-.cz-button,
+/* Boutons partagés : casier, dossiers, formulaires et messages anonymes. */
+:is(.cz-button, .cw-button, .vf-button),
 .cz-button--ghost {
   display: inline-flex;
   align-items: center;
@@ -177,39 +177,40 @@ body.casier-no-nav .app-shell > .app-main {
   background: var(--cz-surface);
   color: var(--cz-sage);
   font: 600 13px / 1.2 "IBM Plex Sans", sans-serif;
+  text-decoration: none;
   text-align: center;
   white-space: nowrap;
   cursor: pointer;
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
-.cz-button svg {
+:is(.cz-button, .cw-button, .vf-button) svg {
   flex-shrink: 0;
 }
 
-.cz-button:not(:disabled):hover,
+:is(.cz-button, .cw-button, .vf-button):not(:disabled):hover,
 .cz-button--ghost:not(:disabled):hover {
   background: var(--cz-sage-soft);
 }
 
-.cz-button--primary {
+:is(.cz-button--primary, .cw-primary, .vf-primary, .cw-button[aria-pressed="true"], .vf-button[aria-pressed="true"]) {
   border-color: var(--cz-sage);
   background: var(--cz-sage);
   color: #fff;
 }
 
-.cz-button--primary:not(:disabled):hover {
+:is(.cz-button--primary, .cw-primary, .vf-primary, .cw-button[aria-pressed="true"], .vf-button[aria-pressed="true"]):not(:disabled):hover {
   border-color: var(--cz-sage-hover);
   background: var(--cz-sage-hover);
 }
 
-.cz-button--danger {
+:is(.cz-button--danger, .cw-danger) {
   border-color: var(--cz-danger-line);
   background: var(--cz-danger-soft);
   color: var(--cz-danger);
 }
 
-.cz-button--danger:not(:disabled):hover {
+:is(.cz-button--danger, .cw-danger):not(:disabled):hover {
   background: #f5dfe2;
 }
 
@@ -238,8 +239,8 @@ body.casier-no-nav .app-shell > .app-main {
   width: 100%;
 }
 
-.cz-button:disabled,
-.cz-button[aria-disabled="true"] {
+:is(.cz-button, .cw-button, .vf-button):disabled,
+:is(.cz-button, .cw-button, .vf-button)[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -1512,7 +1513,7 @@ body.casier-no-nav .app-shell > .app-main {
     padding-left: 18px;
   }
 
-  .cz-dialog-footer > .cz-button {
+  .cz-dialog-footer > :is(.cz-button, .cw-button, .vf-button) {
     flex: 1 1 auto;
   }
 }
@@ -1581,18 +1582,18 @@ body.casier-no-nav .app-shell > .app-main {
   scrollbar-color: #3a4640 transparent;
 }
 
-:root[data-theme="dark"] .cz-button--primary {
+:root[data-theme="dark"] :is(.cz-button--primary, .cw-primary, .vf-primary, .cw-button[aria-pressed="true"], .vf-button[aria-pressed="true"]) {
   border-color: var(--iris-accent-strong, #4f7d66);
   background: var(--iris-accent-strong, #4f7d66);
   color: #fff;
 }
 
-:root[data-theme="dark"] .cz-button--primary:not(:disabled):hover {
+:root[data-theme="dark"] :is(.cz-button--primary, .cw-primary, .vf-primary, .cw-button[aria-pressed="true"], .vf-button[aria-pressed="true"]):not(:disabled):hover {
   border-color: #44705b;
   background: #44705b;
 }
 
-:root[data-theme="dark"] .cz-button--danger:not(:disabled):hover {
+:root[data-theme="dark"] :is(.cz-button--danger, .cw-danger):not(:disabled):hover {
   background: rgba(232, 139, 139, 0.24);
 }
 
@@ -1726,7 +1727,7 @@ body.casier-no-nav .app-shell > .app-main {
 .cz-list-check input { width: 18px; height: 18px; accent-color: var(--cz-sage); cursor: pointer; }
 
 .cz-stats-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-bottom: 22px; }
-.cz-stats-filters .cz-button[aria-pressed="true"] { background: var(--cz-sage-soft); border-color: var(--cz-sage); }
+.cz-stats-filters :is(.cz-button, .cw-button, .vf-button)[aria-pressed="true"] { background: var(--cz-sage-soft); border-color: var(--cz-sage); }
 .cz-stats-date { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--cz-muted); }
 .cz-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
 .cz-stats-grid .cz-card h2 { margin: 0 0 14px; font-size: 16px; }
