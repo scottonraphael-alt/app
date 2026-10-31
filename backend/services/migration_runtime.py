@@ -159,6 +159,8 @@ async def run_ticket_delivery(client, stop):
                 try:
                     await workflow_settings.apply()
                     if policy.Settings().enabled and discord_actions_enabled():
+                        from services.workflow_panel_sync import tick as sync_panels
+                        await sync_panels(client)
                         await native.tick(client)
                     record_run('native_ticket_delivery')
                 except Exception:

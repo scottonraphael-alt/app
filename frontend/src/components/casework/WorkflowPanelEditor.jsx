@@ -63,7 +63,7 @@ export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCa
  </article>)}
  <div className="cw-toolbar">{[['text','Texte'],['section','Texte + vignette'],['separator','Séparateur'],['image','Image'],['link','Lien']].map(([kind,label])=><button type="button" className="cw-button" key={kind} disabled={blocks.length>=5} onClick={()=>update({...panel,blocks:[...blocks,{kind,text:['text','section'].includes(kind)?'Votre message ici.':'',url:'',label:''}]})}>+ {label}</button>)}</div>
  <p role="status" className={used>limit?"cw-alert":""}><strong>{used.toLocaleString("fr-FR")} / {limit.toLocaleString("fr-FR")} caractères</strong> · 5 blocs maximum. Les variables sont comptées avec leur taille maximale. La place restante est réservée aux informations automatiques.</p>
- <p>Enregistrez les réglages ci-dessous. Les nouveaux panneaux utiliseront ce contenu. Pour remplacer un panneau public existant, relancez sa commande /panel.</p>
+ <p>Enregistrez les réglages ci-dessous : les panneaux déjà publiés seront actualisés automatiquement dans les secondes qui suivent, sans nouvelle commande ni notification. Un message supprimé volontairement ne sera pas recréé.</p>
  <button type="button" className="cw-button" onClick={()=>{const next={...value};delete next[key];onChange(next);}}>Rétablir le contenu d’origine</button>
  </div><aside className="wf-panel-preview an-discord-preview"><p className="cz-eyebrow">APERÇU DU CONTENU PERSONNALISÉ</p><div className="an-preview-container" style={{borderLeftColor:panel.color}}>
  {!blocks.length&&<p>Le panneau conserve sa présentation d’origine.</p>}

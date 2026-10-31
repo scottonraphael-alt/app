@@ -115,4 +115,7 @@ async def save(payload):
         from pymongo.errors import DuplicateKeyError
         try:await db.workflow_configuration.insert_one(replacement)
         except DuplicateKeyError:raise HTTPException(409,'La configuration a changé.')
-    return await apply()
+    result=await apply()
+    from services.migration_runtime import wake_tickets,wake_verifications
+    wake_tickets();wake_verifications()
+    return result
