@@ -134,13 +134,14 @@ class Review(discord.ui.LayoutView):
             discord.ui.TextDisplay('### '+LABELS[row['status']]),discord.ui.Separator(),
             accent_colour=0xEDB35D if row['status'] in ('pending','approved') else 0x73A594 if row['status']=='published' else 0xB76A75)
         context={**row,'decision_by':row.get('reviewer_id')}
-        if not apply_panel(box,'anonymous:review',row=context):
+        custom=apply_panel(box,'anonymous:review',row=context,replace=True)
+        if not custom:
             box.add_item(discord.ui.TextDisplay(row['text']))
-        if row.get('reviewer_id'):
+        if not custom and row.get('reviewer_id'):
             box.add_item(discord.ui.TextDisplay(f"Traité par <@{row['reviewer_id']}>"))
-        if row['status']=='rejected':
+        if not custom and row['status']=='rejected':
             box.add_item(discord.ui.TextDisplay('**Motif du refus :** '+row.get('reason','').encode('utf-16-le')[:300].decode('utf-16-le','ignore')+'\n-# Motif complet dans Iris.'))
-        if pending:
+        if pending and not custom:
             roles=[str(v) for v in (config.DISCORD_STAFF_ROLE_ID,config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if v]
             box.add_item(discord.ui.TextDisplay(' '.join('<@&'+v+'>' for v in roles)+f' · Nouveau message pour <#{PUBLIC_CHANNEL}>'))
         buttons=discord.ui.ActionRow()

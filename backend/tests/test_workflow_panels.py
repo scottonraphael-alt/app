@@ -40,7 +40,7 @@ def test_room_custom_copy_preserves_privacy_and_management():
         view=commands.RoomPanel('request',row={'kind':'contact_staff','member_id':'123','confidential':True,'reason':'Une demande détaillée'})
         content=str(view.to_components())
         assert 'Bienvenue dans cet espace.' in content
-        assert 'Accès réservé au membre' in content
+        assert 'Accès réservé au membre' not in content
         assert 'Une demande détaillée' not in content
         assert 'Gestion du ticket' not in content and 'historique sont consultables' not in content
         assert any(isinstance(c,discord.ui.Select) and c.custom_id=='iris:room:request:actions' for c in view.walk_children())
@@ -62,13 +62,12 @@ def test_section_heading_uses_real_member_and_preserves_state_and_actions():
         assert '<@123>' in section['components'][0]['content']
         assert '{membre}' not in str(payload)
         assert 'Espace de' not in str(payload)
-        assert 'Échanges suspendus' in str(payload)
+        assert 'Échanges suspendus' not in str(payload)
         assert any(isinstance(c,discord.ui.Select) for c in view.walk_children())
     h.run(check())
 
 def test_custom_heading_requires_member_and_section_requires_image():
-    with pytest.raises(HTTPException):
-        panels.validate({'room:summons':{'replace_heading':True,'blocks':[{'text':'Titre sans membre'}]}})
+    assert panels.validate({'room:summons':{'replace_heading':True,'blocks':[{'text':'Titre personnalisé libre'}]}})
     with pytest.raises(HTTPException):
         panels.validate({'room:summons':{'blocks':[{'kind':'section','text':'Texte','url':''}]}})
 
@@ -165,13 +164,13 @@ def test_panel_accepts_its_full_text_budget_and_rejects_excess(key):
 
 def test_form_with_large_custom_text_keeps_discord_text_budget():
     from services.verification_discord import StaffForm
-    panels.configure(panels.validate({'form:verification':{'blocks':[{'text':'a'*2000}]}}))
+    panels.configure(panels.validate({'form:verification':{'blocks':[{'text':'a'*1200+'{reponses_formulaire}'}]}}))
     async def check():
         row={'member_id':'123','active':True,'status':'waiting','forms':[{'answers':{key:'😀'*1500 for key in ('name','age','reason','psychiatry')}}]}
         view=StaffForm('123',base_url='https://example.com',row=row)
         count=sum(len(c.content.encode('utf-16-le'))//2 for c in view.walk_children() if isinstance(c,discord.ui.TextDisplay))
         assert count<=4000
-        assert 'Réponses abrégées' in str(view.to_components())
+        assert 'Règlement accepté' in str(view.to_components())
     h.run(check())
 
 @pytest.mark.parametrize('key',['request:support','review:support'])
@@ -194,10 +193,58 @@ def test_custom_mini_panel_preserves_claim_links_and_current_status():
             advisory='Préavis disponible.',thread_url='https://discord.com/channels/1/2/3')
         payload=str(view.to_components())
         assert 'Dossier de <@123>' in payload and 'Préavis disponible.' in payload
-        assert '{avis_ia}' not in payload and 'En attente' in payload
+        assert '{avis_ia}' not in payload and 'En attente' not in payload
         buttons=[c for c in view.walk_children() if isinstance(c,discord.ui.Button)]
         assert any(b.custom_id=='iris:verification:123:claim' for b in buttons)
         assert any(b.label=='Lire le formulaire' for b in buttons)
         assert any(b.label=='Gérer dans Iris' for b in buttons)
         assert view.is_persistent()
     h.run(check())
+
+@pytest.mark.parametrize('key',list(panels.KEYS))
+def test_every_custom_panel_contains_only_custom_text_and_functional_controls(key):
+    custom='CUSTOM_ONLY'+(' {message_anonyme}' if key=='anonymous:review' else '')
+    panels.configure(panels.validate({key:{'blocks':[{'text':custom}]}}))
+    async def check():
+        row={'_id':'request','member_id':'123','actor_id':'456','assigned_id':'456',
+             'decision_by':'456','reviewer_id':'456','status':'open','visibility':'restricted','guild_id':'987','channel_id':'654',
+             'kind':'support','reason':'AUTOMATIC_REASON','triggers':'AUTOMATIC_TRIGGERS','confidential':True,
+             'alias':'ANO-AB12-CD','text':'Anonymous content'}
+        if key=='public:moderation':view=commands.StaffMenu()
+        elif key=='public:verification':
+            from services.verification_discord import Panel
+            view=Panel()
+        elif key.startswith('public:'):view=commands.PublicPanel(key.split(':')[1])
+        elif key.startswith('room:'):
+            row['kind']=key.split(':')[1];view=commands.RoomPanel('request',row=row)
+        elif key in ('staff:verification','form:verification'):
+            from services.verification_discord import StaffPanel,StaffForm
+            formrow={'member_id':'123','status':'claimed','active':True,'claimed_by':'456','forms':[{'answers':{'name':'AUTOMATIC_ANSWER'}}]}
+            view=StaffPanel('123',base_url='https://example.com',row=formrow) if key.startswith('staff:') else StaffForm('123',base_url='https://example.com',row=formrow)
+        elif key=='request:support':view=commands.SupportDecision(row)
+        elif key=='review:support':
+            from services.casework.native import support_receipt
+            view=support_receipt(row)
+        else:
+            from services.anonymous_messages import Review
+            row['status']='rejected';view=Review(row)
+        texts=[c.content for c in view.walk_children() if isinstance(c,discord.ui.TextDisplay)]
+        assert texts==[custom.replace('{message_anonyme}',row['text'])]
+        assert any(isinstance(c,(discord.ui.Button,discord.ui.Select,discord.ui.UserSelect)) for c in view.walk_children())
+    h.run(check())
+
+def test_custom_mini_panel_uses_claimed_staff_in_processed_variable():
+    from services.verification_discord import StaffPanel
+    panels.configure(panels.validate({'staff:verification':{'blocks':[{'text':'Pris en charge par {traite_par} · {statut}'}]}}))
+    async def check():
+        view=StaffPanel('123',base_url='https://example.com',row={'status':'claimed','active':True,'claimed_by':'456'})
+        assert 'Pris en charge par <@456> · Pris en charge' in str(view.to_components())
+        assert 'Décision en attente' not in str(view.to_components())
+    h.run(check())
+
+def test_member_id_and_username_are_plain_values_and_forbidden_on_anonymous_panels():
+    assert panels.render_text('{membre_id} / {membre_username}',{'member_id':'123456789012345678','member':{'username':'alex_oasis'}})=='123456789012345678 / alex_oasis'
+    assert panels.render_text('{membre_username}',{'member_username':'other_user'})=='other_user'
+    for variable in ('membre_id','membre_username'):
+        with pytest.raises(HTTPException):
+            panels.validate({'anonymous:review':{'blocks':[{'text':'{message_anonyme} {'+variable+'}'}]}})

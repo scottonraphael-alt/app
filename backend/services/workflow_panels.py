@@ -28,8 +28,8 @@ KEYS = {
     'review:support':'Demande de soutien traitée',
 }
 _cache = {}
-VARIABLES={'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':300,'identifiant_anonyme':11,'message_anonyme':3000}
-TOKEN=re.compile(r'\{(membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme)\}')
+VARIABLES={'membre_id':20,'membre_username':32,'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':300,'identifiant_anonyme':11,'message_anonyme':3000,'motif':1000,'triggers':1000,'motif_refus':1000,'statut':40,'reponses_formulaire':2200}
+TOKEN=re.compile(r'\{('+ '|'.join(VARIABLES) +r')\}')
 
 
 def values(row):
@@ -39,7 +39,18 @@ def values(row):
     try:
         if row.get('decided_at'):stamp=f"<t:{int(datetime.fromisoformat(row['decided_at']).timestamp())}:F>"
     except (ValueError,TypeError):pass
-    return {'identifiant_anonyme':str(row.get('alias') or 'ANO-XXXX-XX'),'message_anonyme':str(row.get('text') or ''),
+    def short(value,units):
+        return str(value or 'Non renseigné').encode('utf-16-le')[:units*2].decode('utf-16-le','ignore')
+    answers=row.get('answers') or {}
+    fields=[('name','Prénom / pseudo'),('age','Tranche d’âge'),('reason','Motif de venue'),('psychiatry','Avis sur la psychiatrie')]
+    response='\n\n'.join('### '+label+'\n'+short(answers.get(key),450).replace('`','ˋ') for key,label in fields)
+    response+='\n\nRèglement accepté : '+('Oui' if answers.get('rules') else 'Non renseigné')
+    return {'membre_id':str(row.get('member_id') or 'ID indisponible'),'membre_username':str(row.get('member_username') or (row.get('member') or {}).get('username') or 'Pseudo indisponible')[:32],
+        'motif':short(row.get('reason'),1000),'triggers':short(row.get('triggers'),1000),
+        'motif_refus':short(row.get('decision_reason') or row.get('reason'),1000),
+        'statut':short(row.get('status_label') or {'waiting':'En attente','claimed':'Pris en charge','pending':'En attente','approved':'Publication en cours','published':'Publié','rejected':'Refusé','open':'Ouvert','suspended':'Suspendu','restricted':'Accès restreint','archived':'Archivé'}.get(row.get('status'),'À vérifier'),40),
+        'reponses_formulaire':response,
+        'identifiant_anonyme':str(row.get('alias') or 'ANO-XXXX-XX'),'message_anonyme':str(row.get('text') or ''),
         'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:600].decode('utf-16-le','ignore'),
         'membre':mention(row.get('member_id'),'Membre à sélectionner'),
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
@@ -78,10 +89,7 @@ class Panel(BaseModel):
 
 
 def text_limit(key):
-    if key=='anonymous:review':return 3500
-    if key.startswith('public:'):return 4000
-    if key.startswith('room:'):return 3600
-    return {'request:support':1200,'review:support':1400,'form:verification':2000,'staff:verification':3000}.get(key,3600)
+    return 4000
 
 
 def expanded_size(blocks):
@@ -115,14 +123,13 @@ def validate(panels):
                 raise HTTPException(422,'Le média ou lien doit utiliser une adresse publique valide.')
             if b.kind=='link' and not b.label.strip():
                 raise HTTPException(422,'Le bouton de lien doit avoir un libellé.')
-        if panel.replace_heading and (not key.startswith('room:') or not any('{membre}' in b.text for b in panel.blocks if b.kind in ('text','section'))):
-            raise HTTPException(422,'Un en-tête de ticket personnalisé doit contenir {membre}.')
         if key=='anonymous:review' and panel.blocks:
             if not any('{message_anonyme}' in b.text for b in panel.blocks if b.kind in ('text','section')):
                 raise HTTPException(422,'Le panneau de validation doit contenir {message_anonyme} pour permettre sa lecture avant décision.')
-            if any(any('{'+name+'}' in b.text for name in ('membre','interlocuteur','avatar_membre','salon','avis_ia')) or b.url=='{avatar_membre}' for b in panel.blocks):
+            if any(any('{'+name+'}' in b.text for name in ('membre','membre_id','membre_username','interlocuteur','avatar_membre','salon','avis_ia','reponses_formulaire')) or b.url=='{avatar_membre}' for b in panel.blocks):
                 raise HTTPException(422,'Utilise les variables anonymes, sans identité ni avatar du membre.')
         for b in panel.blocks:
+            if '{reponses_formulaire}' in b.text and key!='form:verification':raise HTTPException(422,'Les réponses du formulaire sont disponibles dans le formulaire complet.')
             if '{avis_ia}' in b.text and key not in ('form:verification','staff:verification'):raise HTTPException(422,'Le préavis IA est disponible dans le formulaire complet et le mini-panneau de vérification.')
             if key.startswith('public:') and TOKEN.search(b.text):
                 raise HTTPException(422,'Un panneau public ne connaît pas encore le membre : utilisez les variables dans un ticket ou une demande.')
@@ -167,4 +174,4 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 
 def revision(key):
-    return hashlib.sha256(json.dumps(_cache.get(key,{}),sort_keys=True).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps({'layout':3,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]

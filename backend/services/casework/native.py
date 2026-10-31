@@ -149,8 +149,9 @@ async def create(request_id,client):
             # The old BotGhost channel-created event sees no legacy prefix and sends no second panel.
             channel=await server.create_text_channel('iris-preparation-'+request_id[:8],category=category,overwrites=overwrites,topic=marker,reason=f'Iris : {TITLES[row["kind"]]}')
             await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'channel_id':str(channel.id),'stage':'channel_ready'}})
+        row['member_username']=member.name
         row['member_avatar_url']=str(member.display_avatar.url)
-        await db.case_requests.update_one({'_id':request_id},{'$set':{'member_avatar_url':row['member_avatar_url']}})
+        await db.case_requests.update_one({'_id':request_id},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username')}})
         from services.casework.commands import RoomPanel
         from services.verification_runtime import Adapter
         target_name=('🔒・｜cstaff-' if row['confidential'] else PREFIX[row['kind']])+member.name[:60]
@@ -196,6 +197,7 @@ def room_panel_state(case):
 async def current_panel_state(case):
     from services.workflow_panels import revision
     state=room_panel_state(case)
+    state['member_username']=(case.get('member') or {}).get('username')
     state["presentation_revision"]=revision("room:"+case["kind"])
     if case['kind']=='support':
         # The Helper follow-up is authoritative, including an intentional unassignment.
@@ -231,13 +233,15 @@ async def tick(client):
     from services.verification_runtime import Adapter,message
     server=await guild(client)
     async for row in db.case_requests.find({'guild_id':str(server.id),'status':{'$in':['waiting','refused','pending','creating','open']}}):
-        if 'member_avatar_url' not in row:
+        if 'member_avatar_url' not in row or 'member_username' not in row:
             try:
                 member=await server.fetch_member(int(row['member_id']))
                 row['member_avatar_url']=str(member.display_avatar.url)
+                row['member_username']=member.name
             except discord.NotFound:
                 row['member_avatar_url']=None
-            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_avatar_url':row['member_avatar_url']}})
+                row['member_username']=None
+            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username')}})
 
         if row['status'] in ('pending','creating'):
             try:
@@ -337,11 +341,11 @@ def support_receipt(row):
         discord.ui.TextDisplay(('### 🤝 Acceptée par ' if accepted else '### Décision de ')+f"<@{row.get('decision_by') or row.get('assigned_id')}>"),
         accent_colour=0x73A594 if accepted else 0xB78B58)
     from services.workflow_panels import apply as apply_panel
-    apply_panel(box,'review:support',row=row)
-    if row.get('decided_at'):
+    custom=apply_panel(box,'review:support',row=row,replace=True)
+    if not custom and row.get('decided_at'):
         stamp=int(datetime.fromisoformat(row['decided_at']).timestamp())
         box.add_item(discord.ui.TextDisplay(f'📅 <t:{stamp}:F>'))
-    if not accepted:
+    if not custom and not accepted:
         box.add_item(discord.ui.TextDisplay('### Explication\n'+fenced(row.get('decision_reason','').encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))))
     if accepted:
         box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Ouvrir le salon de soutien',emoji='🌸',

@@ -110,6 +110,12 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
         return
     guild = await guild_for(client)
     channel = await private_review_channel(guild)
+    if not (row.get('member') or {}).get('avatar_url') and getattr(guild,'fetch_member',None):
+        try:
+            member=await guild.fetch_member(int(row['member_id']))
+            row={**row,'member':{**(row.get('member') or {}),'avatar_url':str(member.display_avatar.url)}}
+            await db.verification_cases.update_one({'_id':row['_id']},{'$set':{'member.avatar_url':row['member']['avatar_url']}})
+        except discord.HTTPException:pass
     from services.workflow_panels import revision as panel_revision
     view = StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,advisory=advisory) if row.get('forms') else message('📁 Formulaire supprimé', 'Les réponses de ce dossier ont été supprimées par un Responsable.')
     record = row.get('staff_delivery') or {}
@@ -163,7 +169,7 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':7,'presentation_revision':panel_revision('form:verification'),'mini_presentation_revision':panel_revision('staff:verification'), 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':8,'presentation_revision':panel_revision('form:verification'),'mini_presentation_revision':panel_revision('staff:verification'), 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
 
@@ -524,7 +530,7 @@ async def tick(client):
             except Exception:logger.exception('Nettoyage Discord du formulaire à reprendre (%s).',row['member_id'])
             continue
         from services.workflow_panels import revision as panel_revision
-        if (current.get('staff_delivery') or {}).get('mini_presentation_revision')!=panel_revision('staff:verification') or (current.get('staff_delivery') or {}).get('presentation_revision')!=panel_revision('form:verification') or (current.get('staff_delivery') or {}).get('layout_version') != 7 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
+        if (current.get('staff_delivery') or {}).get('mini_presentation_revision')!=panel_revision('staff:verification') or (current.get('staff_delivery') or {}).get('presentation_revision')!=panel_revision('form:verification') or (current.get('staff_delivery') or {}).get('layout_version') != 8 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
             try:
                 await publish_staff(client, current)
             except Exception:

@@ -57,7 +57,7 @@ class Form(discord.ui.Modal):
             if self.rules.values!=['accepted']:raise HTTPException(422,'L’acceptation du règlement est obligatoire.')
             await interaction.response.defer(ephemeral=True,thinking=True)
             user=interaction.user
-            await service.submit({'id':str(user.id),'username':user.name,'display_name':user.display_name},
+            await service.submit({'id':str(user.id),'username':user.name,'display_name':user.display_name,'avatar_url':str(user.display_avatar.url)},
                 {'name':self.name.value,'age':self.age.value,'reason':self.reason.value,'psychiatry':self.psychiatry.value,'rules':True},
                 f'interaction:{interaction.id}')
             from services.migration_runtime import audit
@@ -135,21 +135,23 @@ class StaffForm(StaffActions,discord.ui.LayoutView):
             box.add_item(discord.ui.TextDisplay(f'<@&{staff_role}> · Un formulaire attend votre lecture.'))
         box.add_item(discord.ui.TextDisplay(staff_status(row)))
         from services.workflow_panels import apply as apply_panel, render_text
-        context={'member_id':str(member_id),'assigned_id':row.get('claimed_by'),'advisory':advisory}
-        if not apply_panel(box,'form:verification',row=context):
+        context={'member':row.get('member') or {},'member_id':str(member_id),'assigned_id':row.get('claimed_by'),'decision_by':row.get('claimed_by'),'status_label':STATUS_LABELS.get(row['status'],'À vérifier'),'answers':row['forms'][-1]['answers'],'advisory':advisory}
+        custom=apply_panel(box,'form:verification',row=context,replace=True)
+        if not custom:
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+render_text('{avis_ia}',context)))
-        box.add_item(discord.ui.Separator())
-        form=row['forms'][-1]
-        from services.workflow_panels import form_answer_limit
-        answer_limit=form_answer_limit()
-        for key,title in [('name','👤 Prénom / pseudo'),('age','🎂 Tranche d’âge'),('reason','🌱 Motif de venue'),('psychiatry','💬 Avis sur la psychiatrie')]:
-            box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key),limit=answer_limit)))
-        if any(len(str(form['answers'].get(key) or ''))>answer_limit for key in ('name','age','reason','psychiatry')):
-            box.add_item(discord.ui.TextDisplay('-# Réponses abrégées pour tenir dans Discord. Le formulaire complet reste disponible dans Iris.'))
-        box.add_item(discord.ui.TextDisplay('-# Règlement accepté : '+('Oui' if form['answers'].get('rules') else 'Non renseigné')))
-        box.add_item(discord.ui.Separator())
+        if not custom:
+            box.add_item(discord.ui.Separator())
+            form=row['forms'][-1]
+            from services.workflow_panels import form_answer_limit
+            answer_limit=form_answer_limit()
+            for key,title in [('name','👤 Prénom / pseudo'),('age','🎂 Tranche d’âge'),('reason','🌱 Motif de venue'),('psychiatry','💬 Avis sur la psychiatrie')]:
+                box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key),limit=answer_limit)))
+            if any(len(str(form['answers'].get(key) or ''))>answer_limit for key in ('name','age','reason','psychiatry')):
+                box.add_item(discord.ui.TextDisplay('-# Réponses abrégées pour tenir dans Discord. Le formulaire complet reste disponible dans Iris.'))
+            box.add_item(discord.ui.TextDisplay('-# Règlement accepté : '+('Oui' if form['answers'].get('rules') else 'Non renseigné')))
+            box.add_item(discord.ui.Separator())
         box.add_item(staff_buttons(self,row,[('approve','Valider'),('ticket','Créer un ticket'),('close','Clore sans expulser')]))
-        box.add_item(discord.ui.TextDisplay(IRIS_DECISIONS))
+        if not custom:box.add_item(discord.ui.TextDisplay(IRIS_DECISIONS))
         box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Dossier et historique dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id))))
         self.add_item(box)
 
@@ -166,14 +168,13 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         from services.workflow_panels import apply as apply_panel
         presentation=discord.ui.Container()
         custom=apply_panel(presentation,'staff:verification',row={
-            'member_id':self.member_id,'assigned_id':(row or {}).get('claimed_by'),'advisory':advisory,
+            'member':(row or {}).get('member') or {},'member_id':self.member_id,'assigned_id':(row or {}).get('claimed_by'),'decision_by':(row or {}).get('claimed_by'),'status_label':STATUS_LABELS.get((row or {}).get('status'),'À vérifier'),'advisory':advisory,
             'member_avatar_url':((row or {}).get('member') or {}).get('avatar_url')})
         if custom:
             box.clear_items()
             box.accent_colour=presentation.accent_colour
             for item in list(presentation.children):
                 presentation.remove_item(item);box.add_item(item)
-            box.add_item(discord.ui.TextDisplay(f'👤 <@{self.member_id}>\n'+staff_status(row)))
         if advisory and not custom:
             short=str(advisory).encode('utf-16-le')[:600].decode('utf-16-le','ignore')
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+short+'\n-# Analyse complète dans Iris. Ce préavis ne prend aucune décision.'))
@@ -181,8 +182,8 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         links=discord.ui.ActionRow(discord.ui.Button(label='Gérer dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id)))
         if thread_url:links.add_item(discord.ui.Button(label='Lire le formulaire',emoji='📝',style=discord.ButtonStyle.link,url=thread_url))
         box.add_item(links)
-        box.add_item(discord.ui.Separator())
-        box.add_item(discord.ui.TextDisplay(IRIS_DECISIONS))
+        if not custom:box.add_item(discord.ui.Separator())
+        if not custom:box.add_item(discord.ui.TextDisplay(IRIS_DECISIONS))
         self.add_item(box)
 
 class Confirm(discord.ui.LayoutView):

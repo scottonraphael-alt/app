@@ -97,7 +97,7 @@ class SupportDecision(discord.ui.LayoutView):
             discord.ui.TextDisplay(f'Membre : <@{row["member_id"]}>\n### Motif\n'+fenced(row['reason'])),
             discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])),accent_colour=0x78618C)
         from services.workflow_panels import apply as apply_panel
-        apply_panel(box,'request:support',row=row)
+        apply_panel(box,'request:support',row=row,replace=True)
         buttons=discord.ui.ActionRow()
         for accept,label in [(True,'Accepter et devenir interlocuteur'),(False,'Refuser avec une explication')]:
             button=discord.ui.Button(label=label,style=discord.ButtonStyle.primary if accept else discord.ButtonStyle.secondary,custom_id=f'iris:support:{row["_id"]}:{accept}')
@@ -153,9 +153,7 @@ class RoomPanel(discord.ui.LayoutView):
             for item in list(presentation.children):
                 presentation.remove_item(item)
                 box.add_item(item)
-            if row.get('status')=='suspended':box.add_item(discord.ui.TextDisplay('⏸️ Échanges suspendus.'))
-            if row.get('visibility')=='restricted':box.add_item(discord.ui.TextDisplay('🔒 Accès restreint à l’administration.'))
-        if row['kind']=='contact_staff' and row.get('confidential'):
+        if not customized and row['kind']=='contact_staff' and row.get('confidential'):
             box.add_item(discord.ui.TextDisplay('🔐 Accès réservé au membre, aux Responsables et aux Administrateurs.'))
         if not customized and row['kind']!='verification':box.add_item(discord.ui.TextDisplay('### 📝 Motif de l’échange\n'+fenced(row['reason'])))
         if not customized and row['kind']=='support':box.add_item(discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row['triggers'])+'\n-# 👥 Tous les Helpers, Helpers+ et Staff peuvent lire les échanges pour le conseil et la supervision.'))
