@@ -1,3 +1,4 @@
+const CommandDescriptionsPage=lazy(()=>import("./pages/CommandDescriptionsPage"));
 const AnonymousMessagesPage=lazy(()=>import("./pages/AnonymousMessagesPage"));
 const ModerationPromptPage=lazy(()=>import("./pages/ModerationPromptPage"));
 const WorkflowSettingsPage=lazy(()=>import("./pages/WorkflowSettingsPage"));
@@ -154,6 +155,7 @@ function AuthenticatedApp({
       <Suspense fallback={<Loading />}>
         <Routes>
 <Route path="/staff/messages-anonymes" element={(canSeeCasework||isHelper) ? <AnonymousMessagesPage/> : <Navigate to={defaultRoute} replace/>}/>
+<Route path="/responsable/commandes-discord" element={isResponsable ? <CommandDescriptionsPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/responsable/moderation-ia" element={isResponsable ? <ModerationPromptPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/responsable/parcours-discord" element={isResponsable ? <WorkflowSettingsPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/staff/dossiers/support" element={(canSeeCasework||isHelper) ? <SupportDossiersPage canReassign={isResponsable||isServerAdmin||isAdmin} canSeeMember360={canSeeOperateur}/> : <Navigate to={defaultRoute} replace/>}/>

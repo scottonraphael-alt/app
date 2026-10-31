@@ -45,16 +45,16 @@ class Form(discord.ui.Modal):
         self.age=discord.ui.RadioGroup(options=[discord.RadioGroupOption(label=label+' ans' if label!='26+' else '26 ans et plus',value=label) for label in AGE_GROUPS],required=True)
         self.reason=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,min_length=50,max_length=250)
         self.psychiatry=discord.ui.TextInput(style=discord.TextStyle.paragraph,required=True,min_length=120,max_length=1000)
-        self.rules=discord.ui.Checkbox(default=False)
+        self.rules=discord.ui.CheckboxGroup(required=True,min_values=1,max_values=1,options=[discord.CheckboxGroupOption(label='J’ai lu et j’accepte le règlement',value='accepted',default=False)])
         for label,component in [('Comment souhaites-tu être appelé ?',self.name),('Ta tranche d’âge',self.age),
             ('Pourquoi souhaites-tu nous rejoindre ?',self.reason),('Quel est ton avis sur la psychiatrie ?',self.psychiatry),
-            ('J’ai lu et j’accepte le règlement',self.rules)]:
+            ('Acceptation du règlement',self.rules)]:
             self.add_item(discord.ui.Label(text=label,component=component))
 
     async def on_submit(self,interaction):
         try:
             check_guild(interaction)
-            if self.rules.value is not True:raise HTTPException(422,'L’acceptation du règlement est obligatoire.')
+            if self.rules.values!=['accepted']:raise HTTPException(422,'L’acceptation du règlement est obligatoire.')
             await interaction.response.defer(ephemeral=True,thinking=True)
             user=interaction.user
             await service.submit({'id':str(user.id),'username':user.name,'display_name':user.display_name},

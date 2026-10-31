@@ -149,7 +149,7 @@ def test_views_and_required_form_can_be_serialized_offline():
     async def render():
         panel=Panel();staff=StaffPanel(MID,base_url='https://iris.example');form=Form()
         assert panel.to_components()[0]['type']==17 and staff.to_components()[0]['type']==17
-        assert len(form.children)==5 and not form.rules.default
+        assert len(form.children)==5 and not form.rules.options[0].default
         assert form.reason.required and form.psychiatry.required and form.age.required
     h.run(render())
 
