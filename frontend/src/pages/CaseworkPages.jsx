@@ -83,7 +83,7 @@ function CaseList({ kind }) {
     {data && <section className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
       <tbody>{data.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>
-        <td><State row={row} /></td><td>{row.assigned?.display_name || row.assigned?.id || 'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</tbody></table></div>
+        <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</tbody></table></div>
       {!data.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
       <footer className="cw-toolbar"><button className="cw-button" disabled={!offset} onClick={() => setOffset(n => Math.max(0, n - 25))}>Précédent</button>
         <span>Page {Math.floor(offset / 25) + 1} sur {Math.max(1, Math.ceil(data.total / 25))} · {data.total} dossiers</span>
@@ -140,7 +140,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
   const action = (name, extra = {}) => setConfirm({ action: name, revision: row.revision, ...extra });
   return <Frame kind={kind} title={row?.member?.display_name || row?.member?.username || 'Dossier du membre'} back refresh={() => setRefresh(n => n + 1)}>
     {error && <p role="alert" className="cw-alert">{error}</p>}{!row && !error && <p role="status">Chargement du dossier…</p>}
-    {row && <><section className="cw-strip"><State row={row} /><span>Intervenant : {row.assigned?.display_name || row.assigned?.id || 'À attribuer'}</span><span>Ouvert le {date(row.created_at)}</span>
+    {row && <><section className="cw-strip"><State row={row} /><span>Intervenant : {row.assigned?((row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible'))+' · '+row.assigned.id):'À attribuer'}</span><span>Ouvert le {date(row.created_at)}</span>
       {row.visibility !== 'staff' && <strong><LockKeyhole size={14} /> Accès confidentiel</strong>}</section>
       {row.discord_actions_enabled===false && <p className="cw-guide">La collecte et le suivi sont disponibles. La clôture Discord sera accessible après la bascule des commandes BotGhost vers Iris.</p>}
       {(row.closure?.error_type||row.closure?.cancel_error) && <p className="cw-alert">La clôture demande une vérification des accès, des fichiers ou des derniers messages. Le salon n’est pas annoncé comme supprimé. Un Responsable ou Administrateur peut reprendre l’action.</p>}

@@ -92,7 +92,22 @@ async def reveal(ident,actor):
     person=await db.anonymous_identities.find_one({'guild_id':guild(),'alias':row['alias']})
     if not person:raise HTTPException(404,'Identité introuvable.')
     await audit('anonymous.identity_revealed',str(actor),message_id=ident,alias=row['alias'])
-    return {'member_id':person['member_id'],'alias':row['alias']}
+    username=person.get('username')
+    display_name=person.get('display_name')
+    from services.discord_service import DiscordService
+    discord_service=DiscordService()
+    try:
+        profile=await discord_service.fetch_member(person['member_id'])
+        username=profile.username;display_name=profile.display_name
+    except HTTPException:
+        try:
+            user=await discord_service._get('/users/'+person['member_id'])
+            username=user.get('username') or username
+            display_name=user.get('global_name') or display_name
+        except HTTPException:pass
+    if username:
+        await db.anonymous_identities.update_one({'_id':person['_id']},{'$set':{'username':username,'display_name':display_name}})
+    return {'member_id':person['member_id'],'alias':row['alias'],'username':username,'display_name':display_name}
 
 class Refusal(discord.ui.Modal):
     def __init__(self,ident):

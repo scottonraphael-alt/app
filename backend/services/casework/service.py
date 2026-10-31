@@ -100,9 +100,31 @@ async def enroll(channel, opening, member, settings, *, assigned=None, initiator
     return row
 
 
+
+async def assignment_names(row,cache=None):
+    assigned=row.get('assigned') or {}
+    target=assigned.get('id')
+    if not target or assigned.get('username'):return row
+    cache=cache if cache is not None else {}
+    if target not in cache:
+        try:
+            from services.discord_service import DiscordService
+            profile=await DiscordService().fetch_member(target)
+            cache[target]={'id':target,'username':profile.username,'display_name':profile.display_name or profile.username}
+        except HTTPException:
+            cache[target]=assigned
+    snapshot=cache[target]
+    if snapshot.get('username'):
+        row={**row,'assigned':{**assigned,**snapshot}}
+        await db.case_tickets.update_one({'_id':row['_id'],'assigned.id':target},{'$set':{
+            'assigned.username':snapshot['username'],'assigned.display_name':snapshot['display_name']}})
+    return row
+
+
 async def get(case_id, actor_id, settings):
     row = await load(case_id, settings.guild_id)
     await policy.authorize(actor_id, row)
+    row=await assignment_names(row)
     return public(row)
 
 
@@ -115,6 +137,8 @@ async def listing(actor_id, settings, *, kind, archived=False, offset=0, limit=2
     if attention:
         query['$or'] = [{'assigned': None}, {'sync.status': 'error'}, {'status': 'closing'}]
     rows = await db.case_tickets.find(query).sort('updated_at', -1).skip(offset).limit(limit).to_list(limit)
+    cache={}
+    rows=[await assignment_names(row,cache) for row in rows]
     return {'items': [public(row, False) for row in rows],
             'total': await db.case_tickets.count_documents(query)}
 

@@ -165,3 +165,13 @@ def test_custom_review_and_reveal_after_refusal_are_private_and_authorized():
             assert it.followup.send.await_args.kwargs['ephemeral'] is True
     try:h.run(check())
     finally:workflow_panels.configure({})
+
+def test_revealed_username_is_not_included_in_history_after_reveal(monkeypatch):
+    from services.discord_service import DiscordService
+    monkeypatch.setattr(DiscordService,'fetch_member',AsyncMock(return_value=SimpleNamespace(username='private_author_789',display_name='Private Author')))
+    row=submit()
+    identity=h.run(service.reveal(row['_id'],RESP))
+    assert identity['username']=='private_author_789' and identity['member_id']==MEMBER
+    api=h.make_client(router.router)
+    response=api.get('/api/anonymous-messages',cookies=h.session_cookies('staff'))
+    assert 'private_author_789' not in response.text and MEMBER not in response.text

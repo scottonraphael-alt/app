@@ -627,3 +627,12 @@ def test_moderation_publication_reuses_existing_message(world):
         assert partial.edit.await_args.kwargs['view'].is_persistent()
         client.add_view.assert_called_once()
     h.run(check())
+
+def test_existing_assignment_with_only_id_is_enriched_for_display(world):
+    case=opened(world,kind='verification',actor=STAFF)
+    assert case['assigned']['id']==STAFF
+    enriched=h.run(service.get(case['id'],STAFF,policy.Settings()))
+    assert enriched['assigned']['id']==STAFF
+    assert enriched['assigned']['username']
+    stored=h.run(h.db.case_tickets.find_one({'_id':case['id']}))
+    assert stored['assigned']['username']==enriched['assigned']['username']

@@ -25,6 +25,6 @@ export default function AnonymousMessagesPage(){
  {selected&&<Modal title={'Message de '+selected.alias} eyebrow="HISTORIQUE ANONYME" onClose={()=>{setSelected(null);setIdentity(null);}}><div className="cw-modal cz-dialog-root"><span className="cw-state">{LABELS[selected.status]}</span><p>{selected.text}</p><p>Proposé le {date(selected.created_at)}</p>{selected.reviewer_id&&<p>Traité par {selected.reviewer_id} · {date(selected.decided_at)}</p>}{selected.reason&&<p><strong>Motif du refus :</strong> {selected.reason}</p>}{selected.sync_error&&<p className="cw-alert">{selected.sync_error}</p>}
  {selected.public_message_id&&<a className="cw-button" target="_blank" rel="noreferrer" href={'https://discord.com/channels/'+data?.guild_id+'/'+data?.public_channel_id+'/'+selected.public_message_id}>Voir la publication Discord ↗</a>}
  {data?.can_reveal&&!identity&&<button className="cw-button cw-danger" disabled={busy} onClick={reveal}><Eye size={16}/>Révéler l’auteur · action journalisée</button>}
- {identity&&<div className="cw-alert"><strong>Identité révélée : {identity.member_id}</strong><p>Cette consultation a été enregistrée.</p></div>}{error&&<p role="alert">{error}</p>}</div></Modal>}
+ {identity&&<div className="cw-alert"><strong>Identité révélée : {identity.username?'@'+identity.username:(identity.display_name||'Pseudo indisponible')} · {identity.member_id}</strong><p>Cette consultation a été enregistrée.</p></div>}{error&&<p role="alert">{error}</p>}</div></Modal>}
  </main>;
 }
