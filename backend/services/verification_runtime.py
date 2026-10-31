@@ -108,6 +108,14 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     if not row.get('active') and row.get('status') in service.FINAL:
         await cleanup_staff(client,row)
         return
+    automatic_advisory=False
+    if advisory is None:
+        from services.verification_auto_advisory import cached
+        generated=await cached(row['member_id'])
+        if generated:
+            automatic_advisory=True
+            advisory=generated['advisory']['summary']
+            reference_ids=generated['advisory']['reference_ids']
     guild = await guild_for(client)
     channel = await private_review_channel(guild)
     if not (row.get('member') or {}).get('avatar_url') and getattr(guild,'fetch_member',None):
@@ -169,7 +177,7 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     # Persist the receipt even if the form changed in flight. The old revision forces
     # a subsequent redaction/update, including after deletion of the last form.
     await db.verification_cases.update_one({'_id': row['_id']}, {'$set': {
-        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':8,'presentation_revision':panel_revision('form:verification'),'mini_presentation_revision':panel_revision('staff:verification'), 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory else None, 'advisory_reference_ids':reference_ids or []}}})
+        'staff_delivery': {**record, 'revision': row['revision'], 'layout_version':8,'presentation_revision':panel_revision('form:verification'),'mini_presentation_revision':panel_revision('staff:verification'), 'advisory_until':(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat() if advisory and not automatic_advisory else None, 'advisory_reference_ids':reference_ids or []}}})
     if row.get('forms'):
         client.add_view(view, message_id=int(record['message_id']))
 

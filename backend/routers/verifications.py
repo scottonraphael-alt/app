@@ -23,6 +23,9 @@ async def detail(member_id:str,request:Request,helper=Depends(current_helper)):
     result=await service.get(member_id,helper.id)
     await audit(request,helper,'viewed',member_id)
     from services.migration_runtime import discord_actions_enabled
+    from services.verification_auto_advisory import cached
+    generated=await cached(member_id)
+    result['automatic_advisory']=generated['advisory'] if generated else None
     result['discord_actions_enabled'] = discord_actions_enabled()
     return result
 

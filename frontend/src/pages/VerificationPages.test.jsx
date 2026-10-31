@@ -67,3 +67,10 @@ test('shows Discord cleanup errors while keeping the Iris archive readable',asyn
  expect(container.textContent).toContain('OasisLink doit pouvoir gérer les fils.');
  expect(container.textContent).toContain('Présentation personnelle');
 });
+
+test('displays automatically generated advice without a manual request',async()=>{
+ api.get.mockResolvedValue({data:{...row,automatic_advisory:{summary:'Préavis automatique disponible.',points:[],uncertainties:[],reference_ids:[]}}});
+ await render(<VerificationDetailPage/>);
+ expect(container.textContent).toContain('Préavis automatique disponible.');
+ expect(api.post).not.toHaveBeenCalled();
+});

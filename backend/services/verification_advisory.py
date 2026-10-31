@@ -1,8 +1,7 @@
-"""On-demand, non-binding advisory. Not scheduled and never applies decisions.
+"""Non-binding admission advice with provenance-checked automatic generation.
 
-No cross-case AI cache: removing a reference takes effect on the next analysis and
-there are no stored copies of its answers to purge elsewhere. Callers must not persist
-this result until the integration adds provenance-aware invalidation on example changes.
+Only the current candidate and curated references are sent to Anthropic.
+Cached output is usable only while the complete input fingerprint still matches.
 """
 import json
 import os
@@ -27,8 +26,8 @@ class Advisory(BaseModel):
     uncertainties:list[str]=Field(max_length=8)
     reference_ids:list[str]=Field(max_length=8)
 
-async def context(member_id,actor_id,*,rules):
-    await service.authority(actor_id)
+async def _context(member_id,actor_id,*,rules):
+    if actor_id is not None:await service.authority(actor_id)
     if not isinstance(rules,str) or not 20<=len(rules)<=10000:raise HTTPException(422,'Règles d’admission explicites requises.')
     row=await service.load(member_id)
     if not row['active'] or row['training'] or not row['forms']:raise HTTPException(409,'Le préavis nécessite un dossier réel en attente.')
@@ -57,8 +56,8 @@ def validate(text,context):
     if not set(result.reference_ids)<=available:raise ValueError('Référence inconnue.')
     return result.model_dump()
 
-async def generate(member_id,actor_id,*,rules):
-    data,form_id=await context(member_id,actor_id,rules=rules)
+async def _generate(member_id,actor_id,*,rules):
+    data,form_id=await _context(member_id,actor_id,rules=rules)
     if not service.config.ANTHROPIC_API_KEY:raise HTTPException(503,'Clé Anthropic non configurée.')
     model=os.getenv('VERIFICATION_AI_MODEL',service.config.TICKET_SUMMARY_MODEL).strip()
     async with AsyncAnthropic(api_key=service.config.ANTHROPIC_API_KEY,timeout=60,max_retries=1) as client:
@@ -80,9 +79,19 @@ async def generate(member_id,actor_id,*,rules):
     except (ValueError,TypeError):raise HTTPException(503,'Préavis non vérifiable. Le dossier reste disponible pour lecture humaine.') from None
     # A deleted/replaced form must never receive a stale AI response.
     current=await service.load(member_id)
-    await service.authority(actor_id)
+    if actor_id is not None:await service.authority(actor_id)
     if not current['forms'] or current['forms'][-1]['id']!=form_id or not current['active'] or current['training']:
         raise HTTPException(409,'Le dossier a changé pendant l’analyse.')
-    fresh_data,_=await context(member_id,actor_id,rules=rules)
+    fresh_data,_=await _context(member_id,actor_id,rules=rules)
     if fresh_data!=data:raise HTTPException(409,'Les références ont changé pendant l’analyse.')
     return {'form_id':form_id,'advisory':advisory,'binding':False,'generated_at':service.stamp()}
+
+
+async def context(member_id,actor_id,*,rules):
+    await service.authority(actor_id)
+    return await _context(member_id,actor_id,rules=rules)
+
+
+async def generate(member_id,actor_id,*,rules):
+    await service.authority(actor_id)
+    return await _generate(member_id,actor_id,rules=rules)

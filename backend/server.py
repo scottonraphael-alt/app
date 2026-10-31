@@ -11,6 +11,7 @@ from routers import command_descriptions
 from services.command_descriptions import run as run_command_descriptions
 from routers import anonymous_messages
 from services.anonymous_messages import run as run_anonymous_messages
+from services.verification_auto_advisory import run as run_verification_advisories
 from routers import moderation_prompt
 from routers import casework, verifications, workflow_settings
 from services.purgatory import run as run_purgatory
@@ -220,6 +221,7 @@ async def startup() -> None:
         asyncio.create_task(supervise("purgatory", run_purgatory(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("member_casework", run_migration_runtime(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("native_ticket_delivery", run_ticket_delivery(moderation_client, _feature_stop_event))),
+        asyncio.create_task(supervise("verification_advisories", run_verification_advisories(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("verification_delivery", run_verifications(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_crisis", run_ticket_crisis_loop(_feature_stop_event))),
         asyncio.create_task(supervise("sla", run_sla_loop(_feature_stop_event))),

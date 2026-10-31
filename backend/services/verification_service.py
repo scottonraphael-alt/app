@@ -233,7 +233,9 @@ async def delete_form(member_id,form_id,actor_id,payload):
     if not changed['forms']:changed.update(status='empty',active=False,claimed_by=None)
     elif form_id==row['forms'][-1]['id']:
         last=changed['forms'][-1];changed.update(status=last['status'],active=last['status'] not in FINAL|{'historical_unknown'},claimed_by=None)
-    return public(await save(row,changed))
+    saved=await save(row,changed)
+    await db.verification_advisories.delete_many({'$or':[{'_id':key(member_id)},{'result.advisory.reference_ids':form_id}]})
+    return public(saved)
 
 async def review_example(member_id,form_id,actor_id,payload):
     await authority(actor_id,responsable=True);payload=ExampleReview.model_validate(payload);row=await load(member_id)

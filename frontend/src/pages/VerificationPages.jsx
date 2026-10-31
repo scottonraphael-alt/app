@@ -49,7 +49,7 @@ function VerificationDetail({memberId,responsable,canReassign}) {
   const nonce=useRef(null);
   useEffect(()=>{let live=true;setData(null);setLoading(true);setError('');setReview(null);setAdmin(null);setAdvisory(null);nonce.current=null;
     if(!/^\d{17,20}$/.test(memberId)){setError('Identifiant de membre invalide.');setLoading(false);return;}
-    api.get(`${BASE}/${memberId}`).then(r=>{if(live)setData(r.data);}).catch(e=>{if(live)setError(failure(e));}).finally(()=>{if(live)setLoading(false);});return ()=>{live=false;};
+    api.get(`${BASE}/${memberId}`).then(r=>{if(live){setData(r.data);setAdvisory(r.data.automatic_advisory||null);}}).catch(e=>{if(live)setError(failure(e));}).finally(()=>{if(live)setLoading(false);});return ()=>{live=false;};
   },[memberId,refresh]);
   useEffect(()=>{if(data?.ticket_requested&&action==='ticket')setAction('claim');},[data?.ticket_requested,action]);
   async function send(payload) {
@@ -71,11 +71,11 @@ function VerificationDetail({memberId,responsable,canReassign}) {
   const outstanding=data?.jobs?.some(job=>['pending','running','uncertain','retry'].includes(job.status));
   const cleanupPending=Boolean(data?.discord_cleanup&&data.discord_cleanup.status!=='done');
   useEffect(()=>{
-    if(!outstanding&&!cleanupPending)return;
+    if(!outstanding&&!cleanupPending&&!(data?.active&&!data?.training&&!advisory))return;
     let live=true;
-    const timer=setInterval(()=>{if(document.visibilityState==='visible')api.get(`${BASE}/${memberId}`).then(r=>{if(live)setData(r.data);}).catch(()=>{});},3000);
+    const timer=setInterval(()=>{if(document.visibilityState==='visible')api.get(`${BASE}/${memberId}`).then(r=>{if(live){setData(r.data);setAdvisory(r.data.automatic_advisory||null);}}).catch(()=>{});},outstanding||cleanupPending?3000:10000);
     return ()=>{live=false;clearInterval(timer);};
-  },[memberId,outstanding,cleanupPending]);
+  },[memberId,outstanding,cleanupPending,data?.active,data?.training,advisory]);
   async function analyze() {
     setBusy(true);setError('');setAdvisory(null);
     try {const r=await api.post(`${BASE}/${memberId}/advisory`);setAdvisory(r.data.advisory);}catch(e){setError(failure(e));}finally{setBusy(false);}

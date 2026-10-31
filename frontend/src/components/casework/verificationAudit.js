@@ -5,6 +5,7 @@ export const VERIFICATION_AUDIT_LABELS = {
   'verification.deleted':'Formulaire supprimé', 'verification.example_reviewed':'Référence IA revue',
   'verification.effect.confirmed':'Étape Discord confirmée', 'verification.effect.retry_requested':'Reprise de décision demandée',
   'verification.panel.published':'Panneau de vérification publié', 'verification.sanction.executing':'Application d’une décision de vérification',
+  'verification.advisory_generated':'Préavis IA généré automatiquement', 'advisory_generated':'Préavis IA généré automatiquement',
   'verification.advisory_requested':'Préavis IA demandé', 'verification.advisory_completed':'Préavis IA consultable',
   'verification.history_import_requested':'Import des anciens formulaires demandé', 'verification.history_import_viewed':'Progression de l’import consultée',
 };
