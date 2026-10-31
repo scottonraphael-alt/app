@@ -207,7 +207,7 @@ def test_every_custom_panel_contains_only_custom_text_and_functional_controls(ke
     panels.configure(panels.validate({key:{'blocks':[{'text':custom}]}}))
     async def check():
         row={'_id':'request','member_id':'123','actor_id':'456','assigned_id':'456',
-             'decision_by':'456','reviewer_id':'456','status':'open','visibility':'restricted','guild_id':'987','channel_id':'654',
+             'decision_by':'456','reviewer_id':'456','status':'open','visibility':'staff','guild_id':'987','channel_id':'654',
              'kind':'support','reason':'AUTOMATIC_REASON','triggers':'AUTOMATIC_TRIGGERS','confidential':True,
              'alias':'ANO-AB12-CD','text':'Anonymous content'}
         if key=='public:moderation':view=commands.StaffMenu()
@@ -278,3 +278,19 @@ def test_advisory_variable_keeps_the_complete_summary_beyond_300_characters():
     summary='Une lecture attentive des réponses est nécessaire. '*12+'Fin du préavis.'
     assert 300<len(summary)<1000
     assert panels.values({'advisory':summary})['avis_ia']==summary
+
+
+@pytest.mark.parametrize('kind',['verification','contact_staff','bubble','summons'])
+def test_custom_restricted_room_notice_is_below_selector_and_disappears_when_lifted(kind):
+    panels.configure(panels.validate({'room:'+kind:{'blocks':[{'text':'Texte personnalisé'}]}}))
+    async def check():
+        row={'kind':kind,'member_id':'123','actor_id':'456','reason':'Motif','visibility':'restricted'}
+        components=commands.RoomPanel('request',row=row).to_components()[0]['components']
+        select_index=next(i for i,c in enumerate(components) if c['type']==1)
+        assert components[select_index+1]['type']==14
+        assert components[select_index+1]['spacing']==2
+        assert components[select_index+2]['content'].startswith('### 🔒 Ticket restreint')
+        assert 'Administrateurs' in components[select_index+2]['content']
+        row['visibility']='staff'
+        assert 'Ticket restreint' not in str(commands.RoomPanel('request',row=row).to_components())
+    h.run(check())

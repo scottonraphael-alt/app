@@ -89,7 +89,8 @@ class Panel(BaseModel):
 
 
 def text_limit(key):
-    return 4000
+    # Reserve room for the mandatory restriction notice beneath the selector.
+    return 3700 if key in ('room:verification','room:contact_staff','room:bubble','room:summons') else 4000
 
 
 def expanded_size(blocks):
@@ -174,4 +175,4 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 
 def revision(key):
-    return hashlib.sha256(json.dumps({'layout':5,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps({'layout':6,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]

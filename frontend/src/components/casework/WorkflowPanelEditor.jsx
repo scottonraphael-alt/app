@@ -34,7 +34,7 @@ const previewText=text=>(text||'').replace(/\{(membre_id|membre_username|membre|
 export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCatalogue=PANELS}){
  const [key,setKey]=useState('public:support');
  const panel=value[key]||empty();
- const limit=4000;
+ const limit=['room:verification','room:contact_staff','room:bubble','room:summons'].includes(key)?3700:4000;
  const sizes={membre_id:20,membre_username:32,membre:24,interlocuteur:24,traite_par:24,date_traitement:40,salon:95,avis_ia:1000,identifiant_anonyme:11,message_anonyme:3000,statut:40,motif:1000,triggers:1000,motif_refus:1000,reponses_formulaire:2200};
  const used=(panel.blocks||[]).filter(b=>['text','section'].includes(b.kind)).reduce((n,b)=>n+(b.text||'').replace(/\{(membre_id|membre_username|membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme|statut|motif|triggers|motif_refus|reponses_formulaire)\}/g,(_,name)=>'x'.repeat(sizes[name])).length,0);
  const update=next=>onChange({...value,[key]:next});

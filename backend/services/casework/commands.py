@@ -169,6 +169,9 @@ class RoomPanel(discord.ui.LayoutView):
                 await choose_room_action(interaction,request['case_id'],select.values[0])
             except Exception as exc:await error(interaction,exc)
         select.callback=chosen;box.add_item(discord.ui.ActionRow(select))
+        if row['kind'] in ('verification','contact_staff','bubble','summons') and row.get('visibility')=='restricted':
+            box.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+            box.add_item(discord.ui.TextDisplay('### 🔒 Ticket restreint à l’administration\nSeuls le membre concerné et les Administrateurs peuvent lire et poursuivre cet échange. Les autres membres du Staff n’ont plus accès au ticket.'))
         if not customized:box.add_item(discord.ui.TextDisplay('-# 🗂️ Le dossier et son historique sont consultables dans Iris.'))
         self.add_item(box)
 
