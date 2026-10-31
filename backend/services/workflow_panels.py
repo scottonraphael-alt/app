@@ -42,9 +42,9 @@ def values(row):
     def short(value,units):
         return str(value or 'Non renseigné').encode('utf-16-le')[:units*2].decode('utf-16-le','ignore')
     answers=row.get('answers') or {}
-    fields=[('name','Prénom / pseudo'),('age','Tranche d’âge'),('reason','Motif de venue'),('psychiatry','Avis sur la psychiatrie')]
-    response='\n\n'.join('### '+label+'\n'+short(answers.get(key),450).replace('`','ˋ') for key,label in fields)
-    response+='\n\nRèglement accepté : '+('Oui' if answers.get('rules') else 'Non renseigné')
+    fields=[('name','👤 Prénom / pseudo',80),('age','🎂 Tranche d’âge',24),('reason','🌱 Motif de venue',500),('psychiatry','💬 Avis sur la psychiatrie',1300)]
+    response='\n'.join('### '+label+'\n```\n'+short(answers.get(key),limit).strip().replace('`','ˋ')+'\n```' for key,label,limit in fields)
+    response+='\n-# '+('✅ Règlement accepté : Oui' if answers.get('rules') else '⚠️ Règlement accepté : Non renseigné')
     return {'membre_id':str(row.get('member_id') or 'ID indisponible'),'membre_username':str(row.get('member_username') or (row.get('member') or {}).get('username') or 'Pseudo indisponible')[:32],
         'motif':short(row.get('reason'),1000),'triggers':short(row.get('triggers'),1000),
         'motif_refus':short(row.get('decision_reason') or row.get('reason'),1000),
@@ -174,4 +174,4 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 
 def revision(key):
-    return hashlib.sha256(json.dumps({'layout':3,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps({'layout':4,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]

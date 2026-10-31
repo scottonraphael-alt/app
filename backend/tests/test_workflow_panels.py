@@ -248,3 +248,27 @@ def test_member_id_and_username_are_plain_values_and_forbidden_on_anonymous_pane
     for variable in ('membre_id','membre_username'):
         with pytest.raises(HTTPException):
             panels.validate({'anonymous:review':{'blocks':[{'text':'{message_anonyme} {'+variable+'}'}]}})
+
+
+def test_form_answers_variable_is_compact_fenced_and_bounded():
+    text=panels.values({'answers':{'name':'Alex```\n# injection','age':'26+','reason':'Bonjour','psychiatry':'Un avis','rules':True}})['reponses_formulaire']
+    for label in ('👤 Prénom / pseudo','🎂 Tranche d’âge','🌱 Motif de venue','💬 Avis sur la psychiatrie'):
+        assert '### '+label+'\n```\n' in text
+    assert text.count('```')==8
+    assert 'Alexˋˋˋ' in text
+    assert '\n\n\n' not in text
+    assert text.endswith('-# ✅ Règlement accepté : Oui')
+    longest=panels.values({'answers':{key:'😀'*3000 for key in ('name','age','reason','psychiatry')}})['reponses_formulaire']
+    assert len(longest.encode('utf-16-le'))//2<=panels.VARIABLES['reponses_formulaire']
+
+
+def test_verification_form_action_colors():
+    from services.verification_discord import StaffForm
+    async def check():
+        row={'active':True,'status':'waiting','jobs':[],'forms':[{'answers':{}}]}
+        view=StaffForm('123',base_url='https://example.com',row=row)
+        buttons={item.custom_id.rsplit(':',1)[-1]:item for item in view.walk_children() if isinstance(item,discord.ui.Button) and item.custom_id}
+        assert buttons['approve'].style==discord.ButtonStyle.success
+        assert buttons['ticket'].style==discord.ButtonStyle.primary
+        assert buttons['close'].style==discord.ButtonStyle.danger
+    h.run(check())

@@ -97,7 +97,7 @@ def staff_buttons(owner,row,choices):
     blocked=bool(row and (not row.get('active') or any(j['status'] in ('pending','running','uncertain','retry') for j in row.get('jobs',[]))))
     for action,label in choices:
         if action=='ticket' and service.ticket_requested(row or {}):continue
-        style=discord.ButtonStyle.primary if action=='claim' else discord.ButtonStyle.success if action=='approve' else discord.ButtonStyle.secondary
+        style=discord.ButtonStyle.primary if action in ('claim','ticket') else discord.ButtonStyle.success if action=='approve' else discord.ButtonStyle.danger if action=='close' else discord.ButtonStyle.secondary
         button=discord.ui.Button(label=label,style=style,custom_id=f'iris:verification:{owner.member_id}:{action}')
         button.disabled=blocked or bool(action=='claim' and row and row.get('claimed_by'))
         button.callback=owner.callback_for(action);actions.add_item(button)
