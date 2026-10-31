@@ -15,7 +15,7 @@ def test_editor_validates_destinations_and_bounded_content():
     with pytest.raises(HTTPException):
         panels.validate({'public:support':{'blocks':[{'kind':'image','url':'http://127.0.0.1/image'}]}})
     with pytest.raises(HTTPException):
-        panels.validate({'public:support':{'blocks':[{'text':'a'*400},{'text':'b'*400}]}})
+        panels.validate({'public:support':{'blocks':[{'text':'a'*2500},{'text':'b'*2500}]}})
     with pytest.raises(HTTPException):
         panels.validate({'unknown':{}})
 
@@ -147,4 +147,34 @@ def test_form_advisory_variable_and_default_section():
         view=StaffForm('123',base_url='https://example.com',row=row,advisory='Autre avis.')
         assert 'Autre avis.' in str(view.to_components()) and '{avis_ia}' not in str(view.to_components())
         assert 'non généré' in panels.render_text('{avis_ia}',{})
+    h.run(check())
+
+@pytest.mark.parametrize('key',list(panels.KEYS))
+def test_panel_accepts_its_full_text_budget_and_rejects_excess(key):
+    limit=panels.text_limit(key)
+    assert panels.validate({key:{'blocks':[{'text':'a'*limit}]}})
+    with pytest.raises(HTTPException):
+        panels.validate({key:{'blocks':[{'text':'a'*limit},{'text':'b'}]}})
+
+def test_form_with_large_custom_text_keeps_discord_text_budget():
+    from services.verification_discord import StaffForm
+    panels.configure(panels.validate({'form:verification':{'blocks':[{'text':'a'*2000}]}}))
+    async def check():
+        row={'member_id':'123','active':True,'status':'waiting','forms':[{'answers':{key:'😀'*1500 for key in ('name','age','reason','psychiatry')}}]}
+        view=StaffForm('123',base_url='https://example.com',row=row)
+        count=sum(len(c.content.encode('utf-16-le'))//2 for c in view.walk_children() if isinstance(c,discord.ui.TextDisplay))
+        assert count<=4000
+        assert 'Réponses abrégées' in str(view.to_components())
+    h.run(check())
+
+@pytest.mark.parametrize('key',['request:support','review:support'])
+def test_large_support_custom_text_with_long_automatic_fields_stays_sendable(key):
+    from services.casework.native import support_receipt
+    panels.configure(panels.validate({key:{'blocks':[{'text':'a'*panels.text_limit(key)}]}}))
+    async def check():
+        row={'_id':'request','kind':'support','member_id':'123','guild_id':'987','channel_id':'654','status':'refused',
+             'reason':'😀'*2000,'triggers':'😀'*2000,'decision_reason':'😀'*1500,'decision_by':'456'}
+        view=commands.SupportDecision(row) if key.startswith('request:') else support_receipt(row)
+        count=sum(len(c.content.encode('utf-16-le'))//2 for c in view.walk_children() if isinstance(c,discord.ui.TextDisplay))
+        assert count<=4000
     h.run(check())

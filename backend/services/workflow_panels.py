@@ -37,7 +37,7 @@ def values(row):
     try:
         if row.get('decided_at'):stamp=f"<t:{int(datetime.fromisoformat(row['decided_at']).timestamp())}:F>"
     except (ValueError,TypeError):pass
-    return {'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.')[:300],
+    return {'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:600].decode('utf-16-le','ignore'),
         'membre':mention(row.get('member_id'),'Membre à sélectionner'),
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
@@ -62,7 +62,7 @@ def render_text(text,row):
 class Block(BaseModel):
     model_config=ConfigDict(extra='forbid')
     kind:Literal['text','section','separator','image','link']='text'
-    text:str=Field(default='',max_length=700)
+    text:str=Field(default='',max_length=4000)
     url:str=Field(default='',max_length=512)
     label:str=Field(default='',max_length=80)
 
@@ -74,6 +74,24 @@ class Panel(BaseModel):
     blocks:list[Block]=Field(default_factory=list,max_length=5)
 
 
+def text_limit(key):
+    if key.startswith('public:'):return 4000
+    if key.startswith('room:'):return 3600
+    return {'request:support':1200,'review:support':1400,'form:verification':2000}.get(key,3600)
+
+
+def expanded_size(blocks):
+    return sum(len(b.text.encode('utf-16-le'))//2 + sum(b.text.count('{'+name+'}')*max(0,size-len(name)-2) for name,size in VARIABLES.items()) for b in blocks if b.kind in ('text','section'))
+
+
+def form_answer_limit():
+    panel=_cache.get('form:verification') or {}
+    if not panel.get('blocks'):return 1500
+    size=expanded_size(Panel.model_validate(panel).blocks)
+    # Reserve labels, status, actions and decisions; allow two UTF-16 units per character.
+    return max(100,min(1500,(4000-size-1000)//8))
+
+
 def validate(panels):
     if set(panels)-set(KEYS):
         raise HTTPException(422,'Panneau inconnu.')
@@ -83,8 +101,6 @@ def validate(panels):
             panel=Panel.model_validate(value)
         except ValidationError:
             raise HTTPException(422,"Vérifie les types de blocs, leurs champs et la couleur du panneau.") from None
-        if sum(len((b.text+b.label).encode('utf-16-le'))//2 for b in panel.blocks)>700:
-            raise HTTPException(422,'Limite de 700 caractères par panneau personnalisé, pour conserver les informations du dossier.')
         for b in panel.blocks:
             if b.kind in ('text','section') and not b.text.strip():
                 raise HTTPException(422,'Un bloc texte ne peut pas être vide.')
@@ -102,9 +118,13 @@ def validate(panels):
             if key.startswith('public:') and TOKEN.search(b.text):
                 raise HTTPException(422,'Un panneau public ne connaît pas encore le membre : utilisez les variables dans un ticket ou une demande.')
         # Budget the maximum expansion before Discord receives a message.
-        expanded=sum(len((b.text+b.label).encode('utf-16-le'))//2 + sum(b.text.count('{'+name+'}')*max(0,size-len(name)-2) for name,size in VARIABLES.items()) for b in panel.blocks)
-        if expanded>700:
-            raise HTTPException(422,'Le texte, mentions comprises, dépasse la place disponible (700 caractères).')
+        expanded=expanded_size(panel.blocks)
+        limit=text_limit(key)
+        if expanded>limit:
+            raise HTTPException(422,f'Ce panneau dispose de {limit} caractères, variables comprises. Le reste est réservé aux informations automatiques Discord.')
+        for b in panel.blocks:
+            if b.kind=='image' and len(b.text.encode('utf-16-le'))//2>1024:
+                raise HTTPException(422,'La description d’une image est limitée à 1 024 caractères.')
         result[key]=panel.model_dump()
     return result
 

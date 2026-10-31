@@ -140,8 +140,12 @@ class StaffForm(StaffActions,discord.ui.LayoutView):
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+render_text('{avis_ia}',context)))
         box.add_item(discord.ui.Separator())
         form=row['forms'][-1]
+        from services.workflow_panels import form_answer_limit
+        answer_limit=form_answer_limit()
         for key,title in [('name','👤 Prénom / pseudo'),('age','🎂 Tranche d’âge'),('reason','🌱 Motif de venue'),('psychiatry','💬 Avis sur la psychiatrie')]:
-            box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key))))
+            box.add_item(discord.ui.TextDisplay('### '+title+'\n'+fence(form['answers'].get(key),limit=answer_limit)))
+        if any(len(str(form['answers'].get(key) or ''))>answer_limit for key in ('name','age','reason','psychiatry')):
+            box.add_item(discord.ui.TextDisplay('-# Réponses abrégées pour tenir dans Discord. Le formulaire complet reste disponible dans Iris.'))
         box.add_item(discord.ui.TextDisplay('-# Règlement accepté : '+('Oui' if form['answers'].get('rules') else 'Non renseigné')))
         box.add_item(discord.ui.Separator())
         box.add_item(staff_buttons(self,row,[('approve','Valider'),('ticket','Créer un ticket'),('close','Clore sans expulser')]))

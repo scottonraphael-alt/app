@@ -331,8 +331,8 @@ def support_receipt(row):
     box=discord.ui.Container(discord.ui.TextDisplay('## '+title),
         discord.ui.TextDisplay(f"### 👤 Demande de <@{row['member_id']}>"),
         discord.ui.Separator(),
-        discord.ui.TextDisplay('### 📝 Motif de la demande\n'+fenced(row['reason'][:700])),
-        discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row.get('triggers','')[:700])),
+        discord.ui.TextDisplay('### 📝 Motif de la demande\n'+fenced(row['reason'].encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))),
+        discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row.get('triggers','').encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))),
         discord.ui.Separator(),
         discord.ui.TextDisplay(('### 🤝 Acceptée par ' if accepted else '### Décision de ')+f"<@{row.get('decision_by') or row.get('assigned_id')}>"),
         accent_colour=0x73A594 if accepted else 0xB78B58)
@@ -342,7 +342,7 @@ def support_receipt(row):
         stamp=int(datetime.fromisoformat(row['decided_at']).timestamp())
         box.add_item(discord.ui.TextDisplay(f'📅 <t:{stamp}:F>'))
     if not accepted:
-        box.add_item(discord.ui.TextDisplay('### Explication\n'+fenced(row.get('decision_reason','')[:700])))
+        box.add_item(discord.ui.TextDisplay('### Explication\n'+fenced(row.get('decision_reason','').encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))))
     if accepted:
         box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Ouvrir le salon de soutien',emoji='🌸',
             style=discord.ButtonStyle.link,url=f"https://discord.com/channels/{row['guild_id']}/{row['channel_id']}")))
