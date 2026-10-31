@@ -105,12 +105,15 @@ Réponds uniquement par un objet JSON : {"summary": "3 phrases max", "key_points
 
 
 async def build_summary(ticket: dict) -> dict:
+    from services.analysis_prompts import resolve
+    system=await resolve('copilot',SUMMARY_SYSTEM)
+    system+='\nFormat obligatoire : objet JSON avec summary (texte), key_points (liste de textes), last_member_mood (texte). Aucun fait inventé ni diagnostic.'
     messages = recent_messages(ticket)
     result = None
     if ticket_crisis.llm_available() and messages:
         payload = [{"auteur": _role_of(ticket, m), "message": str(m.get("content", ""))[:1000]} for m in messages]
         data = ticket_crisis.parse_json_object(
-            await ticket_crisis.call_llm(SUMMARY_SYSTEM, json.dumps({"messages": payload}, ensure_ascii=False), 700))
+            await ticket_crisis.call_llm(system, json.dumps({"messages": payload}, ensure_ascii=False), 700))
         if data and isinstance(data.get("summary"), str) and data["summary"].strip():
             points = [_clip(p, 200) for p in (data.get("key_points") or []) if isinstance(p, str) and p.strip()][:5]
             mood = data.get("last_member_mood")

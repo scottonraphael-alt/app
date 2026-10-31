@@ -19,3 +19,18 @@ def test_prompt_requires_responsable_and_revision_and_markers():
     assert 'Échelle des sanctions.' in ai.build_system_prompt(response.json())
     assert client.put('/api/responsable/moderation-prompt',json=data,cookies=h.session_cookies('responsable')).status_code==409
     assert client.get('/api/responsable/moderation-prompt',cookies=h.session_cookies('responsable')).json()['prompt']==data['prompt']
+
+
+@pytest.mark.parametrize('key',['ticket_summary','verification','copilot'])
+def test_analysis_prompts_permissions_revision_and_runtime_resolution(key):
+    from services.analysis_prompts import resolve
+    client=h.make_client(route.router);url='/api/responsable/moderation-prompt/analyses/'+key
+    assert client.get(url,cookies=h.session_cookies('staff')).status_code==403
+    initial=client.get(url,cookies=h.session_cookies('responsable')).json()
+    assert len(initial['prompt'])>=100
+    data={'revision':0,'prompt':'Consignes personnalisées pour une analyse factuelle et claire. '*5}
+    assert client.put(url,json=data,cookies=h.session_cookies('staff')).status_code==403
+    saved=client.put(url,json=data,cookies=h.session_cookies('responsable'))
+    assert saved.status_code==200
+    assert h.run(resolve(key,'default'))==data['prompt']
+    assert client.put(url,json=data,cookies=h.session_cookies('responsable')).status_code==409

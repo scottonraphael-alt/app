@@ -4,7 +4,7 @@ const GROUPS=[
  {title:'Discord et IA',intro:'Configurer le bot et préparer les messages.',tone:'violet',links:[
   ['/responsable/commandes-discord','Descriptions des commandes',Terminal],
   ['/responsable/parcours-discord','Parcours, rôles et panneaux',Settings2],
-  ['/responsable/moderation-ia','Prompt de modération IA',BrainCircuit],
+  ['/responsable/moderation-ia','Prompts de l’IA',BrainCircuit],
   ['/responsable/annonces','Composer une annonce',Megaphone],
  ]},
  {title:'Sécurité et archives',intro:'Contrôler les accès et retrouver les traces.',tone:'clay',links:[

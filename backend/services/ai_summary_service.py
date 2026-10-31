@@ -115,6 +115,9 @@ async def heartbeat_chunks(source):
 
 async def stream_summary(ticket: dict, helper_id: str):
     ensure_ai_configuration()
+    from services.analysis_prompts import resolve
+    system=await resolve('ticket_summary',SYSTEM_PROMPT)
+    system+='\nFormat obligatoire : objet JSON avec context, expressed_needs, actions, next_follow_up ; chaque valeur limitée à 800 caractères.'
     prompt=summary_input(ticket)
     yield "progress", "Claude prépare la synthèse…"
     try:
@@ -124,7 +127,7 @@ async def stream_summary(ticket: dict, helper_id: str):
                 chunks=[]
                 try:
                     async with client.messages.stream(
-                        model=TICKET_SUMMARY_MODEL,max_tokens=budget,system=SYSTEM_PROMPT,
+                        model=TICKET_SUMMARY_MODEL,max_tokens=budget,system=system,
                         **generation_options(TICKET_SUMMARY_MODEL),
                         messages=[{"role":"user","content":prompt}],
                     ) as stream:

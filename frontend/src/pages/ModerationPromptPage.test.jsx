@@ -17,3 +17,17 @@ test('shows current moderation instructions and confirms a saved revision',async
   expect(host.querySelector('[role="status"]').textContent).toContain('prochaines analyses');
  }finally{await act(async()=>root.unmount());host.remove();}
 });
+
+test.each([['Résumé des suivis','ticket_summary'],['Préavis des vérifications','verification'],['Copilote des suivis','copilot']])('edits %s independently',async(label,key)=>{
+ const data={revision:2,prompt:'Consignes enregistrées pour cette analyse. '.repeat(5),default_prompt:'Consignes par défaut. '.repeat(8)};
+ api.get.mockResolvedValue({data});api.put.mockResolvedValue({data:{...data,revision:3}});
+ const host=document.createElement('div');document.body.append(host);const root=createRoot(host);
+ try{
+  await act(async()=>root.render(<Page/>));
+  await act(async()=>[...host.querySelectorAll('nav button')].find(b=>b.textContent===label).click());
+  expect(api.get).toHaveBeenLastCalledWith('/responsable/moderation-prompt/analyses/'+key);
+  expect(host.querySelectorAll('textarea')).toHaveLength(1);
+  await act(async()=>host.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  expect(api.put).toHaveBeenLastCalledWith('/responsable/moderation-prompt/analyses/'+key,{revision:2,prompt:data.prompt});
+ }finally{await act(async()=>root.unmount());host.remove();}
+});

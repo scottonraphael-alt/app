@@ -43,3 +43,37 @@ async def save(data:PromptIn,request:Request,helper=Depends(current_responsable)
         except DuplicateKeyError:raise HTTPException(409,'Le prompt a changé.')
     await log_auth_event('moderation.prompt.updated',request,helper=helper,status_code=200,details={'revision':row['revision']})
     return {k:row[k] for k in ('revision','prompt','rules','sanctions')}
+
+
+class AnalysisPromptIn(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    revision:int=Field(ge=0)
+    prompt:str=Field(min_length=100,max_length=20000)
+
+
+@router.get('/analyses/{key}')
+async def get_analysis(key:str,request:Request,helper=Depends(current_responsable)):
+    from services.analysis_prompts import default
+    original=default(key)
+    row=await db.ai_configuration.find_one({'_id':'analysis-prompt:'+key})
+    await log_auth_event('analysis.prompt.viewed',request,helper=helper,status_code=200,details={'key':key})
+    return {'revision':(row or {}).get('revision',0),'prompt':(row or {}).get('prompt',original),'default_prompt':original}
+
+
+@router.put('/analyses/{key}')
+async def save_analysis(key:str,data:AnalysisPromptIn,request:Request,helper=Depends(current_responsable)):
+    from services.analysis_prompts import default
+    original=default(key);identifier='analysis-prompt:'+key
+    old=await db.ai_configuration.find_one({'_id':identifier})
+    if (old or {}).get('revision',0)!=data.revision:raise HTTPException(409,'Le prompt a changé. Actualise avant d’enregistrer.')
+    await log_auth_event('analysis.prompt.update_requested',request,helper=helper,status_code=200,details={'key':key})
+    row={'_id':identifier,**data.model_dump(),'revision':data.revision+1}
+    if old:
+        result=await db.ai_configuration.replace_one({'_id':identifier,'revision':data.revision},row)
+        if not result.matched_count:raise HTTPException(409,'Le prompt a changé.')
+    else:
+        try:await db.ai_configuration.insert_one(row)
+        except DuplicateKeyError:raise HTTPException(409,'Le prompt a changé.')
+    if key=='copilot':await db.tickets.update_many({}, {'$unset':{'copilot_summary':''}})
+    await log_auth_event('analysis.prompt.updated',request,helper=helper,status_code=200,details={'key':key,'revision':row['revision']})
+    return {'revision':row['revision'],'prompt':row['prompt'],'default_prompt':original}
