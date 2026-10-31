@@ -163,7 +163,18 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         box=discord.ui.Container(discord.ui.TextDisplay('## '+title),
             discord.ui.TextDisplay(f'### 👤 Formulaire de <@{self.member_id}>'),
             discord.ui.TextDisplay(staff_status(row)),accent_colour=0x846594)
-        if advisory:
+        from services.workflow_panels import apply as apply_panel
+        presentation=discord.ui.Container()
+        custom=apply_panel(presentation,'staff:verification',row={
+            'member_id':self.member_id,'assigned_id':(row or {}).get('claimed_by'),'advisory':advisory,
+            'member_avatar_url':((row or {}).get('member') or {}).get('avatar_url')})
+        if custom:
+            box.clear_items()
+            box.accent_colour=presentation.accent_colour
+            for item in list(presentation.children):
+                presentation.remove_item(item);box.add_item(item)
+            box.add_item(discord.ui.TextDisplay(f'👤 <@{self.member_id}>\n'+staff_status(row)))
+        if advisory and not custom:
             short=str(advisory).encode('utf-16-le')[:600].decode('utf-16-le','ignore')
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+short+'\n-# Analyse complète dans Iris. Ce préavis ne prend aucune décision.'))
         box.add_item(staff_buttons(self,row,[('claim','Je m’en occupe')]))

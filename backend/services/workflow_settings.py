@@ -32,7 +32,7 @@ class SettingsIn(BaseModel):
     ids:dict[str,str]=Field(default_factory=dict,max_length=25)
     gifs:list[str]=Field(default_factory=list,max_length=4)
     admission_rules:str=Field(default='',max_length=10000)
-    panels:dict=Field(default_factory=dict,max_length=12)
+    panels:dict=Field(default_factory=dict,max_length=13)
     purgatory_responsables:bool=False
 
 

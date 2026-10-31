@@ -116,7 +116,10 @@ def test_moderation_custom_presentation_preserves_persistent_member_selector():
 def test_every_editor_entry_is_connected_to_its_discord_renderer(key):
     panels.configure(panels.validate({key:{'blocks':[{'text':'CONTENU PERSONNALISÉ'}]}}))
     async def check():
-        if key=='form:verification':
+        if key=='staff:verification':
+            from services.verification_discord import StaffPanel
+            view=StaffPanel('123',base_url='https://example.com',row={'status':'waiting','active':True})
+        elif key=='form:verification':
             from services.verification_discord import StaffForm
             view=StaffForm('123',base_url='https://example.com',row={'member_id':'123','status':'waiting','active':True,'forms':[{'answers':{}}]})
         elif key=='public:moderation':view=commands.StaffMenu()
@@ -177,4 +180,20 @@ def test_large_support_custom_text_with_long_automatic_fields_stays_sendable(key
         view=commands.SupportDecision(row) if key.startswith('request:') else support_receipt(row)
         count=sum(len(c.content.encode('utf-16-le'))//2 for c in view.walk_children() if isinstance(c,discord.ui.TextDisplay))
         assert count<=4000
+    h.run(check())
+
+def test_custom_mini_panel_preserves_claim_links_and_current_status():
+    from services.verification_discord import StaffPanel
+    panels.configure(panels.validate({'staff:verification':{'blocks':[{'text':'# Dossier de {membre}\n{avis_ia}'}]}}))
+    async def check():
+        view=StaffPanel('123',base_url='https://example.com',row={'status':'waiting','active':True},
+            advisory='Préavis disponible.',thread_url='https://discord.com/channels/1/2/3')
+        payload=str(view.to_components())
+        assert 'Dossier de <@123>' in payload and 'Préavis disponible.' in payload
+        assert '{avis_ia}' not in payload and 'En attente' in payload
+        buttons=[c for c in view.walk_children() if isinstance(c,discord.ui.Button)]
+        assert any(b.custom_id=='iris:verification:123:claim' for b in buttons)
+        assert any(b.label=='Lire le formulaire' for b in buttons)
+        assert any(b.label=='Gérer dans Iris' for b in buttons)
+        assert view.is_persistent()
     h.run(check())

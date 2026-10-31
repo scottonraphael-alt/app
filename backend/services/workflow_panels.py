@@ -12,7 +12,8 @@ from services.announcement_components import safe_url
 from services.ticket_avatars import avatar_source
 
 KEYS = {
-    'form:verification':'Formulaire · Préavis et présentation',
+    'form:verification':'Vérification · Formulaire complet (fil)',
+    'staff:verification':'Vérification · Mini-panneau Staff (salon)',
     'public:verification':'Accueil · Vérification',
     'public:contact_staff':'Accueil · Contact Staff',
     'public:support':'Accueil · Soutien',
@@ -77,7 +78,7 @@ class Panel(BaseModel):
 def text_limit(key):
     if key.startswith('public:'):return 4000
     if key.startswith('room:'):return 3600
-    return {'request:support':1200,'review:support':1400,'form:verification':2000}.get(key,3600)
+    return {'request:support':1200,'review:support':1400,'form:verification':2000,'staff:verification':3000}.get(key,3600)
 
 
 def expanded_size(blocks):
@@ -114,7 +115,7 @@ def validate(panels):
         if panel.replace_heading and (not key.startswith('room:') or not any('{membre}' in b.text for b in panel.blocks if b.kind in ('text','section'))):
             raise HTTPException(422,'Un en-tête de ticket personnalisé doit contenir {membre}.')
         for b in panel.blocks:
-            if '{avis_ia}' in b.text and key!='form:verification':raise HTTPException(422,'Le préavis IA est disponible dans le panneau Formulaire · Préavis et présentation.')
+            if '{avis_ia}' in b.text and key not in ('form:verification','staff:verification'):raise HTTPException(422,'Le préavis IA est disponible dans le formulaire complet et le mini-panneau de vérification.')
             if key.startswith('public:') and TOKEN.search(b.text):
                 raise HTTPException(422,'Un panneau public ne connaît pas encore le membre : utilisez les variables dans un ticket ou une demande.')
         # Budget the maximum expansion before Discord receives a message.

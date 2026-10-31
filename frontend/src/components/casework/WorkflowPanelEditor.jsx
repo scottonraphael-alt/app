@@ -4,7 +4,8 @@ import {Markdown} from '../announcements/Preview';
 import {safeUrl} from '../announcements/document';
 import '../../DiscordAnnouncements.css';
 const PANELS={
- 'form:verification':'Formulaire · Préavis et présentation',
+ 'form:verification':'Vérification · Formulaire complet (fil)',
+ 'staff:verification':'Vérification · Mini-panneau Staff (salon)',
  'public:verification':'Accueil · Vérification','public:contact_staff':'Accueil · Contact Staff','public:support':'Accueil · Soutien','public:moderation':'Accueil · Modération',
  'room:verification':'Ticket · Vérification','room:contact_staff':'Ticket · Contact Staff','room:summons':'Ticket · Convocation',
  'request:support':'Demande de soutien en attente','room:bubble':'Ticket · Bulle','room:support':'Ticket · Soutien','review:support':'Demande de soutien traitée',
@@ -23,7 +24,7 @@ const previewText=text=>(text||'').replace(/\{(membre|interlocuteur|traite_par|d
 export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCatalogue=PANELS}){
  const [key,setKey]=useState('public:support');
  const panel=value[key]||empty();
- const limit=key.startsWith('public:')?4000:key.startsWith('room:')?3600:({'form:verification':2000,'request:support':1200,'review:support':1400}[key]||3600);
+ const limit=key.startsWith('public:')?4000:key.startsWith('room:')?3600:({'form:verification':2000,'staff:verification':3000,'request:support':1200,'review:support':1400}[key]||3600);
  const sizes={membre:24,interlocuteur:24,traite_par:24,date_traitement:40,salon:95,avis_ia:300};
  const used=(panel.blocks||[]).filter(b=>['text','section'].includes(b.kind)).reduce((n,b)=>n+(b.text||'').replace(/\{(membre|interlocuteur|traite_par|date_traitement|salon|avis_ia)\}/g,(_,name)=>'x'.repeat(sizes[name])).length,0);
  const update=next=>onChange({...value,[key]:next});
@@ -56,7 +57,7 @@ export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCa
  <button type="button" className="cw-button cw-danger" onClick={()=>update({...panel,blocks:blocks.filter((_,i)=>i!==index)})}>Retirer</button></div>
  {['text','section'].includes(b.kind)&&<MarkdownField label={'Texte du bloc '+(index+1)} value={b.text||''} catalogue={catalogue} onChange={text=>change(index,{text})}/>}
  {['image','section','link'].includes(b.kind)&&<label>{b.kind!=='link'?'Lien HTTPS de l’image':'Destination du bouton'}<input type={b.url==='{avatar_membre}'?'text':'url'} value={b.url||''} onChange={e=>change(index,{url:e.target.value})}/></label>}
- {['text','section'].includes(b.kind)&&!key.startsWith('public:')&&<div className="cw-toolbar" aria-label="Insérer une variable">{VARIABLES.filter(([name])=>name!=='avis_ia'||key==='form:verification').map(([name,label])=><button type="button" className="cw-button" key={name} title={label} onClick={()=>change(index,{text:(b.text||'')+' {'+name+'}'})}>{'{'+name+'}'}</button>)}{key==='room:support'&&<button type="button" className="cw-button" onClick={()=>change(index,{text:(b.text||'')+'\nTon Interlocuteur est {interlocuteur}'})}>Phrase d’attribution</button>}</div>}
+ {['text','section'].includes(b.kind)&&!key.startsWith('public:')&&<div className="cw-toolbar" aria-label="Insérer une variable">{VARIABLES.filter(([name])=>name!=='avis_ia'||['form:verification','staff:verification'].includes(key)).map(([name,label])=><button type="button" className="cw-button" key={name} title={label} onClick={()=>change(index,{text:(b.text||'')+' {'+name+'}'})}>{'{'+name+'}'}</button>)}{key==='room:support'&&<button type="button" className="cw-button" onClick={()=>change(index,{text:(b.text||'')+'\nTon Interlocuteur est {interlocuteur}'})}>Phrase d’attribution</button>}</div>}
  {['image','section'].includes(b.kind)&&!key.startsWith('public:')&&<button type="button" className="cw-button" onClick={()=>change(index,{url:'{avatar_membre}'})}>Utiliser l’avatar du membre</button>}
  {b.kind==='image'&&<label>Description de l’image<input maxLength={1024} value={b.text||''} onChange={e=>change(index,{text:e.target.value})}/></label>}
  {b.kind==='link'&&<label>Texte du bouton<input maxLength={80} value={b.label||''} onChange={e=>change(index,{label:e.target.value})}/></label>}
