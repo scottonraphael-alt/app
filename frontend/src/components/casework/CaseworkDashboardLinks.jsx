@@ -12,6 +12,6 @@ export default function CaseworkDashboardLinks({ isStaff = false, isResponsable 
     ['contact_staff', 'Contacts Staff', MessagesSquare],
     ['bubble', 'Bulles d’échange', Sparkles],
   ];
-  return <nav aria-label="Dossiers des membres" className="cw-dashboard-links">{links.map(([kind, title, Icon]) =>
+  return <nav aria-label="Dossiers des membres" className="cw-dashboard-links"><Link to="/staff/messages-anonymes"><MessagesSquare size={18} aria-hidden="true"/><span>Messages anonymes</span></Link>{links.map(([kind, title, Icon]) =>
     <Link key={kind} to={`/staff/dossiers/${kind}`}><Icon size={18} aria-hidden="true" /><span>{title}</span></Link>)}</nav>;
 }
