@@ -93,6 +93,14 @@ def test_worker_publishes_once_and_reuses_review_message(monkeypatch):
     assert public_call.args[2]['allowed_mentions']['parse']==[]
     assert public_call.args[2]['allowed_mentions']['roles']==[]
     assert partial.edit.await_count==1
+    from services import workflow_panels
+    workflow_panels.configure(workflow_panels.validate({'anonymous:review':{'blocks':[{'text':'Présentation modifiée : {message_anonyme}'}]}}))
+    try:
+        h.run(service.tick(client));h.run(service.tick(client))
+        assert partial.edit.await_count==2
+        assert 'Présentation modifiée' in str(partial.edit.await_args.kwargs['view'].to_components())
+        assert send.await_count==2
+    finally:workflow_panels.configure({})
     assert h.run(h.db.anonymous_messages.find_one({'_id':row['_id']}))['status']=='published'
 
 def test_refusal_never_sends_public_message(monkeypatch):
@@ -133,3 +141,27 @@ def test_registration_retains_other_commands_and_restores_review_buttons(monkeyp
         await client.close()
     h.run(check())
     assert [payload['name'] for payload in posted]==['anonyme']
+
+def test_custom_review_and_reveal_after_refusal_are_private_and_authorized():
+    from services import workflow_panels
+    workflow_panels.configure(workflow_panels.validate({'anonymous:review':{'blocks':[
+        {'text':'## Proposition {identifiant_anonyme}\n{message_anonyme}'}]}}))
+    row=submit()
+    h.run(service.decide(row['_id'],STAFF,accept=False,reason='Le message ne respecte pas les règles.'))
+    row=h.run(h.db.anonymous_messages.find_one({'_id':row['_id']}))
+    async def check():
+        view=service.Review(row)
+        assert MEMBER not in str(view.to_components())
+        assert 'Proposition '+row['alias'] in str(view.to_components())
+        assert row['text'] in str(view.to_components())
+        reveal=next(c for c in view.walk_children() if isinstance(c,discord.ui.Button) and c.label=='Révéler')
+        for actor,allowed in ((STAFF,False),(RESP,True)):
+            response=SimpleNamespace(is_done=lambda:True,defer=AsyncMock())
+            it=SimpleNamespace(guild_id=int(h.GUILD_ID),user=SimpleNamespace(id=int(actor)),
+                response=response,followup=SimpleNamespace(send=AsyncMock()))
+            await reveal.callback(it)
+            payload=str(it.followup.send.await_args.kwargs['view'].to_components())
+            assert (MEMBER in payload)==allowed
+            assert it.followup.send.await_args.kwargs['ephemeral'] is True
+    try:h.run(check())
+    finally:workflow_panels.configure({})

@@ -12,6 +12,7 @@ from services.announcement_components import safe_url
 from services.ticket_avatars import avatar_source
 
 KEYS = {
+    'anonymous:review':'Messages anonymes · Validation Staff',
     'form:verification':'Vérification · Formulaire complet (fil)',
     'staff:verification':'Vérification · Mini-panneau Staff (salon)',
     'public:verification':'Accueil · Vérification',
@@ -27,8 +28,8 @@ KEYS = {
     'review:support':'Demande de soutien traitée',
 }
 _cache = {}
-VARIABLES={'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':300}
-TOKEN=re.compile(r'\{(membre|interlocuteur|traite_par|date_traitement|salon|avis_ia)\}')
+VARIABLES={'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':300,'identifiant_anonyme':11,'message_anonyme':3000}
+TOKEN=re.compile(r'\{(membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme)\}')
 
 
 def values(row):
@@ -38,7 +39,8 @@ def values(row):
     try:
         if row.get('decided_at'):stamp=f"<t:{int(datetime.fromisoformat(row['decided_at']).timestamp())}:F>"
     except (ValueError,TypeError):pass
-    return {'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:600].decode('utf-16-le','ignore'),
+    return {'identifiant_anonyme':str(row.get('alias') or 'ANO-XXXX-XX'),'message_anonyme':str(row.get('text') or ''),
+        'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:600].decode('utf-16-le','ignore'),
         'membre':mention(row.get('member_id'),'Membre à sélectionner'),
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
@@ -76,6 +78,7 @@ class Panel(BaseModel):
 
 
 def text_limit(key):
+    if key=='anonymous:review':return 3500
     if key.startswith('public:'):return 4000
     if key.startswith('room:'):return 3600
     return {'request:support':1200,'review:support':1400,'form:verification':2000,'staff:verification':3000}.get(key,3600)
@@ -114,6 +117,11 @@ def validate(panels):
                 raise HTTPException(422,'Le bouton de lien doit avoir un libellé.')
         if panel.replace_heading and (not key.startswith('room:') or not any('{membre}' in b.text for b in panel.blocks if b.kind in ('text','section'))):
             raise HTTPException(422,'Un en-tête de ticket personnalisé doit contenir {membre}.')
+        if key=='anonymous:review' and panel.blocks:
+            if not any('{message_anonyme}' in b.text for b in panel.blocks if b.kind in ('text','section')):
+                raise HTTPException(422,'Le panneau de validation doit contenir {message_anonyme} pour permettre sa lecture avant décision.')
+            if any(any('{'+name+'}' in b.text for name in ('membre','interlocuteur','avatar_membre','salon','avis_ia')) or b.url=='{avatar_membre}' for b in panel.blocks):
+                raise HTTPException(422,'Utilise les variables anonymes, sans identité ni avatar du membre.')
         for b in panel.blocks:
             if '{avis_ia}' in b.text and key not in ('form:verification','staff:verification'):raise HTTPException(422,'Le préavis IA est disponible dans le formulaire complet et le mini-panneau de vérification.')
             if key.startswith('public:') and TOKEN.search(b.text):

@@ -114,13 +114,17 @@ class Review(discord.ui.LayoutView):
     def __init__(self,row):
         super().__init__(timeout=None)
         pending=row['status']=='pending'
+        from services.workflow_panels import apply as apply_panel
         box=discord.ui.Container(discord.ui.TextDisplay('## Message de '+row['alias']),
             discord.ui.TextDisplay('### '+LABELS[row['status']]),discord.ui.Separator(),
-            discord.ui.TextDisplay(row['text']),accent_colour=0xEDB35D if row['status'] in ('pending','approved') else 0x73A594 if row['status']=='published' else 0xB76A75)
+            accent_colour=0xEDB35D if row['status'] in ('pending','approved') else 0x73A594 if row['status']=='published' else 0xB76A75)
+        context={**row,'decision_by':row.get('reviewer_id')}
+        if not apply_panel(box,'anonymous:review',row=context):
+            box.add_item(discord.ui.TextDisplay(row['text']))
         if row.get('reviewer_id'):
             box.add_item(discord.ui.TextDisplay(f"Traité par <@{row['reviewer_id']}>"))
         if row['status']=='rejected':
-            box.add_item(discord.ui.TextDisplay('**Motif du refus :** '+row.get('reason','')))
+            box.add_item(discord.ui.TextDisplay('**Motif du refus :** '+row.get('reason','').encode('utf-16-le')[:300].decode('utf-16-le','ignore')+'\n-# Motif complet dans Iris.'))
         if pending:
             roles=[str(v) for v in (config.DISCORD_STAFF_ROLE_ID,config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if v]
             box.add_item(discord.ui.TextDisplay(' '.join('<@&'+v+'>' for v in roles)+f' · Nouveau message pour <#{PUBLIC_CHANNEL}>'))
@@ -185,8 +189,10 @@ async def deliver(client,target,view,kind,ident,roles=None):
 
 async def tick(client):
     if not client.is_ready():return
+    from services.workflow_panels import revision
+    template_revision=revision('anonymous:review')
     async for row in db.anonymous_messages.find({'guild_id':guild(),'status':{'$in':['pending','approved','published','rejected']}}):
-        if row.get('review_status')==row['status']:continue
+        if row.get('review_status')==row['status'] and row.get('presentation_revision')==template_revision:continue
         token=uuid4().hex
         lease=await db.anonymous_messages.update_one({'_id':row['_id'],
             '$or':[{'lease_until':{'$exists':False}},{'lease_until':{'$lte':now()}}]},
@@ -208,7 +214,7 @@ async def tick(client):
                 roles=[str(v) for v in (config.DISCORD_STAFF_ROLE_ID,config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if v]
                 sent=await deliver(client,review,view,'review',row['_id'],roles)
             client.add_view(view,message_id=int(sent))
-            await db.anonymous_messages.update_one(query,{'$set':{'review_message_id':sent,'review_status':row['status'],'sync_error':None},'$unset':{'lease_until':''}})
+            await db.anonymous_messages.update_one(query,{'$set':{'review_message_id':sent,'review_status':row['status'],'presentation_revision':template_revision,'sync_error':None},'$unset':{'lease_until':''}})
         except Exception:
             await db.anonymous_messages.update_one(query,{'$set':{'lease_until':now()+timedelta(seconds=30),'sync_error':'Livraison Discord à reprendre.'}})
             logger.exception('Livraison du message anonyme à reprendre (%s).',row['alias'])

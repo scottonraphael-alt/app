@@ -114,9 +114,12 @@ def test_moderation_custom_presentation_preserves_persistent_member_selector():
 
 @pytest.mark.parametrize('key',list(panels.KEYS))
 def test_every_editor_entry_is_connected_to_its_discord_renderer(key):
-    panels.configure(panels.validate({key:{'blocks':[{'text':'CONTENU PERSONNALISÉ'}]}}))
+    panels.configure(panels.validate({key:{'blocks':[{'text':'CONTENU PERSONNALISÉ'+('\n{message_anonyme}' if key=='anonymous:review' else '')}]}}))
     async def check():
-        if key=='staff:verification':
+        if key=='anonymous:review':
+            from services.anonymous_messages import Review
+            view=Review({'_id':'request','alias':'ANO-XXXX-XX','text':'Message proposé','status':'pending'})
+        elif key=='staff:verification':
             from services.verification_discord import StaffPanel
             view=StaffPanel('123',base_url='https://example.com',row={'status':'waiting','active':True})
         elif key=='form:verification':
@@ -155,9 +158,10 @@ def test_form_advisory_variable_and_default_section():
 @pytest.mark.parametrize('key',list(panels.KEYS))
 def test_panel_accepts_its_full_text_budget_and_rejects_excess(key):
     limit=panels.text_limit(key)
-    assert panels.validate({key:{'blocks':[{'text':'a'*limit}]}})
+    text=('{message_anonyme}'+'a'*(limit-3000)) if key=='anonymous:review' else 'a'*limit
+    assert panels.validate({key:{'blocks':[{'text':text}]}})
     with pytest.raises(HTTPException):
-        panels.validate({key:{'blocks':[{'text':'a'*limit},{'text':'b'}]}})
+        panels.validate({key:{'blocks':[{'text':text},{'text':'b'}]}})
 
 def test_form_with_large_custom_text_keeps_discord_text_budget():
     from services.verification_discord import StaffForm
