@@ -234,6 +234,9 @@ async def change(case_id, actor_id, data, settings):
                               'stage': (row.get('closure') or {}).get('stage', 'requested'), 'previous_status': (row.get('closure') or {}).get('previous_status', row['status']), 'requested_at': now()}
     changed['events'].append(event('action', str(actor_id), **details))
     saved=await save(row, changed)
+    if data.action in ('archive','cancel_close'):
+        from services.migration_runtime import wake_closures
+        wake_closures()
     if saved['kind']=='support' and data.action in ('claim','assign'):
         await db.tickets.update_many({'channel_id':saved['channel_id']},{'$set':{'assigned_helper':saved['assigned']}})
         await db.case_tickets.update_one({'_id':saved['_id']},{'$set':{'sync.due':True}})

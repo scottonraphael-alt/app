@@ -575,3 +575,46 @@ def test_rejected_delete_then_external_removal_never_claims_complete_archive():
     row=h.run(cases.load(case_id,h.GUILD_ID));assert row['archive']['complete'] is False
     row=h.run(sync.channel_deleted(reader.data['id'],h.GUILD_ID,SETTINGS))
     assert row['status']=='archived' and row['archive']['complete'] is False
+
+
+@pytest.mark.parametrize('enabled', [True, False])
+def test_closure_delivery_is_independent_and_respects_handover(monkeypatch, enabled):
+    from services.casework import closure
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED', str(enabled).lower())
+    monkeypatch.setattr(runtime.policy, 'Settings', lambda: SETTINGS)
+    h.run(h.db.case_tickets.insert_one({'_id':'close-me','guild_id':SETTINGS.guild_id,'status':'closing','source':'iris'}))
+    close=AsyncMock();discovery=AsyncMock(side_effect=RuntimeError('slow discovery'))
+    monkeypatch.setattr(closure,'run',close)
+    monkeypatch.setattr(runtime.sync,'cycle',discovery)
+    class Stop:
+        done=False
+        def is_set(self):return self.done
+        async def wait(self):self.done=True
+    h.run(runtime.run_closures(SimpleNamespace(is_ready=lambda:True),Stop()))
+    assert close.await_count==int(enabled)
+    discovery.assert_not_awaited()
+
+
+def test_closure_confirmation_wakes_idle_worker(monkeypatch):
+    import asyncio
+    from services.casework import closure
+    monkeypatch.setenv('IRIS_NATIVE_WORKFLOWS_ENABLED','true')
+    monkeypatch.setattr(runtime.policy,'Settings',lambda:SETTINGS)
+    async def check():
+        stop=asyncio.Event()
+        async def close(*args):stop.set()
+        delivery=AsyncMock(side_effect=close)
+        monkeypatch.setattr(closure,'run',delivery)
+        task=asyncio.create_task(runtime.run_closures(SimpleNamespace(is_ready=lambda:True),stop))
+        try:
+            await asyncio.sleep(0)
+            assert runtime._closure_wakeup is not None
+            await h.db.case_tickets.insert_one({'_id':'new-close','guild_id':SETTINGS.guild_id,'status':'closing','source':'iris'})
+            runtime.wake_closures()
+            await asyncio.wait_for(task,1)
+            delivery.assert_awaited_once()
+            assert runtime._closure_wakeup is None
+        finally:
+            if not task.done():task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+    h.run(check())

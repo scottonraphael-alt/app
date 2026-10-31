@@ -15,7 +15,7 @@ from services.verification_auto_advisory import run as run_verification_advisori
 from routers import moderation_prompt
 from routers import casework, verifications, workflow_settings
 from services.purgatory import run as run_purgatory
-from services.migration_runtime import run as run_migration_runtime, run_verifications, run_ticket_delivery
+from services.migration_runtime import run as run_migration_runtime, run_verifications, run_ticket_delivery, run_closures
 from services import agenda_indexes, agenda_reminders
 from services.system_health import supervise
 from services import presence as presence_service, casier_history as casier_history_service
@@ -222,6 +222,7 @@ async def startup() -> None:
         asyncio.create_task(supervise("member_casework", run_migration_runtime(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("native_ticket_delivery", run_ticket_delivery(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("verification_advisories", run_verification_advisories(moderation_client, _feature_stop_event))),
+        asyncio.create_task(supervise("ticket_closures", run_closures(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("verification_delivery", run_verifications(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_crisis", run_ticket_crisis_loop(_feature_stop_event))),
         asyncio.create_task(supervise("sla", run_sla_loop(_feature_stop_event))),

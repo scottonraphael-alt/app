@@ -14,6 +14,7 @@ from services.casework.discord_gateway import DiscordGateway
 logger = logging.getLogger(__name__)
 _verification_wakeup = None
 _ticket_wakeup = None
+_closure_wakeup = None
 
 
 def wake_verifications():
@@ -179,3 +180,39 @@ async def run_ticket_delivery(client, stop):
     finally:
         if _ticket_wakeup is wakeup:
             _ticket_wakeup = None
+
+
+def wake_closures():
+    if _closure_wakeup is not None:_closure_wakeup.set()
+
+
+async def run_closures(client,stop):
+    """Close requested tickets independently of discovery and history imports."""
+    from services.casework import closure
+    global _closure_wakeup
+    wakeup=asyncio.Event();_closure_wakeup=wakeup
+    try:
+        while not stop.is_set():
+            wakeup.clear()
+            try:
+                settings=policy.Settings()
+                if client.is_ready() and settings.enabled and discord_actions_enabled():
+                    gateway=DiscordGateway(client,settings)
+                    async for row in db.case_tickets.find({'guild_id':settings.guild_id,'status':{'$in':['closing','reopening']}}):
+                        if stop.is_set():break
+                        if not can_close_case(row):continue
+                        try:
+                            if row['status']=='reopening':await closure.cancel(row['_id'],gateway,settings)
+                            else:await closure.run(row['_id'],gateway,settings)
+                        except Exception:logger.exception('Clôture de dossier à reprendre (%s).',row['_id'])
+            except Exception:
+                logger.exception('Traitement des clôtures à reprendre.')
+            if wakeup.is_set():continue
+            waits=[asyncio.create_task(stop.wait()),asyncio.create_task(wakeup.wait())]
+            try:await asyncio.wait(waits,timeout=30,return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in waits:
+                    if not task.done():task.cancel()
+                await asyncio.gather(*waits,return_exceptions=True)
+    finally:
+        if _closure_wakeup is wakeup:_closure_wakeup=None
