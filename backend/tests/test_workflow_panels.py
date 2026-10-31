@@ -229,7 +229,11 @@ def test_every_custom_panel_contains_only_custom_text_and_functional_controls(ke
             from services.anonymous_messages import Review
             row['status']='rejected';view=Review(row)
         texts=[c.content for c in view.walk_children() if isinstance(c,discord.ui.TextDisplay)]
-        assert texts==[custom.replace('{message_anonyme}',row['text'])]
+        expected=custom.replace('{message_anonyme}',row['text'])
+        if key=='review:support':
+            assert texts[0]==expected and len(texts)==2
+            assert texts[1].startswith('## ✅ Demande acceptée par <@456>')
+        else:assert texts==[expected]
         assert any(isinstance(c,(discord.ui.Button,discord.ui.Select,discord.ui.UserSelect)) for c in view.walk_children())
     h.run(check())
 
@@ -293,4 +297,20 @@ def test_custom_restricted_room_notice_is_below_selector_and_disappears_when_lif
         assert 'Administrateurs' in components[select_index+2]['content']
         row['visibility']='staff'
         assert 'Ticket restreint' not in str(commands.RoomPanel('request',row=row).to_components())
+    h.run(check())
+
+
+@pytest.mark.parametrize('status,color,label',[('open',0x57F287,'acceptée'),('refused',0xED4245,'refusée')])
+def test_custom_support_receipt_keeps_decision_color_author_date_and_large_separator(status,color,label):
+    from services.casework.native import support_receipt
+    panels.configure(panels.validate({'review:support':{'color':'#123456','blocks':[{'text':'Ma présentation'}]}}))
+    async def check():
+        row={'status':status,'member_id':'123','decision_by':'456','decided_at':'2026-10-31T04:00:00+00:00','reason':'Motif','guild_id':'789','channel_id':'987'}
+        payload=support_receipt(row).to_components()[0]
+        assert payload['accent_color']==color
+        content=payload['components']
+        assert content[0]['content']=='Ma présentation'
+        assert content[1]['type']==14 and content[1]['spacing']==2
+        assert 'Demande '+label+' par <@456>' in content[2]['content']
+        assert '\nLe <t:' in content[2]['content']
     h.run(check())

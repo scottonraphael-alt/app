@@ -337,14 +337,20 @@ def support_receipt(row):
         discord.ui.Separator(),
         discord.ui.TextDisplay('### 📝 Motif de la demande\n'+fenced(row['reason'].encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))),
         discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row.get('triggers','').encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))),
-        discord.ui.Separator(),
-        discord.ui.TextDisplay(('### 🤝 Acceptée par ' if accepted else '### Décision de ')+f"<@{row.get('decision_by') or row.get('assigned_id')}>"),
-        accent_colour=0x73A594 if accepted else 0xB78B58)
+        accent_colour=0x57F287 if accepted else 0xED4245)
     from services.workflow_panels import apply as apply_panel
     custom=apply_panel(box,'review:support',row=row,replace=True)
-    if not custom and row.get('decided_at'):
+    # Decision metadata remains authoritative even with a customized presentation.
+    box.accent_colour=0x57F287 if accepted else 0xED4245
+    box.add_item(discord.ui.Separator(spacing=discord.SeparatorSpacing.large))
+    actor=row.get('decision_by') or row.get('assigned_id')
+    actor_text=f'<@{actor}>' if actor else 'un intervenant non renseigné'
+    decision=('## ✅ Demande acceptée par ' if accepted else '## ❌ Demande refusée par ')+actor_text
+    if row.get('decided_at'):
         stamp=int(datetime.fromisoformat(row['decided_at']).timestamp())
-        box.add_item(discord.ui.TextDisplay(f'📅 <t:{stamp}:F>'))
+        decision+=f'\nLe <t:{stamp}:F>'
+    else:decision+='\nDate non renseignée'
+    box.add_item(discord.ui.TextDisplay(decision))
     if not custom and not accepted:
         box.add_item(discord.ui.TextDisplay('### Explication\n'+fenced(row.get('decision_reason','').encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))))
     if accepted:
