@@ -120,7 +120,6 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         if (page > lastPage) { setPage(lastPage); return; }
         setMessages(data.messages);
         setTicket((current) => current ? { ...current, message_count: data.total } : current);
-        transcriptRef.current?.scrollTo?.({ top: 0 });
       })
       .catch((requestError) => { if (!controller.signal.aborted) setMessagesError(getErrorMessage(requestError)); })
       .finally(() => { if (!controller.signal.aborted) setMessagesLoading(false); });
@@ -156,6 +155,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   }, [messagesLoading, messages, highlightedMessage, searchOpen]);
 
   const changePage = (value) => {
+    transcriptRef.current?.closest(".tw-conversation")?.scrollIntoView?.({ block: "start" });
     setPage(value);
     setHighlightedMessage(null);
     ticketEvent("messages.page_changed", ticketId, value);
@@ -169,7 +169,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
     setSearchError("");
     try {
       const { data } = await api.get(`/tickets/${ticketId}/messages/search`, { params: { q: searchTerm, from_day: searchFrom || undefined, to_day: searchTo || undefined, search_page: resultPage }, signal: controller.signal });
-      if (!controller.signal.aborted) { setSearchResults(data); transcriptRef.current?.scrollTo?.({ top: 0 }); }
+      if (!controller.signal.aborted) { setSearchResults(data); }
     } catch (requestError) { if (!controller.signal.aborted) setSearchError(getErrorMessage(requestError)); }
     finally { if (!controller.signal.aborted) setSearchLoading(false); }
   };
