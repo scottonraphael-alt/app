@@ -1,3 +1,4 @@
+const ModerationPromptPage=lazy(()=>import("./pages/ModerationPromptPage"));
 const WorkflowSettingsPage=lazy(()=>import("./pages/WorkflowSettingsPage"));
 const SupportDossiersPage=lazy(()=>import("./pages/CaseworkPages").then(m=>({default:m.SupportDossiersPage})));
 const VerificationListPage = lazy(() => import("./pages/VerificationPages").then(m => ({ default: m.VerificationListPage })));
@@ -151,6 +152,7 @@ function AuthenticatedApp({
     >
       <Suspense fallback={<Loading />}>
         <Routes>
+<Route path="/responsable/moderation-ia" element={isResponsable ? <ModerationPromptPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/responsable/parcours-discord" element={isResponsable ? <WorkflowSettingsPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/staff/dossiers/support" element={(canSeeCasework||isHelper) ? <SupportDossiersPage canReassign={isResponsable||isServerAdmin||isAdmin} canSeeMember360={canSeeOperateur}/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/staff/dossiers/support/:caseId" element={(canSeeCasework||isHelper) ? <SupportDossiersPage canReassign={isResponsable||isServerAdmin||isAdmin} canSeeMember360={canSeeOperateur}/> : <Navigate to={defaultRoute} replace/>}/>

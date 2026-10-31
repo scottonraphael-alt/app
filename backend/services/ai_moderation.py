@@ -272,7 +272,7 @@ PROMPT_WARN_CHARS = 30000  # règlement + sanctions : au-delà, le prompt devien
 _warned_prompt_size = False
 
 
-def build_system_prompt() -> str | None:
+def build_system_prompt(overrides=None) -> str | None:
     """Prompt système à jour (règlement + échelle de sanctions), ou None si pas de règlement valide.
 
     Le texte est strictement identique d'un appel à l'autre tant que les fichiers ne changent pas,
@@ -280,10 +280,10 @@ def build_system_prompt() -> str | None:
     """
     global _warned_prompt_size
 
-    rules = _rules.get()
+    rules = overrides["rules"] if overrides else _rules.get()
     if rules is None:
         return None
-    sanctions = _sanctions.get()
+    sanctions = overrides["sanctions"] if overrides else _sanctions.get()
 
     if sanctions:
         sanctions_block = (
@@ -298,7 +298,7 @@ def build_system_prompt() -> str | None:
         logger.warning("Règlement + sanctions très longs (%d caractères) : chaque analyse consommera beaucoup de tokens.",
                        len(rules) + len(sanctions or ""))
 
-    return _PROMPT_TEMPLATE.replace("[[REGLEMENT]]", rules).replace("[[SANCTIONS]]", sanctions_block)
+    return (overrides["prompt"] if overrides else _PROMPT_TEMPLATE).replace("[[REGLEMENT]]", rules).replace("[[SANCTIONS]]", sanctions_block)
 
 
 # --------------------------------------------------------------------------- #
@@ -859,7 +859,9 @@ async def apply_verdict(job: Job, verdict: Verdict) -> None:
 async def _process(job: Job) -> None:
     assert _client is not None
 
-    system_prompt = build_system_prompt()  # règlement + sanctions, relus si les fichiers ont changé
+    from database import db
+    overrides=await db.ai_configuration.find_one({'_id':'moderation-prompt'})
+    system_prompt = build_system_prompt(overrides) if overrides else build_system_prompt()
     if system_prompt is None:
         logger.warning("Aucun règlement valide chargé : message %s non analysé.", job.message.id)
         return

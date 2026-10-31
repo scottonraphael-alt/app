@@ -125,7 +125,7 @@ class StaffActions:
 
 class StaffForm(StaffActions,discord.ui.LayoutView):
     """Full answers live in the associated Staff thread, not in the channel index."""
-    def __init__(self,member_id,*,base_url,row):
+    def __init__(self,member_id,*,base_url,row,advisory=None):
         super().__init__(timeout=None)
         self.member_id=str(member_id)
         from services.verification_runtime import fence
@@ -134,6 +134,10 @@ class StaffForm(StaffActions,discord.ui.LayoutView):
         if row.get('active') and staff_role.isascii() and staff_role.isdigit():
             box.add_item(discord.ui.TextDisplay(f'<@&{staff_role}> · Un formulaire attend votre lecture.'))
         box.add_item(discord.ui.TextDisplay(staff_status(row)))
+        from services.workflow_panels import apply as apply_panel, render_text
+        context={'member_id':str(member_id),'assigned_id':row.get('claimed_by'),'advisory':advisory}
+        if not apply_panel(box,'form:verification',row=context):
+            box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+render_text('{avis_ia}',context)))
         box.add_item(discord.ui.Separator())
         form=row['forms'][-1]
         for key,title in [('name','👤 Prénom / pseudo'),('age','🎂 Tranche d’âge'),('reason','🌱 Motif de venue'),('psychiatry','💬 Avis sur la psychiatrie')]:

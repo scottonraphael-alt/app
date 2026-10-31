@@ -4,19 +4,21 @@ import {Markdown} from '../announcements/Preview';
 import {safeUrl} from '../announcements/document';
 import '../../DiscordAnnouncements.css';
 const PANELS={
+ 'form:verification':'Formulaire · Préavis et présentation',
  'public:verification':'Accueil · Vérification','public:contact_staff':'Accueil · Contact Staff','public:support':'Accueil · Soutien','public:moderation':'Accueil · Modération',
  'room:verification':'Ticket · Vérification','room:contact_staff':'Ticket · Contact Staff','room:summons':'Ticket · Convocation',
  'request:support':'Demande de soutien en attente','room:bubble':'Ticket · Bulle','room:support':'Ticket · Soutien','review:support':'Demande de soutien traitée',
 };
 const empty=()=>({color:'#78618c',blocks:[]});
 const VARIABLES=[
+ ['avis_ia','Résumé du préavis disponible, sinon état non généré','Le formulaire nécessite une lecture attentive du Staff.'],
  ['membre','Membre concerné','@Membre'],
  ['interlocuteur','Intervenant actuellement attribué ; sinon « Non attribué »','@Helper'],
  ['traite_par','Personne ayant accepté ou refusé ; sinon « Décision en attente »','@Staff'],
  ['date_traitement','Date de la décision ; sinon « Décision en attente »','30 octobre 2026 à 15:00'],
  ['salon','Lien vers le salon ; sinon « Salon en préparation »','#soutient-membre'],
 ];
-const previewText=text=>(text||'').replace(/\{(membre|interlocuteur|traite_par|date_traitement|salon)\}/g,(_,key)=>VARIABLES.find(v=>v[0]===key)[2]);
+const previewText=text=>(text||'').replace(/\{(membre|interlocuteur|traite_par|date_traitement|salon|avis_ia)\}/g,(_,key)=>VARIABLES.find(v=>v[0]===key)[2]);
 
 export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCatalogue=PANELS}){
  const [key,setKey]=useState('public:support');
@@ -51,7 +53,7 @@ export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCa
  <button type="button" className="cw-button cw-danger" onClick={()=>update({...panel,blocks:blocks.filter((_,i)=>i!==index)})}>Retirer</button></div>
  {['text','section'].includes(b.kind)&&<MarkdownField label={'Texte du bloc '+(index+1)} value={b.text||''} catalogue={catalogue} onChange={text=>change(index,{text})}/>}
  {['image','section','link'].includes(b.kind)&&<label>{b.kind!=='link'?'Lien HTTPS de l’image':'Destination du bouton'}<input type={b.url==='{avatar_membre}'?'text':'url'} value={b.url||''} onChange={e=>change(index,{url:e.target.value})}/></label>}
- {['text','section'].includes(b.kind)&&!key.startsWith('public:')&&<div className="cw-toolbar" aria-label="Insérer une variable">{VARIABLES.map(([name,label])=><button type="button" className="cw-button" key={name} title={label} onClick={()=>change(index,{text:(b.text||'')+' {'+name+'}'})}>{'{'+name+'}'}</button>)}{key==='room:support'&&<button type="button" className="cw-button" onClick={()=>change(index,{text:(b.text||'')+'\nTon Interlocuteur est {interlocuteur}'})}>Phrase d’attribution</button>}</div>}
+ {['text','section'].includes(b.kind)&&!key.startsWith('public:')&&<div className="cw-toolbar" aria-label="Insérer une variable">{VARIABLES.filter(([name])=>name!=='avis_ia'||key==='form:verification').map(([name,label])=><button type="button" className="cw-button" key={name} title={label} onClick={()=>change(index,{text:(b.text||'')+' {'+name+'}'})}>{'{'+name+'}'}</button>)}{key==='room:support'&&<button type="button" className="cw-button" onClick={()=>change(index,{text:(b.text||'')+'\nTon Interlocuteur est {interlocuteur}'})}>Phrase d’attribution</button>}</div>}
  {['image','section'].includes(b.kind)&&!key.startsWith('public:')&&<button type="button" className="cw-button" onClick={()=>change(index,{url:'{avatar_membre}'})}>Utiliser l’avatar du membre</button>}
  {b.kind==='image'&&<label>Description de l’image<input maxLength={700} value={b.text||''} onChange={e=>change(index,{text:e.target.value})}/></label>}
  {b.kind==='link'&&<label>Texte du bouton<input maxLength={80} value={b.label||''} onChange={e=>change(index,{label:e.target.value})}/></label>}

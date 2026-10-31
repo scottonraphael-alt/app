@@ -116,7 +116,10 @@ def test_moderation_custom_presentation_preserves_persistent_member_selector():
 def test_every_editor_entry_is_connected_to_its_discord_renderer(key):
     panels.configure(panels.validate({key:{'blocks':[{'text':'CONTENU PERSONNALISÉ'}]}}))
     async def check():
-        if key=='public:moderation':view=commands.StaffMenu()
+        if key=='form:verification':
+            from services.verification_discord import StaffForm
+            view=StaffForm('123',base_url='https://example.com',row={'member_id':'123','status':'waiting','active':True,'forms':[{'answers':{}}]})
+        elif key=='public:moderation':view=commands.StaffMenu()
         elif key=='public:verification':
             from services.verification_discord import Panel
             view=Panel()
@@ -132,4 +135,16 @@ def test_every_editor_entry_is_connected_to_its_discord_renderer(key):
                 view=support_receipt(row)
         assert 'CONTENU PERSONNALISÉ' in str(view.to_components())
         assert view.is_persistent()
+    h.run(check())
+
+def test_form_advisory_variable_and_default_section():
+    from services.verification_discord import StaffForm
+    async def check():
+        row={'member_id':'123','active':True,'status':'waiting','forms':[{'answers':{}}]}
+        view=StaffForm('123',base_url='https://example.com',row=row,advisory='Lecture humaine recommandée.')
+        assert 'Lecture humaine recommandée.' in str(view.to_components())
+        panels.configure(panels.validate({'form:verification':{'blocks':[{'text':'## Avis\n{avis_ia}'}]}}))
+        view=StaffForm('123',base_url='https://example.com',row=row,advisory='Autre avis.')
+        assert 'Autre avis.' in str(view.to_components()) and '{avis_ia}' not in str(view.to_components())
+        assert 'non généré' in panels.render_text('{avis_ia}',{})
     h.run(check())

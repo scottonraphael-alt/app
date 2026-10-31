@@ -1,0 +1,12 @@
+import {useEffect,useState} from 'react';
+import {Link} from 'react-router-dom';
+import {api,getErrorMessage} from '../api/client';
+import '../Casier.css';
+import '../WorkflowSettings.css';
+import '../Casework.css';
+export default function ModerationPromptPage(){
+ const [data,setData]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{document.body.classList.add('casier-no-nav');api.get('/responsable/moderation-prompt').then(r=>setData(r.data)).catch(e=>setError(getErrorMessage(e)));return()=>document.body.classList.remove('casier-no-nav');},[]);
+ async function save(e){e.preventDefault();setBusy(true);setError('');setNotice('');try{const r=await api.put('/responsable/moderation-prompt',data);setData(r.data);setNotice('Enregistré. Les prochaines analyses utilisent ces consignes.');}catch(e){setError(getErrorMessage(e));}finally{setBusy(false);}}
+ return <main className="cz-page wf-page"><header className="cz-header"><div><p className="cz-eyebrow">ESPACE RESPONSABLE · INTELLIGENCE ARTIFICIELLE</p><h1>La modération IA</h1><p className="cz-intro">Définissez les consignes, le règlement et l’échelle de sanctions utilisés pour analyser les messages.</p></div><Link className="cw-button" to="/">Accueil →</Link></header>{error&&<p className="cw-alert" role="alert">{error}</p>}{notice&&<p className="wf-notice" role="status">{notice}</p>}{data&&<form onSubmit={save}><section className="cw-card"><h2>Consignes de modération</h2><p>Conservez les balises <code>[[REGLEMENT]]</code> et <code>[[SANCTIONS]]</code> ainsi que les consignes de réponse JSON : le bot utilise ces champs pour lire les verdicts. La limite de sortie reste de 3 000 tokens.</p><label>Prompt système<textarea rows={22} required minLength={100} maxLength={20000} value={data.prompt} onChange={e=>setData({...data,prompt:e.target.value})}/></label></section><section className="cw-card"><h2>Règlement et sanctions</h2><label>Règlement du serveur<textarea rows={15} required minLength={10} maxLength={30000} value={data.rules} onChange={e=>setData({...data,rules:e.target.value})}/></label><label>Échelle de sanctions<textarea rows={12} maxLength={20000} value={data.sanctions} onChange={e=>setData({...data,sanctions:e.target.value})}/></label></section><button className="cw-button cw-primary" disabled={busy}>{busy?'Enregistrement…':'Enregistrer les consignes'}</button></form>}</main>;
+}

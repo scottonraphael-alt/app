@@ -12,6 +12,7 @@ from services.announcement_components import safe_url
 from services.ticket_avatars import avatar_source
 
 KEYS = {
+    'form:verification':'Formulaire · Préavis et présentation',
     'public:verification':'Accueil · Vérification',
     'public:contact_staff':'Accueil · Contact Staff',
     'public:support':'Accueil · Soutien',
@@ -25,8 +26,8 @@ KEYS = {
     'review:support':'Demande de soutien traitée',
 }
 _cache = {}
-VARIABLES={'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95}
-TOKEN=re.compile(r'\{(membre|interlocuteur|traite_par|date_traitement|salon)\}')
+VARIABLES={'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':300}
+TOKEN=re.compile(r'\{(membre|interlocuteur|traite_par|date_traitement|salon|avis_ia)\}')
 
 
 def values(row):
@@ -36,7 +37,8 @@ def values(row):
     try:
         if row.get('decided_at'):stamp=f"<t:{int(datetime.fromisoformat(row['decided_at']).timestamp())}:F>"
     except (ValueError,TypeError):pass
-    return {'membre':mention(row.get('member_id'),'Membre à sélectionner'),
+    return {'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.')[:300],
+        'membre':mention(row.get('member_id'),'Membre à sélectionner'),
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
         'date_traitement':stamp,
@@ -96,6 +98,7 @@ def validate(panels):
         if panel.replace_heading and (not key.startswith('room:') or not any('{membre}' in b.text for b in panel.blocks if b.kind in ('text','section'))):
             raise HTTPException(422,'Un en-tête de ticket personnalisé doit contenir {membre}.')
         for b in panel.blocks:
+            if '{avis_ia}' in b.text and key!='form:verification':raise HTTPException(422,'Le préavis IA est disponible dans le panneau Formulaire · Préavis et présentation.')
             if key.startswith('public:') and TOKEN.search(b.text):
                 raise HTTPException(422,'Un panneau public ne connaît pas encore le membre : utilisez les variables dans un ticket ou une demande.')
         # Budget the maximum expansion before Discord receives a message.
