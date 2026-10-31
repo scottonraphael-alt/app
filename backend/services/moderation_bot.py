@@ -120,9 +120,10 @@ async def install_member_commands(client):
     from services.verification_runtime import install as install_verifications
     from services.casework.commands import install as install_tickets
     from services import workflow_settings
+    from services.anonymous_messages import install as install_anonymous
     from services.iris_diagnostics import install as install_diagnostics
     await workflow_settings.apply()
-    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered'),('diagnostic',install_diagnostics,'iris_diagnostics_registered')]:
+    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered'),('anonyme',install_anonymous,'anonymous_registered'),('diagnostic',install_diagnostics,'iris_diagnostics_registered')]:
         if getattr(client,registered,False):continue
         try:await installer(client)
         except Exception:logger.exception('Enregistrement des commandes %s à reprendre.',name)

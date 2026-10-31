@@ -248,6 +248,7 @@ const pills = [
         </div>
       )}
 
+      {(isStaff || isHelper || isResponsable || isServerAdmin) && <Link to="/staff/messages-anonymes" className="nd-responsable-link"><KeyRound size={18}/><span>Historique des messages anonymes</span><ArrowRight size={18}/></Link>}
       {(isStaff || isResponsable || isServerAdmin) && <section className="nd-casework-module" aria-labelledby="member-casework-title"><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/><Link className="nd-responsable-link" to="/staff/verifications">Formulaires d’admission <ArrowRight size={18}/></Link></section>}
       {/* Espace réservé aux responsables */}
       {isResponsable && (

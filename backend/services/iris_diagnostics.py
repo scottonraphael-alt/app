@@ -90,7 +90,7 @@ async def run_checks(client):
         scope = discord.Object(id=int(config.DISCORD_GUILD_ID))
         tree = client.sanction_tree
         remote = {c.name for c in await tree.fetch_commands(guild=scope)}
-        expected = {'sanction','infos-troubles','crise','panel','panel-vérification','convocation','bulle','dossier','purgatoire','iris-oasis'}
+        expected = {'sanction','infos-troubles','crise','panel','panel-vérification','convocation','bulle','dossier','purgatoire','iris-oasis','anonyme'}
         missing = sorted(name for name in expected if name not in remote or tree.get_command(name,guild=scope) is None)
         return ('error','Commandes absentes : '+', '.join(missing)) if missing else ('ok','Commandes présentes sur Discord et dans le bot.')
     add('Commandes natives', commands)
@@ -109,7 +109,7 @@ async def run_checks(client):
     async def workers():
         from services.system_health import list_tasks
         rows = {r['name']:r for r in await list_tasks()}
-        expected = ('member_casework','native_ticket_delivery','verification_delivery','purgatory','ticket_import','ticket_refresh','ticket_reminders','project_reminders','announcements','sanction_maintenance','defouloir_reset')
+        expected = ('anonymous_messages','member_casework','native_ticket_delivery','verification_delivery','purgatory','ticket_import','ticket_refresh','ticket_reminders','project_reminders','announcements','sanction_maintenance','defouloir_reset')
         now = datetime.now(timezone.utc)
         bad = []
         for name in expected:
@@ -145,7 +145,7 @@ async def run_checks(client):
             await method(await verification_runtime.guild_for(client))
             return 'ok','Salon et permissions vérifiés ; aucune validation ni publication effectuée.'
         add(label,verify)
-    destinations=[('Logs vocaux',1550291270662881351,True,False),('Défouloir',1111018502552289421,False,True),
+    destinations=[('Modération des messages anonymes',1081957992896942163,False,False),('Publication des messages anonymes',1081957994385920065,False,False),('Logs vocaux',1550291270662881351,True,False),('Défouloir',1111018502552289421,False,True),
         ('Rappels de suivi',config.TICKET_REMINDER_CHANNEL_ID,False,False),('Rappels animation',config.PROJECT_REMINDER_CHANNEL_ID,False,False),
         ('Demandes de soutien',os.getenv('CASEWORK_SUPPORT_REVIEW_CHANNEL_ID','1499496022529806446'),False,False),
         ('Logs recherche bien-être',config.WELLBEING_LOG_CHANNEL_ID,True,False)]
