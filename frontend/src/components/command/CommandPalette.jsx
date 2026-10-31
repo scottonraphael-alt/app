@@ -152,7 +152,7 @@ export default function CommandPalette({ onLogout }) {
     });
     const ordered = groups.flatMap((group) => found.filter((item) => item.group === group));
     const byId = new Map([...pages, ...actions].map((item) => [item.id, item]));
-    const recents = query.trim() ? [] : readRecents().map((r) => {
+    const recents = query.trim() ? [] : readRecents().filter(r => !["/staff/passation", "/staff/annuaire", "/staff/kudos", "/staff/accueil", "/staff/meteo-equipe"].includes((r.path || "").split("?")[0])).map((r) => {
       const known = byId.get(r.id);
       if (known) return { ...known, id: `recent-${known.id}`, group: "Récents" };
       if (r.path) return { id: `recent-${r.id}`, label: r.label, hint: "", group: "Récents", icon: Star, run: () => navigate(r.path) };

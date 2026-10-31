@@ -42,7 +42,6 @@ const ResponsableChannelArchivesPage = lazy(() => import("./pages/ResponsableCha
 const ChannelArchiveWorkspacePage = lazy(() => import("./pages/ChannelArchiveWorkspacePage"));
 const ModerationCasierPage = lazy(() => import("./pages/ModerationCasierPage"));
 const TicketArchivesPage = lazy(() => import("./pages/TicketArchivesPage"));
-const HandoffsPage = lazy(() => import("./pages/HandoffsPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const StaffLoadPage = lazy(() => import("./pages/StaffLoadPage"));
 const MonthlyReportPage = lazy(() => import("./pages/MonthlyReportPage"));
@@ -52,10 +51,6 @@ const MeetingPollsPage = lazy(() => import("./pages/MeetingPollsPage"));
 const AiReviewQueuePage = lazy(() => import("./pages/AiReviewQueuePage"));
 const ModerationStatsPage = lazy(() => import("./pages/ModerationStatsPage"));
 const ProjectsTimelinePage = lazy(() => import("./pages/ProjectsTimelinePage"));
-const StaffDirectoryPage = lazy(() => import("./pages/StaffDirectoryPage"));
-const KudosPage = lazy(() => import("./pages/KudosPage"));
-const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
-const TeamWeatherPage = lazy(() => import("./pages/TeamWeatherPage"));
 const ReflexSheetsPage = lazy(() => import("./pages/ReflexSheetsPage"));
 const TrainingsPage = lazy(() => import("./pages/TrainingsPage"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage"));
@@ -418,7 +413,7 @@ function AuthenticatedApp({
 
           <Route
             path="/staff/passation"
-            element={canSeeStaff ? <HandoffsPage helper={helper} /> : <Navigate to={defaultRoute} replace />}
+            element={<Navigate to={defaultRoute} replace />}
           />
           <Route path="/notifications" element={<NotificationsPage helper={helper} />} />
           <Route
@@ -439,10 +434,10 @@ function AuthenticatedApp({
           <Route path="/moderation/revue-ia" element={canSeeStaff ? <AiReviewQueuePage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/moderation/statistiques" element={isResponsable ? <ModerationStatsPage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/animateur/projects/chronologie" element={(canSeeAnimateur || canSeeStaff) ? <ProjectsTimelinePage /> : <Navigate to={defaultRoute} replace />} />
-          <Route path="/staff/annuaire" element={canSeeTeam ? <StaffDirectoryPage /> : <Navigate to={defaultRoute} replace />} />
-          <Route path="/staff/kudos" element={canSeeTeam ? <KudosPage isResponsable={isResponsable} currentHelperId={helper?.id} helper={helper} /> : <Navigate to={defaultRoute} replace />} />
-          <Route path="/staff/accueil" element={canSeeTeam ? <OnboardingPage isResponsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
-          <Route path="/staff/meteo-equipe" element={canSeeTeam ? <TeamWeatherPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/annuaire" element={<Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/kudos" element={<Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/accueil" element={<Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/meteo-equipe" element={<Navigate to={defaultRoute} replace />} />
           <Route path="/staff/fiches-reflexes" element={canSeeTeam ? <ReflexSheetsPage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/staff/formations" element={canSeeTeam ? <TrainingsPage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/responsable/sante-systeme" element={isResponsable ? <SystemHealthPage /> : <Navigate to={defaultRoute} replace />} />

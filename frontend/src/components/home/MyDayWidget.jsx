@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Bell, CalendarClock, ClipboardList, NotebookPen, Users } from "lucide-react";
+import { ArrowRight, Bell, CalendarClock, ClipboardList, Users } from "lucide-react";
 
 function Section({ icon: Icon, title, items, empty, to, renderTail }) {
   return (
@@ -26,7 +26,7 @@ function Section({ icon: Icon, title, items, empty, to, renderTail }) {
 }
 
 export default function MyDayWidget({ day }) {
-  const { meetings, entries, tasks, transmissions, unreadNotifications, isLoading, isError } = day;
+  const { meetings, entries, tasks, unreadNotifications, isLoading, isError } = day;
   return (
     <section className="hm-card hm-day" aria-labelledby="hm-day-title" data-testid="my-day-widget">
       <div className="hm-card-head">
@@ -46,8 +46,6 @@ export default function MyDayWidget({ day }) {
           <Section icon={ClipboardList} title="Tâches à rendre" items={tasks} empty="Aucune tâche à rendre."
             to="/animateur/projects"
             renderTail={(t) => (t.sub ? <span className="hm-sub">{t.sub}</span> : null)} />
-          <Section icon={NotebookPen} title="Transmissions" items={transmissions} empty="Tout est lu." to="/staff/passation"
-            renderTail={(t) => (t.urgent ? <span className="hm-badge-urgent">Urgent</span> : null)} />
         </div>
       )}
       {unreadNotifications > 0 && (

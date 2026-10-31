@@ -111,3 +111,6 @@
 :root[data-theme="dark"] .tb-note.is-crisis .tb-note-title { color: var(--iris-danger); }
 :root[data-theme="dark"] .tb-note.is-urgent { box-shadow: inset 3px 0 0 var(--iris-warn); }
 :root[data-theme="dark"] .tb-note.is-urgent .tb-note-title { color: var(--iris-warn); }
+
+.tb-learning { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+@media (max-width: 900px) { .tb-learning span { display: none; } }

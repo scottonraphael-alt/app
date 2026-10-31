@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bell, ClipboardList, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bell, BookOpenCheck, GraduationCap, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
 
 import { api } from "../../api/client";
 import useTheme from "../../hooks/useTheme";
@@ -175,34 +175,20 @@ function NotificationBell() {
   );
 }
 
-function HandoffsButton() {
-  // La page « Passation » n'est proposée qu'au staff : on s'appuie sur la liste des pages autorisées.
-  const { data: favorites } = useQuery({
+function LearningLinks() {
+  const { data } = useQuery({
     queryKey: FAVORITES_KEY,
     queryFn: async () => (await api.get("/profile/me/favorites")).data,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const isStaff = Boolean(favorites?.available?.some((page) => page.key === "passation"));
-  const { data } = useQuery({
-    queryKey: ["handoffs", "unread"],
-    queryFn: async () => (await api.get("/handoffs", { params: { status: "open" } })).data,
-    enabled: isStaff,
-    refetchInterval: 60 * 1000,
-    refetchIntervalInBackground: false,
-    retry: false,
-  });
-  if (!isStaff) return null;
-  const unread = data?.unread_count || 0;
-  return (
-    <Link
-      className="tb-icon-btn" to="/staff/passation" data-testid="handoffs-button"
-      aria-label={unread ? `Passation, ${unread} non lues` : "Passation"} title="Passation"
-    >
-      <ClipboardList size={17} />
-      {unread > 0 && <span className="tb-badge">{unread > 99 ? "99+" : unread}</span>}
-    </Link>
-  );
+  const allowed = new Set((data?.available || []).map(page => page.key));
+  return <>{[
+    { key: "formations", path: "/staff/formations", label: "Mini formation", Icon: GraduationCap },
+    { key: "fiches_reflexes", path: "/staff/fiches-reflexes", label: "Fiche réflexe", Icon: BookOpenCheck },
+  ].filter(page => allowed.has(page.key)).map(({ key, path, label, Icon }) => (
+    <Link key={key} className="tb-chip tb-learning" to={path} title={label} aria-label={label}><Icon size={16} aria-hidden="true" /><span>{label}</span></Link>
+  ))}</>;
 }
 
 const THEME_META = {
@@ -237,7 +223,7 @@ export default function Topbar({ helper, roleLabel, onLogout }) {
         </button>
         <StatusPicker />
         <ThemeToggle />
-        <HandoffsButton />
+        <LearningLinks />
         <NotificationBell />
         {(helper || onLogout) && (
           <div className="tb-identity" data-testid="helper-identity">
