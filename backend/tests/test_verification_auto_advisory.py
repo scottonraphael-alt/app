@@ -86,3 +86,27 @@ def test_concurrent_workers_share_a_lease(monkeypatch):
         finally:finish.set();await task
         assert generator.await_count==1
     h.run(check())
+
+
+def test_ai_repairs_invalid_output_and_accepts_json_fence(monkeypatch):
+    from types import SimpleNamespace
+    import json
+    submit()
+    async def check():
+        payload=output('form')['advisory']
+        responses=[SimpleNamespace(stop_reason='end_turn',content=[SimpleNamespace(type='text',text='not JSON')]),
+                   SimpleNamespace(stop_reason='end_turn',content=[SimpleNamespace(type='text',text='```json\n'+json.dumps(payload)+'\n```')])]
+        create=AsyncMock(side_effect=responses)
+        client=SimpleNamespace(messages=SimpleNamespace(create=create))
+        class Client:
+            async def __aenter__(self):return client
+            async def __aexit__(self,*args):pass
+        monkeypatch.setattr(auto.ai,'AsyncAnthropic',lambda **kwargs:Client())
+        monkeypatch.setattr(auto.ai.service.config,'ANTHROPIC_API_KEY','offline-test')
+        monkeypatch.setattr(auto.ai,'maximum_output_tokens',AsyncMock(return_value=4096))
+        monkeypatch.setattr(auto.ai,'log_response',lambda *args:None)
+        result=await auto.ai._generate(MID,None,rules='Des règles explicites assez longues pour ce test.')
+        assert result['advisory']==payload
+        assert create.await_count==2
+        assert 'maxLength' in create.call_args.kwargs['system']
+    h.run(check())

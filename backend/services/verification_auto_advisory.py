@@ -17,7 +17,7 @@ async def inputs(member_id):
     rules=(await workflow_settings.load())['admission_rules']
     data,form_id=await ai._context(member_id,None,rules=rules)
     model=os.getenv('VERIFICATION_AI_MODEL',service.config.TICKET_SUMMARY_MODEL).strip()
-    fingerprint=hashlib.sha256(json.dumps([form_id,data,model],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
+    fingerprint=hashlib.sha256(json.dumps([2,form_id,data,model],sort_keys=True,ensure_ascii=False).encode()).hexdigest()
     return fingerprint,rules,form_id
 
 async def cached(member_id):
