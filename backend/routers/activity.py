@@ -12,6 +12,8 @@ Flux :
    Seuls les rôles « contrôleurs » (staff) peuvent mettre en pause / relancer
    et choisir la vidéo active parmi les fichiers du dossier.
 """
+import hashlib
+import hmac
 import logging
 import math
 import os
@@ -61,6 +63,22 @@ ACTIVITY_CONTROLLER_ROLE_IDS = {
 
 # True : la vidéo démarre dès l'ouverture de l'Activity. False : le staff doit lancer la lecture.
 ACTIVITY_AUTOSTART = os.environ.get("ACTIVITY_AUTOSTART", "true").lower() != "false"
+
+
+def _activity_token_key() -> str | None:
+    """Clé dédiée aux jetons vidéo, distincte de celle des cookies de session."""
+    explicit = os.environ.get("ACTIVITY_TOKEN_SECRET", "").strip()
+    if explicit:
+        return explicit
+    if not APP_SESSION_SECRET:
+        return None
+    # Dérivée de APP_SESSION_SECRET : aucune nouvelle variable d'environnement n'est requise.
+    return hmac.new(
+        APP_SESSION_SECRET.encode("utf-8"), b"iris-activity-video-token", hashlib.sha256
+    ).hexdigest()
+
+
+ACTIVITY_TOKEN_KEY = _activity_token_key()
 
 ROOM_TTL = 6 * 3600
 MAX_SEEK_SECONDS = 7 * 24 * 3600
@@ -131,9 +149,18 @@ def _is_configured() -> bool:
             ACTIVITY_CLIENT_ID,
             ACTIVITY_CLIENT_SECRET,
             DISCORD_GUILD_ID,
-            APP_SESSION_SECRET,
+            ACTIVITY_TOKEN_KEY,
         ]
     )
+
+
+def decode_video_token(token: str) -> dict | None:
+    if not ACTIVITY_TOKEN_KEY:
+        return None
+    try:
+        return jwt.decode(token, ACTIVITY_TOKEN_KEY, algorithms=["HS256"], audience=AUDIENCE)
+    except jwt.PyJWTError:
+        return None
 
 
 @router.post("/token")
@@ -170,6 +197,9 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         member = member_response.json()
 
     user_id = (member.get("user") or {}).get("id", "unknown")
+    user = member.get("user") or {}
+    # Pseudo affiché dans le blind test : surnom du serveur > nom global > nom d'utilisateur.
+    user_name = (member.get("nick") or user.get("global_name") or user.get("username") or "Joueur")[:32]
 
     member_roles = set(member.get("roles", []))
     if ACTIVITY_ALLOWED_ROLE_IDS and not member_roles & ACTIVITY_ALLOWED_ROLE_IDS:
@@ -187,7 +217,7 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
             "can_control": can_control,
             "exp": int(time.time()) + VIDEO_TOKEN_TTL,
         },
-        APP_SESSION_SECRET,
+        ACTIVITY_TOKEN_KEY,
         algorithm="HS256",
     )
 
@@ -195,6 +225,8 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         "access_token": access_token,
         "video_token": video_token,
         "can_control": can_control,
+        "user_id": user_id,
+        "user_name": user_name,
         "title": path.stem,
         "video_version": video_version(path),
         "playing": ACTIVITY_AUTOSTART,
@@ -239,9 +271,7 @@ def iter_file(path: Path, start: int, length: int):
 
 @router.get("/video")
 async def activity_video(request: Request, t: str) -> Response:
-    try:
-        jwt.decode(t, APP_SESSION_SECRET, algorithms=["HS256"], audience=AUDIENCE)
-    except jwt.PyJWTError:
+    if decode_video_token(t) is None:
         raise HTTPException(status_code=403, detail="Accès refusé.")
 
     path = current_video_path()
@@ -282,6 +312,7 @@ class Room:
         self.since = time.monotonic()
         self.touched = time.monotonic()
         self.clients: set[WebSocket] = set()
+        self.mode = "cinema"
 
     def current_position(self) -> float:
         if not self.playing:
@@ -311,10 +342,29 @@ class Room:
             "type": "state",
             "playing": self.playing,
             "position": round(self.current_position(), 2),
+            "mode": self.mode,
         }
 
 
 ROOMS: dict[str, Room] = {}
+
+# Modes de l'Activity : « cinema » (vidéo, par défaut) ou « karaoke » (karaoké + blind test,
+# voir routers/activity_karaoke.py). Les modules intéressés s'y abonnent : callback(instance_id, mode).
+ACTIVITY_MODES = ("cinema", "karaoke")
+MODE_LISTENERS: list = []
+
+
+def set_room_mode(instance_id: str, room: "Room", mode: str) -> None:
+    if mode not in ACTIVITY_MODES or mode == room.mode:
+        return
+    room.mode = mode
+    if mode != "cinema":
+        room.set_playing(False)  # la vidéo ne continue pas d'avancer pendant le karaoké
+    for listener in MODE_LISTENERS:
+        try:
+            listener(instance_id, mode)
+        except Exception:  # noqa: BLE001 - un abonné défaillant ne doit pas bloquer le changement
+            logger.exception("Abonné au changement de mode de l'Activity en échec")
 
 
 def purge_rooms() -> None:
@@ -366,9 +416,8 @@ async def select_video(name: str) -> bool:
 
 @router.websocket("/ws")
 async def activity_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
-    try:
-        claims = jwt.decode(t, APP_SESSION_SECRET, algorithms=["HS256"], audience=AUDIENCE)
-    except jwt.PyJWTError:
+    claims = decode_video_token(t)
+    if claims is None:
         await websocket.close(code=4403)
         return
     if not INSTANCE_ID_RE.match(instance_id):
@@ -404,6 +453,11 @@ async def activity_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
                     and math.isfinite(float(raw_position))
                 ):
                     room.set_position(float(raw_position))
+                    await broadcast(room)
+            elif kind == "set_mode" and can_control:
+                requested = message.get("mode")
+                if requested in ACTIVITY_MODES:
+                    set_room_mode(instance_id, room, requested)
                     await broadcast(room)
             elif kind == "list" and can_control:
                 await websocket.send_json(videos_message())
