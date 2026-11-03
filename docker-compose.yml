@@ -23,6 +23,7 @@ services:
     container_name: emergent-backend
     volumes:
       - resources-data:/app/storage
+      - ./activity-karaoke:/data/karaoke:ro
       - ./activity-video:/data/activity:ro
       - ./ai_config:/app/ai_config
     env_file:
