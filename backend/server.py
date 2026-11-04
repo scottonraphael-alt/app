@@ -10,6 +10,7 @@ from routers import sanction_access, announcements, server_statistics, admin, au
 from routers import command_descriptions
 from services.command_descriptions import run as run_command_descriptions
 from routers import anonymous_messages
+from services.resolutions import run as run_resolutions
 from services.anonymous_messages import run as run_anonymous_messages
 from services.verification_auto_advisory import run as run_verification_advisories
 from routers import moderation_prompt
@@ -216,6 +217,7 @@ async def startup() -> None:
     _feature_stop_event = asyncio.Event()
     _feature_tasks[:] = [
         asyncio.create_task(supervise("command_descriptions", run_command_descriptions(moderation_client, _feature_stop_event))),
+        asyncio.create_task(supervise("resolutions", run_resolutions(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("anonymous_messages", run_anonymous_messages(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("defouloir_reset", run_defouloir_reset(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("purgatory", run_purgatory(moderation_client, _feature_stop_event))),

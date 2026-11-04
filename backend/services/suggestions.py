@@ -103,7 +103,7 @@ class SuggestionModal(discord.ui.Modal):
                 raise HTTPException(422, 'Utilise un salon textuel du serveur pour proposer une suggestion.')
             row = {'_id': str(it.id), 'guild_id': str(it.guild_id), 'author_id': str(it.user.id),
                    'title': title, 'explanation': explanation, 'avatar_url': str(it.user.display_avatar.url),
-                   'channel_id': str(target.id), 'created_at': datetime.now(timezone.utc).isoformat()}
+                   'channel_id': str(target.id), 'resolution_requested': True, 'created_at': datetime.now(timezone.utc).isoformat()}
             view = SuggestionView(row)
             sent = await target.send(view=view, allowed_mentions=NONE)
             row['message_id'] = str(sent.id)

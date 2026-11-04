@@ -177,3 +177,7 @@ WELLBEING_LOG_CHANNEL_ID = os.getenv("WELLBEING_LOG_CHANNEL_ID", "15239660833446
 
 # Salon de publication des suggestions ; surcharge possible par variable d’environnement.
 DISCORD_SUGGESTION_CHANNEL_ID = os.environ.get("DISCORD_SUGGESTION_CHANNEL_ID", "1556220183775805481").strip()
+
+# Gouvernance du serveur : avis consultatif du Conseil, décision Responsable.
+DISCORD_RESOLUTION_CHANNEL_ID = os.environ.get("DISCORD_RESOLUTION_CHANNEL_ID", "1528506172145930381").strip()
+DISCORD_COUNCIL_ROLE_ID = os.environ.get("DISCORD_COUNCIL_ROLE_ID", "1321630788898258955").strip()
