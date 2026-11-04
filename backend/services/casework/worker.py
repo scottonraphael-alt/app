@@ -14,6 +14,8 @@ async def tick(gateway, settings):
         except Exception:
             logger.warning('Rétablissement du dossier à reprendre : %s', row['_id'])
     from services.casework import operations
+    # Fallback for callers using this standalone cycle. The priority worker uses
+    # the same atomic leases, so an operation can never be applied twice.
     async for row in db.case_tickets.find({'guild_id':settings.guild_id,'operation.status':{'$in':['pending','running']}}):
         try:await operations.run(row['_id'],gateway,settings)
         except Exception:logger.warning('Action de dossier à reprendre : %s',row['_id'])
@@ -54,4 +56,4 @@ async def mark_message_activity(channel_id, guild_id, settings):
         return
     await db.case_tickets.update_one(
         {'_id': service.key(settings.guild_id, str(channel_id)), 'status': {'$ne': 'archived'}},
-        {'$set': {'sync.due': True}})
+        {'$set': {'sync.due': True}, '$inc': {'revision': 1, 'activity_revision': 1}})

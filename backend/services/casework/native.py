@@ -173,18 +173,20 @@ async def create(request_id,client):
         await db.case_tickets.update_one({'_id':case['_id']},{'$set':{'source':'iris','request_id':request_id,'sync.due':True,'opening_context.triggers':row['triggers'] if support else None}})
         await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'status':'open','stage':'ready','channel_id':str(channel.id),'case_id':case['_id'],
             'room_panel_message_id':receipt['message_id'],'room_panel_version':4,'name_version':1}})
-        if support:
-            from services.ticket_import import import_ticket_channel
-            from services.discord_service import DiscordService
-            try:
-                await import_ticket_channel(str(channel.id),DiscordService())
-            except Exception:
-                # The Discord room is already confirmed. Retry the helper import independently.
-                logger.exception('Import du suivi Helper à reprendre (%s).',request_id)
         await audit('casework.room.created',row['actor_id'],case_id=case['_id'],kind=row['kind'])
         return await db.case_requests.find_one({'_id':request_id})
     except Exception as error:
-        await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'status':'uncertain','error_type':type(error).__name__}})
+        current = await db.case_requests.find_one({'_id': request_id, 'token': token})
+        transient = (isinstance(error, (OSError, TimeoutError)) or
+                     isinstance(error, HTTPException) and error.status_code >= 500 or
+                     isinstance(error, discord.HTTPException) and error.status >= 500)
+        # Retrying is safe only before the durable channel-creation checkpoint.
+        # A lost create response remains uncertain: never create a second room.
+        retry = transient and current and current.get('stage') == 'reserved'
+        fields = {'status': 'pending' if retry else 'uncertain', 'error_type': type(error).__name__}
+        if retry:
+            fields['retry_after'] = (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()
+        await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':fields})
         raise
     finally:
         await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'lease_until':None}})
@@ -227,91 +229,114 @@ async def refresh_room_panel(client,row):
     await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_message_id':str(message_id),'room_panel_version':4,'avatar_panel_version':1,'room_panel_state':state},'$unset':{'room_panel_error':''}})
 
 
-async def tick(client):
+async def tick(client, *, maintenance_only=None):
+    from services.workflow_batch import process
+    server = await guild(client)
+    statuses = (['open', 'refused'] if maintenance_only is True else
+                ['waiting', 'pending', 'creating'] if maintenance_only is False else
+                ['waiting', 'refused', 'pending', 'creating', 'open'])
+    cursor = db.case_requests.find({'guild_id': str(server.id), 'status': {'$in': statuses},
+        '$or': [{'retry_after': {'$exists': False}}, {'retry_after': {'$lte': service.now()}}]}).sort('created_at', 1)
+    async def handle(row):
+        await process_request(client, server, row, maintain=maintenance_only is not False)
+    await process(cursor, handle)
+
+
+async def process_request(client, server, row, *, maintain=True):
     from services.casework.commands import SupportDecision
     from services.workflow_panels import revision
-    from services.verification_runtime import Adapter,message
-    server=await guild(client)
-    async for row in db.case_requests.find({'guild_id':str(server.id),'status':{'$in':['waiting','refused','pending','creating','open']}}):
-        if 'member_avatar_url' not in row or 'member_username' not in row:
-            try:
-                member=await server.fetch_member(int(row['member_id']))
-                row['member_avatar_url']=str(member.display_avatar.url)
-                row['member_username']=member.name
-            except discord.NotFound:
-                row['member_avatar_url']=None
-                row['member_username']=None
-            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username')}})
+    from services.verification_runtime import Adapter, message
+    if row['status'] not in ('pending', 'creating') and ('member_avatar_url' not in row or 'member_username' not in row):
+        try:
+            member=await server.fetch_member(int(row['member_id']))
+            row['member_avatar_url']=str(member.display_avatar.url)
+            row['member_username']=member.name
+        except discord.NotFound:
+            row['member_avatar_url']=None
+            row['member_username']=None
+        await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username')}})
 
-        if row['status'] in ('pending','creating'):
-            try:
-                row=await create(row['_id'],client) or row
-            except Exception:
-                logger.exception('Création du ticket interrompue (%s).',row['_id'])
-        elif row['status']=='waiting' and not row.get('notification'):
-            try:
-                channel=await server.fetch_channel(int(os.getenv('CASEWORK_SUPPORT_REVIEW_CHANNEL_ID','1499496022529806446')))
-                await private_destination(channel,server,support=True)
-                adapter=Adapter(client);nonce=hashlib.sha256(('support-review:'+row['_id']).encode()).hexdigest()[:24]
-                panel=SupportDecision(row)
-                await adapter.send_once(channel,panel,nonce,allowed_roles=[role for role in (config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if role])
-                receipt=await db.workflow_receipts.find_one({'_id':nonce})
-                client.add_view(panel,message_id=int(receipt['message_id']))
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}},'$unset':{'notification_error':''}})
-            except Exception as exc:
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
-                logger.exception('Publication de la demande de soutien interrompue (%s).',row['_id'])
-        if row['status']=='waiting' and row.get('notification'):
-            current_revision=revision('request:support')
-            if row.get('notification_revision')!=current_revision:
-                try:
-                    channel=await server.fetch_channel(int(row['notification']['channel_id']))
-                    panel=SupportDecision(row)
-                    await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
-                    client.add_view(panel,message_id=int(row['notification']['message_id']))
-                    await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_revision':current_revision}})
-                except Exception:
-                    logger.exception('Actualisation du panneau de demande à reprendre (%s).',row['_id'])
-        if row['status']=='open':
-            if not row.get('name_version'):
-                try:
-                    await normalize_room_name(row,server)
-                except Exception:
-                    logger.exception('Mise à jour du nom du salon à reprendre (%s).',row['_id'])
-            if row['kind']=='support':
-                try:
-                    from services.ticket_import import import_ticket_channel
-                    from services.discord_service import DiscordService
-                    if not await db.tickets.find_one({'channel_id':row['channel_id']},{'_id':1}):
-                        await import_ticket_channel(row['channel_id'],DiscordService())
-                except Exception:
-                    logger.exception('Liaison vers le suivi Helper à reprendre (%s).',row['_id'])
-            try:
-                case=await service.load(row['case_id'],str(server.id))
-                if row.get('avatar_panel_version')!=1 or row.get('room_panel_version')!=4 or row.get('room_panel_state')!=await current_panel_state(case):
-                    await refresh_room_panel(client,row)
-            except Exception as exc:
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
-                logger.exception('Mise à jour du menu de ticket à reprendre (%s).',row['_id'])
-        if row['status'] in ('refused','open') and row['kind']!='verification' and not row.get('member_notice'):
-            try:
-                user=await client.fetch_user(int(row['member_id']));dm=await user.create_dm()
-                if row['status']=='refused':body='La coordination n’a pas accepté cette demande.\n\n'+row.get('decision_reason','')+'\n\nTu pourras refaire une demande après le délai anti-spam.'
-                else:
-                    body=f'Ton espace est ouvert : https://discord.com/channels/{server.id}/{row["channel_id"]}'
-                    if row['kind']=='bubble':body='Tu n’as rien fait de mal : nous souhaitons simplement échanger en privé.\n\n'+body
-                    elif row['kind']=='summons':body='Le Staff souhaite échanger avec toi. Sans réponse après trois jours, une alerte sera transmise à l’équipe pour une décision humaine.\n\n'+body
-                await Adapter(client).send_once(dm,member_notice(row,body),hashlib.sha256(('member-notice:'+row['_id']).encode()).hexdigest()[:24])
-                status='sent'
-            except Exception:status='unconfirmed'
-            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_notice':status}})
-        if row.get('notification') and row['status'] in ('open','refused') and (row.get('review_version')!=2 or row.get('review_revision')!=revision('review:support')):
+    if row['status'] in ('pending','creating'):
+        try:
+            row=await create(row['_id'],client) or row
+        except Exception:
+            logger.exception('Création du ticket interrompue (%s).',row['_id'])
+    elif row['status']=='waiting' and not row.get('notification'):
+        try:
+            channel=await server.fetch_channel(int(os.getenv('CASEWORK_SUPPORT_REVIEW_CHANNEL_ID','1499496022529806446')))
+            await private_destination(channel,server,support=True)
+            adapter=Adapter(client);nonce=hashlib.sha256(('support-review:'+row['_id']).encode()).hexdigest()[:24]
+            panel=SupportDecision(row)
+            await adapter.send_once(channel,panel,nonce,allowed_roles=[role for role in (config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if role])
+            receipt=await db.workflow_receipts.find_one({'_id':nonce})
+            client.add_view(panel,message_id=int(receipt['message_id']))
+            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification':{'channel_id':str(channel.id),'message_id':receipt['message_id']}},'$unset':{'notification_error':''}})
+        except Exception as exc:
+            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
+            logger.exception('Publication de la demande de soutien interrompue (%s).',row['_id'])
+    if row['status']=='waiting' and row.get('notification'):
+        current_revision=revision('request:support')
+        if row.get('notification_revision')!=current_revision:
             try:
                 channel=await server.fetch_channel(int(row['notification']['channel_id']))
-                await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=support_receipt(row),allowed_mentions=discord.AllowedMentions.none())
-                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'review_updated':True,'review_version':2,'review_revision':revision('review:support')}})
-            except Exception:pass
-
+                panel=SupportDecision(row)
+                await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=panel,allowed_mentions=discord.AllowedMentions.none())
+                client.add_view(panel,message_id=int(row['notification']['message_id']))
+                await db.case_requests.update_one({'_id':row['_id']},{'$set':{'notification_revision':current_revision}})
+            except Exception:
+                logger.exception('Actualisation du panneau de demande à reprendre (%s).',row['_id'])
+    if row['status']=='open' and maintain:
+        if not row.get('name_version'):
+            try:
+                await normalize_room_name(row,server)
+            except Exception:
+                logger.exception('Mise à jour du nom du salon à reprendre (%s).',row['_id'])
+        if row['kind']=='support':
+            try:
+                from services.ticket_import import import_ticket_channel
+                from services.discord_service import DiscordService
+                if not await db.tickets.find_one({'channel_id':row['channel_id']},{'_id':1}):
+                    await import_ticket_channel(row['channel_id'],DiscordService())
+            except Exception:
+                logger.exception('Liaison vers le suivi Helper à reprendre (%s).',row['_id'])
+        try:
+            case=await service.load(row['case_id'],str(server.id))
+            if row.get('avatar_panel_version')!=1 or row.get('room_panel_version')!=4 or row.get('room_panel_state')!=await current_panel_state(case):
+                await refresh_room_panel(client,row)
+        except Exception as exc:
+            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'room_panel_error':str(exc.detail) if isinstance(exc,HTTPException) else type(exc).__name__}})
+            logger.exception('Mise à jour du menu de ticket à reprendre (%s).',row['_id'])
+    if (row['status'] in ('refused','open') and row['kind']!='verification'
+            and row.get('member_notice') not in ('sent', 'unavailable')
+            and row.get('member_notice_retry_after', '') <= service.now()):
+        try:
+            user=await client.fetch_user(int(row['member_id']));dm=await user.create_dm()
+            if row['status']=='refused':body='La coordination n’a pas accepté cette demande.\n\n'+row.get('decision_reason','')+'\n\nTu pourras refaire une demande après le délai anti-spam.'
+            else:
+                body=f'Ton espace est ouvert : https://discord.com/channels/{server.id}/{row["channel_id"]}'
+                if row['kind']=='bubble':body='Tu n’as rien fait de mal : nous souhaitons simplement échanger en privé.\n\n'+body
+                elif row['kind']=='summons':body='Le Staff souhaite échanger avec toi. Sans réponse après trois jours, une alerte sera transmise à l’équipe pour une décision humaine.\n\n'+body
+            nonce = hashlib.sha256(('member-notice:'+row['_id']).encode()).hexdigest()[:24]
+            receipt = await db.workflow_receipts.find_one({'_id': nonce})
+            if receipt and receipt.get('status') == 'inflight':
+                from services.verification_runtime import reconcile_message
+                receipt = await reconcile_message(client, receipt)
+                if receipt.get('status') != 'sent':
+                    raise HTTPException(409, 'Notification à réconcilier avant répétition.')
+            await Adapter(client).send_once(dm, member_notice(row, body), nonce)
+            status='sent'
+        except Exception as exc:
+            forbidden = (isinstance(exc, discord.HTTPException) and exc.status in (403, 404) or
+                         isinstance(exc, HTTPException) and exc.status_code in (403, 404))
+            status = 'unavailable' if forbidden else 'unconfirmed'
+        await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_notice':status,
+            'member_notice_retry_after': (datetime.now(timezone.utc) + timedelta(seconds=60)).isoformat()}})
+    if row.get('notification') and row['status'] in ('open','refused') and (row.get('review_version')!=2 or row.get('review_revision')!=revision('review:support')):
+        try:
+            channel=await server.fetch_channel(int(row['notification']['channel_id']))
+            await channel.get_partial_message(int(row['notification']['message_id'])).edit(view=support_receipt(row),allowed_mentions=discord.AllowedMentions.none())
+            await db.case_requests.update_one({'_id':row['_id']},{'$set':{'review_updated':True,'review_version':2,'review_revision':revision('review:support')}})
+        except Exception:pass
 
 async def private_destination(channel,server,*,support=False):
     if not isinstance(channel,discord.TextChannel) or channel.guild.id!=server.id or channel.permissions_for(server.default_role).view_channel:

@@ -260,3 +260,39 @@ def test_cancel_closure_restores_previous_ticket_state(previous,visibility):
     result=h.run(closure.cancel(case_id,gateway,SETTINGS))
     assert result['status']==previous and result['closure'] is None
     gateway.restore_access.assert_awaited_once()
+
+
+def test_message_received_during_snapshot_keeps_refresh_due():
+    from services.casework.worker import mark_message_activity
+    reader, case_id = seed()
+    original = reader.history
+    async def history(channel_id):
+        async for page in original(channel_id):
+            yield page
+        await mark_message_activity(CHANNEL, h.GUILD_ID, SETTINGS)
+    reader.history = history
+    row = h.run(sync.synchronize(case_id, reader, SETTINGS))
+    assert row['sync']['history_complete'] and row['sync']['due'] is True
+    reader.history = original
+    row = h.run(sync.synchronize(case_id, reader, SETTINGS))
+    assert row['sync']['due'] is False
+
+
+def test_activity_between_snapshot_read_and_save_cannot_be_overwritten(monkeypatch):
+    from services.casework.worker import mark_message_activity
+    from datetime import datetime, timezone
+    reader, case_id = seed()
+    original = service.save
+    fired = False
+    async def save(old, changed):
+        nonlocal fired
+        if changed.get('sync', {}).get('status') == 'ready' and not fired:
+            fired = True
+            await mark_message_activity(CHANNEL, h.GUILD_ID, SETTINGS)
+        return await original(old, changed)
+    monkeypatch.setattr(service, 'save', save)
+    with pytest.raises(HTTPException):
+        h.run(sync.synchronize(case_id, reader, SETTINGS))
+    row = h.run(service.load(case_id, h.GUILD_ID))
+    assert row['sync']['due'] is True
+    assert (datetime.fromisoformat(row['sync']['retry_after'])-datetime.now(timezone.utc)).total_seconds() < 10

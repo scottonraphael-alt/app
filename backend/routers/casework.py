@@ -99,7 +99,9 @@ async def retry_request(request_id:str,payload:RequestRetry,request:Request,help
                 receipt=await reconcile_message(moderation_client,receipt)
                 if receipt['status']!='sent':await db.workflow_receipts.delete_one({'_id':nonce,'status':'inflight'})
     await audit(request,helper,'request.retry_requested',request_id=request_id,confirmed_missing=payload.confirmed_missing)
-    await db.case_requests.update_one({'_id':request_id,'status':'uncertain'},{'$set':{'status':'pending','lease_until':None}})
+    await db.case_requests.update_one({'_id':request_id,'status':'uncertain'},{'$set':{'status':'pending','lease_until':None}, '$unset': {'retry_after': ''}})
+    from services.migration_runtime import wake_tickets
+    wake_tickets()
     return {'status':'pending'}
 
 

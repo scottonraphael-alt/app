@@ -168,7 +168,8 @@ async def synchronize(case_id, reader, settings):
         changed['last_message_at'] = newest['timestamp'] if newest else None
         changed['sync'] = {'status': 'ready', 'at': service.now(), 'generation': generation,
                            'history_complete': True, 'files_complete': complete_files,
-                           'watermark': str(newest['id']) if newest else None, 'due': False}
+                           'watermark': str(newest['id']) if newest else None,
+                           'due': current.get('activity_revision', 0) != row.get('activity_revision', 0)}
         changed['lease'] = None
         # Keep cached messages no longer in Discord. A Discord deletion is not an Iris purge.
         await service.save(current, changed)
@@ -184,7 +185,7 @@ async def synchronize(case_id, reader, settings):
         await db.case_tickets.update_one(
             {'_id': case_id, 'lease.token': token},
             {'$set': {'sync.status': 'error', 'sync.error_type': type(error).__name__, 'sync.due': True,
-                      'sync.retry_after': (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat(),
+                      'sync.retry_after': (datetime.now(timezone.utc) + timedelta(seconds=5 if isinstance(error, HTTPException) and error.status_code == 409 else 600)).isoformat(),
                       'lease': None}, '$inc': {'revision': 1}})
         raise
 

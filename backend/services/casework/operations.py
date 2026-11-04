@@ -54,7 +54,10 @@ async def request_action(case_id,actor_id,action,reason,request_id,*,revision,pa
     changed['operation']={**(op if op.get('status')=='uncertain' else {}),'id':op.get('id') if op.get('status')=='uncertain' else uuid4().hex,
         'actor_id':str(actor_id),'action':action,'reason':reason.strip(),'participant_id':participant_id,'status':'pending','lease_until':None,'requested_at':service.now()}
     changed['events'].append(service.event('action',str(actor_id),action=action,request_id=request_id,participant_id=participant_id,reason=reason.strip()))
-    return service.public(await service.save(row,changed))
+    saved = await service.save(row, changed)
+    from services.migration_runtime import wake_operations
+    wake_operations()
+    return service.public(saved)
 
 
 async def snapshot(channel,row):

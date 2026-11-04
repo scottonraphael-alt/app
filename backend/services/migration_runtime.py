@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 _verification_wakeup = None
 _ticket_wakeup = None
 _closure_wakeup = None
+_operation_wakeup = None
 
 
 def wake_verifications():
@@ -160,9 +161,7 @@ async def run_ticket_delivery(client, stop):
                 try:
                     await workflow_settings.apply()
                     if policy.Settings().enabled and discord_actions_enabled():
-                        from services.workflow_panel_sync import tick as sync_panels
-                        await sync_panels(client)
-                        await native.tick(client)
+                        await native.tick(client, maintenance_only=False)
                     record_run('native_ticket_delivery')
                 except Exception:
                     record_run('native_ticket_delivery', False, 'Livraison des tickets à reprendre.')
@@ -216,3 +215,67 @@ async def run_closures(client,stop):
                 await asyncio.gather(*waits,return_exceptions=True)
     finally:
         if _closure_wakeup is wakeup:_closure_wakeup=None
+
+
+async def run_ticket_maintenance(client, stop):
+    """Existing-room refreshes and panel edits cannot starve new intakes."""
+    from services.casework import native
+    from services.workflow_panel_sync import tick as sync_panels
+    from services.system_health import record_run
+    while not stop.is_set():
+        if client.is_ready() and policy.Settings().enabled and discord_actions_enabled():
+            try:
+                await sync_panels(client)
+                await native.tick(client, maintenance_only=True)
+                record_run('ticket_maintenance')
+            except Exception:
+                record_run('ticket_maintenance', False, 'Actualisation des tickets à reprendre.')
+                logger.exception('Actualisation des tickets à reprendre.')
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            pass
+
+
+def wake_operations():
+    if _operation_wakeup is not None:
+        _operation_wakeup.set()
+
+
+async def run_operations(client, stop):
+    """Permission changes run independently of slow historical discovery."""
+    from services.casework import operations
+    from services.workflow_batch import process
+    from services.system_health import record_run
+    global _operation_wakeup
+    wakeup = asyncio.Event()
+    _operation_wakeup = wakeup
+    try:
+        while not stop.is_set():
+            wakeup.clear()
+            if client.is_ready() and policy.Settings().enabled and discord_actions_enabled():
+                try:
+                    settings = policy.Settings()
+                    gateway = DiscordGateway(client, settings)
+                    cursor = db.case_tickets.find({'guild_id': settings.guild_id,
+                        'operation.status': {'$in': ['pending', 'running']}})
+                    async def handle(row):
+                        await operations.run(row['_id'], gateway, settings)
+                    await process(cursor, handle)
+                    record_run('ticket_operations')
+                except Exception:
+                    record_run('ticket_operations', False, 'Actions de tickets à reprendre.')
+                    logger.exception('Actions de tickets à reprendre.')
+            if wakeup.is_set():
+                continue
+            waits = [asyncio.create_task(stop.wait()), asyncio.create_task(wakeup.wait())]
+            try:
+                await asyncio.wait(waits, timeout=5, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in waits:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*waits, return_exceptions=True)
+    finally:
+        if _operation_wakeup is wakeup:
+            _operation_wakeup = None

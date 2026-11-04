@@ -129,21 +129,23 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
     record = row.get('staff_delivery') or {}
     if record.get('channel_id') and str(channel.id) != record['channel_id']:
         raise HTTPException(409, 'Le salon de suivi a changé : la livraison existante doit être reprise explicitement.')
+    replacement = ''
     if record.get('message_id'):
         try:
             await channel.get_partial_message(int(record['message_id'])).edit(view=view, allowed_mentions=NONE)
         except discord.NotFound:
             # A deleted post is explicitly replaced, not mistaken for an API transport failure.
+            replacement = ':' + str(record['message_id'])
             record = {}
     if not record.get('message_id') and not row.get('forms'):
         return
     if not record.get('message_id'):
-        nonce = hashlib.sha256(f'verification:{row["_id"]}:{row["forms"][-1]["id"]}'.encode()).hexdigest()[:24]
+        nonce = hashlib.sha256(f'verification:{row["_id"]}:{row["forms"][-1]["id"]}{replacement}'.encode()).hexdigest()[:24]
         from services.announcement_publishing import discord_request
         payload = {'components': view.to_components()}
         payload.update(flags=32768, allowed_mentions={'parse': []}, nonce=nonce, enforce_nonce=True)
         # Fail closed after an interrupted delivery. Discord nonce deduplication is time limited.
-        receipt_key = f'verification-panel:{row["_id"]}:{row["forms"][-1]["id"]}'
+        receipt_key = f'verification-panel:{row["_id"]}:{row["forms"][-1]["id"]}{replacement}'
         receipt = await db.workflow_receipts.find_one({'_id': receipt_key})
         if receipt and receipt.get('status') == 'inflight':
             receipt = await reconcile_message(client, receipt)
@@ -255,6 +257,7 @@ async def review_thread(channel, record, row):
 
 async def publish_thread_form(client, thread, row, record, advisory=None):
     view=StaffForm(row['member_id'],base_url=config.FRONTEND_URL,row=row,advisory=advisory) if row.get('forms') else message('📁 Formulaire supprimé','Les réponses de ce dossier ont été supprimées par un Responsable.')
+    replacement = ''
     if record.get('form_message_id'):
         try:
             await thread.get_partial_message(int(record['form_message_id'])).edit(view=view,allowed_mentions=NONE)
@@ -262,9 +265,9 @@ async def publish_thread_form(client, thread, row, record, advisory=None):
             return
         except discord.NotFound:
             # Do not blindly repeat an old receipt whose message was deleted.
-            record.pop('form_message_id',None)
+            replacement = ':' + str(record.pop('form_message_id'))
     if not row.get('forms'):return
-    key=hashlib.sha256(f'verification-thread-form:{thread.id}:{row["forms"][-1]["id"]}'.encode()).hexdigest()[:24]
+    key=hashlib.sha256(f'verification-thread-form:{thread.id}:{row["forms"][-1]["id"]}{replacement}'.encode()).hexdigest()[:24]
     receipt=await db.workflow_receipts.find_one({'_id':key})
     if receipt and receipt.get('status')=='inflight':
         receipt=await reconcile_message(client,receipt)
@@ -521,29 +524,37 @@ class Adapter:
 
 async def tick(client):
     require_native_workflows()
-    adapter = Adapter(client)
-    async for row in db.verification_cases.find({'guild_id': service.guild(), '$or': [{'active': True, 'forms.0': {'$exists': True}}, {'staff_delivery': {'$exists': True}}]}):
-        if not row.get('active') and row.get('status') in service.FINAL and (row.get('staff_delivery') or {}).get('cleanup_status')=='done':
-            continue
-        for job in row.get('jobs', []):
-            # Uncertain effects need an explicit human retry, not a once-per-minute sanction loop.
-            if job['status'] == 'pending' or (job['status'] == 'running' and (job.get('lease_until') or '') <= service.stamp()):
-                try:
-                    await jobs.run_job(row['member_id'], job['id'], adapter)
-                except Exception:
-                    logger.exception('Traitement de vérification différé (%s).', job['id'])
-        current = await service.load(row['member_id'])
-        if not current.get('active') and current.get('status') in service.FINAL:
-            try:await cleanup_staff(client,current)
-            except Exception:logger.exception('Nettoyage Discord du formulaire à reprendre (%s).',row['member_id'])
-            continue
-        from services.workflow_panels import revision as panel_revision
-        if (current.get('staff_delivery') or {}).get('mini_presentation_revision')!=panel_revision('staff:verification') or (current.get('staff_delivery') or {}).get('presentation_revision')!=panel_revision('form:verification') or (current.get('staff_delivery') or {}).get('layout_version') != 8 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
-            try:
-                await publish_staff(client, current)
-            except Exception:
-                logger.exception('Livraison du suivi de vérification en attente (%s).', row['member_id'])
+    from services.workflow_batch import process
+    cursor = db.verification_cases.find({'guild_id': service.guild(), '$or': [
+        {'active': True, 'forms.0': {'$exists': True}}, {'staff_delivery': {'$exists': True}, '$or': [
+            {'status': {'$nin': list(service.FINAL)}}, {'staff_delivery.cleanup_status': {'$ne': 'done'}}]}]})
+    async def handle(row):
+        await process_case(client, row)
+    await process(cursor, handle)
 
+
+async def process_case(client, row):
+    adapter = Adapter(client)
+    if not row.get('active') and row.get('status') in service.FINAL and (row.get('staff_delivery') or {}).get('cleanup_status')=='done':
+        return
+    for job in row.get('jobs', []):
+        # Uncertain effects need an explicit human retry, not a once-per-minute sanction loop.
+        if job['status'] == 'pending' or (job['status'] == 'running' and (job.get('lease_until') or '') <= service.stamp()):
+            try:
+                await jobs.run_job(row['member_id'], job['id'], adapter)
+            except Exception:
+                logger.exception('Traitement de vérification différé (%s).', job['id'])
+    current = await service.load(row['member_id'])
+    if not current.get('active') and current.get('status') in service.FINAL:
+        try:await cleanup_staff(client,current)
+        except Exception:logger.exception('Nettoyage Discord du formulaire à reprendre (%s).',row['member_id'])
+        return
+    from services.workflow_panels import revision as panel_revision
+    if (current.get('staff_delivery') or {}).get('mini_presentation_revision')!=panel_revision('staff:verification') or (current.get('staff_delivery') or {}).get('presentation_revision')!=panel_revision('form:verification') or (current.get('staff_delivery') or {}).get('layout_version') != 8 or (current.get('staff_delivery') or {}).get('revision') != current['revision'] or ((current.get('staff_delivery') or {}).get('advisory_until') and current['staff_delivery']['advisory_until'] <= service.stamp()):
+        try:
+            await publish_staff(client, current)
+        except Exception:
+            logger.exception('Livraison du suivi de vérification en attente (%s).', row['member_id'])
 
 async def install(client):
     if not policy.Settings().enabled or not discord_actions_enabled() or getattr(client, 'verification_registered', False):

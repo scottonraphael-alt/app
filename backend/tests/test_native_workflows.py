@@ -511,7 +511,8 @@ def test_ticket_delivery_is_independent_of_history_and_wakes(monkeypatch):
         stop=asyncio.Event()
         first=asyncio.Event()
         calls=[]
-        async def tick(client):
+        async def tick(client, **kwargs):
+            assert kwargs == {"maintenance_only": False}
             calls.append(client)
             if len(calls)==1:first.set()
             else:stop.set()
@@ -636,3 +637,80 @@ def test_existing_assignment_with_only_id_is_enriched_for_display(world):
     assert enriched['assigned']['username']
     stored=h.run(h.db.case_tickets.find_one({'_id':case['id']}))
     assert stored['assigned']['username']==enriched['assigned']['username']
+
+
+def test_transient_preflight_failure_is_retried_but_ambiguous_creation_is_not(world, monkeypatch):
+    guild, client = world
+    row = reserve()
+    original = guild.fetch_member
+    guild.fetch_member = AsyncMock(side_effect=TimeoutError('temporary outage'))
+    with pytest.raises(TimeoutError):
+        h.run(native.create(row['_id'], client))
+    stored = h.run(h.db.case_requests.find_one({'_id': row['_id']}))
+    assert stored['status'] == 'pending' and stored['stage'] == 'reserved'
+    assert stored['retry_after'] > service.now()
+    h.run(native.tick(client, maintenance_only=False))
+    assert guild.fetch_member.await_count == 1  # respects retry backoff
+    guild.fetch_member = original
+    h.run(h.db.case_requests.update_one({'_id': row['_id']}, {'$unset': {'retry_after': ''}}))
+    guild.create_text_channel = AsyncMock(side_effect=TimeoutError('response lost'))
+    with pytest.raises(TimeoutError):
+        h.run(native.create(row['_id'], client))
+    stored = h.run(h.db.case_requests.find_one({'_id': row['_id']}))
+    assert stored['status'] == 'uncertain' and stored['stage'] == 'creating_channel'
+    h.run(native.tick(client, maintenance_only=False))
+    guild.create_text_channel.assert_awaited_once()
+
+
+def test_new_intake_does_not_wait_for_existing_room_maintenance(world, monkeypatch):
+    existing = reserve()
+    h.run(h.db.case_requests.update_one({'_id': existing['_id']}, {'$set': {'status': 'open', 'case_id': 'existing'}}))
+    h.run(h.db.case_requests.insert_one({**existing, '_id': 'new-request', 'member_id': '500000000000000002'}))
+    processed = []
+    async def handle(client, server, row, **kwargs):
+        assert kwargs['maintain'] is False
+        processed.append(row['_id'])
+    monkeypatch.setattr(native, 'process_request', handle)
+    h.run(native.tick(world[1], maintenance_only=False))
+    assert processed == ['new-request']
+
+
+def test_member_notification_recovers_from_transient_outage(world, monkeypatch):
+    case = opened(world)
+    client = world[1]
+    row = h.run(h.db.case_requests.find_one({'_id': case['request_id']}))
+    client.fetch_user = AsyncMock(side_effect=TimeoutError('temporary'))
+    h.run(native.process_request(client, world[0], row, maintain=False))
+    stored = h.run(h.db.case_requests.find_one({'_id': row['_id']}))
+    assert stored['member_notice'] == 'unconfirmed'
+    client.fetch_user = AsyncMock(return_value=SimpleNamespace(create_dm=AsyncMock(return_value=SimpleNamespace(id=123))))
+    stored['member_notice_retry_after'] = ''
+    h.run(native.process_request(client, world[0], stored, maintain=False))
+    assert h.run(h.db.case_requests.find_one({'_id': row['_id']}))['member_notice'] == 'sent'
+
+
+def test_permission_operation_worker_wakes_without_waiting_for_history(monkeypatch):
+    from services import migration_runtime as runtime
+    async def run():
+        stop, first = asyncio.Event(), asyncio.Event()
+        await h.db.case_tickets.insert_one({'_id': 'op-case', 'guild_id': h.GUILD_ID, 'operation': {'status': 'pending'}})
+        calls = []
+        async def perform(*args):
+            calls.append(args)
+            if len(calls) == 1:
+                first.set()
+            else:
+                stop.set()
+        monkeypatch.setattr(operations, 'run', perform)
+        client = SimpleNamespace(is_ready=lambda: True)
+        task = asyncio.create_task(runtime.run_operations(client, stop))
+        try:
+            await asyncio.wait_for(first.wait(), 1)
+            runtime.wake_operations()
+            await asyncio.wait_for(task, 1)
+            assert len(calls) == 2
+            assert runtime._operation_wakeup is None
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    h.run(run())

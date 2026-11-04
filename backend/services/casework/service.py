@@ -28,6 +28,9 @@ async def indexes():
     await db.case_tickets.create_index([('guild_id', 1), ('channel_id', 1)], unique=True)
     await db.case_tickets.create_index([('guild_id', 1), ('kind', 1), ('status', 1), ('updated_at', -1)])
     await db.case_tickets.create_index([('guild_id', 1), ('member.id', 1), ('visibility', 1)])
+    await db.case_requests.create_index([('guild_id', 1), ('status', 1), ('created_at', 1)])
+    await db.case_requests.create_index([('guild_id', 1), ('member_id', 1), ('kind', 1), ('created_at', -1)])
+    await db.case_tickets.create_index([('guild_id', 1), ('operation.status', 1)])
     await db.case_messages.create_index([('ticket_id', 1), ('id', 1)], unique=True)
     await db.case_messages.create_index([('ticket_id', 1), ('sort_key', 1)])
 

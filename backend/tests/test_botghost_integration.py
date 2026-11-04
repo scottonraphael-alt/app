@@ -618,3 +618,41 @@ def test_closure_confirmation_wakes_idle_worker(monkeypatch):
             if not task.done():task.cancel()
             await asyncio.gather(task,return_exceptions=True)
     h.run(check())
+
+
+def test_deleted_thread_form_uses_a_new_receipt_and_is_recreated_once(monkeypatch):
+    import discord
+    client, starter, detail, thread, post = thread_delivery_fixture(monkeypatch)
+    h.run(transport.publish_staff(client, h.run(forms.load(MEMBER))))
+    row = h.run(forms.load(MEMBER))
+    missing = discord.NotFound(SimpleNamespace(status=404, reason='Not Found'), {'code': 10008, 'message': 'Unknown Message'})
+    detail.edit.side_effect = missing
+    replacement = SimpleNamespace(edit=AsyncMock())
+    thread.get_partial_message.side_effect = lambda ident: detail if ident == 777 else replacement
+    post.return_value = {'id': '778'}
+    h.run(transport.publish_staff(client, row))
+    row = h.run(forms.load(MEMBER))
+    assert row['staff_delivery']['form_message_id'] == '778'
+    h.run(transport.publish_staff(client, row))
+    assert post.await_count == 2  # initial send and one explicit replacement
+
+
+def test_deleted_staff_panel_does_not_reuse_deleted_message_receipt(monkeypatch):
+    import discord
+    client, starter, detail, thread, post = thread_delivery_fixture(monkeypatch)
+    row = h.run(forms.load(MEMBER))
+    old_key = f'verification-panel:{row["_id"]}:{row["forms"][-1]["id"]}'
+    h.run(h.db.workflow_receipts.insert_one({'_id': old_key, 'status': 'sent', 'message_id': '555'}))
+    missing = discord.NotFound(SimpleNamespace(status=404, reason='Not Found'), {'code': 10008, 'message': 'Unknown Message'})
+    starter.edit.side_effect = missing
+    replacement = SimpleNamespace(edit=AsyncMock(), create_thread=AsyncMock(return_value=thread))
+    channel = transport.private_review_channel.return_value
+    channel.get_partial_message.side_effect = lambda ident: starter if ident == 555 else replacement
+    monkeypatch.setattr(transport, 'review_thread', AsyncMock(return_value=thread))
+    monkeypatch.setattr(transport, 'publish_thread_form', AsyncMock())
+    post.return_value = {'id': '8888'}
+    h.run(transport.publish_staff(client, row))
+    current = h.run(forms.load(MEMBER))
+    assert current['staff_delivery']['message_id'] == '8888'
+    h.run(transport.publish_staff(client, current))
+    post.assert_awaited_once()
