@@ -174,3 +174,6 @@ PROJECT_REMINDER_CHANNEL_ID = "1534270215490244829"
 # Private Discord wellbeing commands. Reuse the existing Anthropic configuration.
 WELLBEING_AI_MODEL = os.getenv("WELLBEING_AI_MODEL", TICKET_SUMMARY_MODEL).strip()
 WELLBEING_LOG_CHANNEL_ID = os.getenv("WELLBEING_LOG_CHANNEL_ID", "1523966083344629810").strip()
+
+# Salon de publication des suggestions ; surcharge possible par variable d’environnement.
+DISCORD_SUGGESTION_CHANNEL_ID = os.environ.get("DISCORD_SUGGESTION_CHANNEL_ID", "1556220183775805481").strip()
