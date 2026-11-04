@@ -9,6 +9,7 @@ from database import client, db, initialize_indexes
 from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report, team_presence, ticket_notes, ticket_tags, ticket_followups, agenda_polls, agenda_move, meeting_extras, casier_bulk, moderation_stats, project_extras, staff_directory, staff_status, kudos, onboarding, team_weather, reflex_sheets, trainings, debriefs, staff_announcements, system_health
 from routers import command_descriptions
 from services.command_descriptions import run as run_command_descriptions
+from routers import resolutions
 from routers import anonymous_messages
 from services.resolutions import run as run_resolutions
 from services.anonymous_messages import run as run_anonymous_messages
@@ -139,6 +140,7 @@ app.include_router(agenda_move.router, prefix="/api")
 app.include_router(meeting_extras.router, prefix="/api")
 app.include_router(casier_bulk.router, prefix="/api")
 app.include_router(command_descriptions.router, prefix="/api")
+app.include_router(resolutions.router, prefix="/api")
 app.include_router(anonymous_messages.router, prefix="/api")
 app.include_router(moderation_stats.router, prefix="/api")
 app.include_router(moderation_prompt.router, prefix="/api")

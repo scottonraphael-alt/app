@@ -20,7 +20,7 @@ test('staff cards include admission and anonymous history, with descriptions',as
  try{
   await act(async()=>root.render(<StaffLinks isStaff/>));
   const links=[...host.querySelectorAll('a')];
-  expect(links).toHaveLength(6);
+  expect(links).toHaveLength(7);
   expect(links.every(a=>a.querySelector('strong')&&a.querySelector('small'))).toBe(true);
   expect(links.some(a=>a.getAttribute('href')==='/staff/verifications')).toBe(true);
   expect(links.some(a=>a.getAttribute('href')==='/staff/messages-anonymes')).toBe(true);

@@ -4,6 +4,7 @@ import { ArrowRight, ClipboardList, FileCheck2, MessagesSquare, ShieldCheck, Spa
 export default function CaseworkDashboardLinks({ isStaff = false, isResponsable = false, isServerAdmin = false }) {
   if (!(isStaff || isResponsable || isServerAdmin)) return null;
   const links = [
+    ['/staff/resolutions','Résolutions','Consulter les votes du Conseil, les décisions et la numérotation.',ClipboardList,'clay'],
     ['/staff/messages-anonymes','Messages anonymes','Consulter les propositions, les décisions et les publications.',MessagesSquare,'blue'],
     ['/staff/dossiers/verification','Tickets de vérification','Retrouver les échanges complémentaires aux formulaires.',FileCheck2,'sage'],
     ['/staff/dossiers/summons','Convocations','Suivre les échanges demandés par l’équipe de modération.',ShieldCheck,'clay'],

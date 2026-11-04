@@ -95,7 +95,7 @@ def test_suggestion_enrollment_delivery_restart_and_sync(monkeypatch):
         target.guild = SimpleNamespace(id=int(h.GUILD_ID))
         message = SimpleNamespace(edit=AsyncMock())
         target.get_partial_message.return_value = message
-        client = SimpleNamespace(fetch_channel=AsyncMock(side_effect=lambda ident: target if str(ident)==str(svc.config.DISCORD_RESOLUTION_CHANNEL_ID) else SimpleNamespace(id=888)), add_view=Mock())
+        client = SimpleNamespace(fetch_channel=AsyncMock(side_effect=lambda ident: target if str(ident) in (str(svc.config.DISCORD_RESOLUTION_CHANNEL_ID), str(svc.config.DISCORD_RESOLUTION_JOURNAL_CHANNEL_ID)) else SimpleNamespace(id=888)), add_view=Mock())
         send = AsyncMock(return_value='777')
         monkeypatch.setattr(anonymous_messages, 'deliver', send)
         await svc.tick(client)
@@ -109,6 +109,11 @@ def test_suggestion_enrollment_delivery_restart_and_sync(monkeypatch):
         await svc.act(row['_id'], 'responsable', 'approve')
         await svc.tick(client)
         assert 'Résolution approuvée' in str(message.edit.call_args.kwargs['view'].to_components())
+        decided = await h.db.resolutions.find_one({'_id': row['_id']})
+        assert decided['journal_message_id'] == '777'
+        assert send.await_count == 2
+        await svc.tick(client)
+        assert send.await_count == 2  # no second journal publication
     asyncio.run(run())
 
 

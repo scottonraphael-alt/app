@@ -156,6 +156,35 @@ class Panel(discord.ui.LayoutView):
         self.add_item(box)
 
 
+class Journal(discord.ui.LayoutView):
+    """Immutable decision record, without voting controls."""
+    def __init__(self, row):
+        super().__init__(timeout=None)
+        accepted = row['status'] == 'approved'
+        votes = list(row.get('votes', {}).values())
+        positive = sum(v['choice'] == 'yes' for v in votes)
+        negative = sum(v['choice'] == 'no' for v in votes)
+        state, emoji = ('Approuvée', '✅') if accepted else ('Rejetée', '❌')
+        heading = f"# {emoji} Résolution `{row['number']}` : {state}\n\n"
+        kind = 'Suggestion' if row['source_kind'] == 'suggestion' else 'Demande'
+        heading += f"## 🛡️ {kind} de <@{row['author_id']}> `{row['author_id']}`"
+        box = discord.ui.Container(accent_colour=0x57B887 if accepted else 0xF16C6C)
+        if row.get('avatar_url'):
+            box.add_item(discord.ui.Section(discord.ui.TextDisplay(heading), accessory=discord.ui.Thumbnail(row['avatar_url'])))
+        else:
+            box.add_item(discord.ui.TextDisplay(heading))
+        box.add_item(discord.ui.TextDisplay(f'### ✅ Vote positif : {positive}  | ❌ Vote Negatif : {negative}'))
+        box.add_item(discord.ui.Separator())
+        box.add_item(discord.ui.TextDisplay('**Titre :**\n' + code(row['title'])))
+        box.add_item(discord.ui.TextDisplay('**Explications :**\n' + code(row['explanation'])))
+        box.add_item(discord.ui.Separator())
+        box.add_item(discord.ui.TextDisplay(f"Décision de <@{row['decided_by']}> · <t:{int(datetime.fromisoformat(row['decided_at']).timestamp())}:f>"))
+        if accepted:
+            staff = f"<@&{config.DISCORD_STAFF_ROLE_ID}>" if config.DISCORD_STAFF_ROLE_ID else 'le Staff'
+            box.add_item(discord.ui.TextDisplay('-# Une mise en place rapide de cette résolution par ' + staff + ' est nécessaire.'))
+        self.add_item(box)
+
+
 async def tick(client):
     # Only suggestions created with the governance feature enabled are enrolled.
     async for suggestion in db.suggestions.find({'guild_id': guild(), 'resolution_requested': True, 'message_id': {'$exists': True}}):
@@ -165,7 +194,7 @@ async def tick(client):
         await db.suggestions.update_one({'_id': suggestion['_id']}, {'$set': {'resolution_id': row['_id'], 'resolution_requested': False}})
     async for row in db.resolutions.find({'guild_id': guild()}):
         expired = now() >= datetime.fromisoformat(row['vote_until'])
-        if row.get('message_id') and row.get('thread_id') and row.get('synced_revision') == row['revision'] and row.get('synced_expired') == expired:
+        if row.get('message_id') and row.get('thread_id') and row.get('synced_revision') == row['revision'] and row.get('synced_expired') == expired and (row['status'] == 'open' or row.get('journal_message_id')):
             continue
         token = uuid4().hex
         lease = await db.resolutions.update_one({'_id': row['_id'], '$or': [
@@ -178,6 +207,14 @@ async def tick(client):
             target = await client.fetch_channel(int(row['channel_id']))
             if not isinstance(target, discord.TextChannel) or str(target.guild.id) != guild():
                 raise HTTPException(503, 'Salon de résolutions invalide.')
+            if row['status'] != 'open' and not row.get('journal_message_id'):
+                journal = await client.fetch_channel(int(config.DISCORD_RESOLUTION_JOURNAL_CHANNEL_ID))
+                if not isinstance(journal, discord.TextChannel) or str(journal.guild.id) != guild():
+                    raise HTTPException(503, 'Salon du journal des résolutions invalide.')
+                from services.anonymous_messages import deliver
+                journal_id = await deliver(client, journal, Journal(row), 'resolution-journal', row['_id'])
+                await db.resolutions.update_one(query, {'$set': {'journal_message_id': str(journal_id),
+                    'journal_channel_id': str(journal.id), 'journal_published_at': now().isoformat()}})
             view = Panel(row)
             if not row.get('message_id'):
                 from services.anonymous_messages import deliver
