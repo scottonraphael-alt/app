@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+WORKDIR /app
+ENV OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 HF_HOME=/models/huggingface TORCH_HOME=/models/torch
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt requirements.karaoke-worker.txt ./
+RUN pip install --no-cache-dir emergentintegrations==0.2.0 --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r requirements.karaoke-worker.txt
+COPY . .
+CMD ["python", "-m", "services.karaoke_prepare_worker"]

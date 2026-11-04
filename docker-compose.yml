@@ -24,6 +24,7 @@ services:
       - resources-data:/app/storage
       - ./activity-video:/data/activity:ro
       - ./ai_config:/app/ai_config
+      - karaoke-music:/data/karaoke
     env_file:
       - .env
     depends_on:
@@ -43,6 +44,39 @@ services:
     networks:
       - npm_default
 
+  # Optional CPU services: docker compose --profile karaoke up -d --build
+  karaoke-preparation:
+    profiles: [karaoke]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.karaoke
+    env_file: [.env]
+    environment:
+      KARAOKE_CPU_THREADS: "2"
+      KARAOKE_WHISPER_MODEL: base
+      KARAOKE_DEMUCS_ENABLED: "true"
+    volumes:
+      - resources-data:/app/storage
+      - karaoke-music:/data/karaoke:ro
+      - karaoke-models:/models
+    cpus: 2
+    mem_limit: 6g
+    depends_on: [mongodb]
+    restart: unless-stopped
+    networks: [npm_default]
+
+  karaoke-voice:
+    profiles: [karaoke]
+    build: ./karaoke-voice
+    env_file: [.env]
+    environment:
+      KARAOKE_BACKEND_URL: http://backend:8000/api/activity/karaoke
+    depends_on: [backend]
+    restart: unless-stopped
+    networks: [npm_default]
+
 volumes:
+  karaoke-music:
+  karaoke-models:
   mongo-data:
   resources-data:

@@ -82,3 +82,7 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
+
+# Local music inputs and isolated voice receiver dependencies
+/karaoke-voice/node_modules/
+/karaoke-music/

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DiscordSDK } from "@discord/embedded-app-sdk";
+import KaraokeStage from "./KaraokeStage";
 
 // Dans l'iframe Discord, le domaine est .discordsays.com : on peut donc
 // retrouver le client id sans variable de build. REACT_APP_DISCORD_CLIENT_ID est facultatif.
@@ -166,6 +167,8 @@ export default function ActivityPage() {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [seekPreview, setSeekPreview] = useState(null);
+  // "cinema" (vidéo CinéStream) ou "karaoke" (karaoké + blind test) : décidé par le serveur.
+  const [mode, setMode] = useState("cinema");
 
   const videoRef = useRef(null);
   const socketRef = useRef(null);
@@ -305,8 +308,11 @@ export default function ActivityPage() {
             status: "ok",
             title: data.title,
             canControl: data.can_control,
+            userId: data.user_id,
+            userName: data.user_name,
             videoToken: data.video_token,
             instanceId: sdk.instanceId,
+            channelId: sdk.channelId,
           });
         }
       } catch (error) {
@@ -374,6 +380,7 @@ export default function ActivityPage() {
           return;
         }
         if (message.type !== "state") return;
+        if (message.mode) setMode(message.mode);
         serverState.current = { playing: message.playing, position: message.position };
         setPlaying(message.playing);
         setPosition(message.position);
@@ -443,6 +450,12 @@ export default function ActivityPage() {
     if (name !== currentVideo) send({ type: "select", name });
   };
 
+  const switchMode = (nextMode) => {
+    revealControls();
+    setPickerOpen(false);
+    send({ type: "set_mode", mode: nextMode });
+  };
+
   const startPlayback = () => {
     setNeedsClick(false);
     applyState();
@@ -459,6 +472,10 @@ export default function ActivityPage() {
         </div>
       </div>
     );
+  }
+
+  if (mode === "karaoke") {
+    return <KaraokeStage session={session} onExit={session.canControl ? () => switchMode("cinema") : null} />;
   }
 
   const videoSrc =
@@ -571,6 +588,9 @@ export default function ActivityPage() {
             </button>
             <button type="button" style={styles.controlButton} onClick={togglePicker}>
               🎞 Vidéos
+            </button>
+            <button type="button" style={styles.controlButton} onClick={() => switchMode("karaoke")}>
+              🎤 Karaoké
             </button>
           </div>
         </div>

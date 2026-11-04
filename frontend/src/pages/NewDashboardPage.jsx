@@ -244,6 +244,7 @@ const pills = [
       )}
 
       {(isStaff || isResponsable || isServerAdmin) && <section className="nd-casework-module" aria-labelledby="member-casework-title"><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>}
+      <nav className="nd-helper-v2-shortcuts" aria-label="Animations musicales"><Link to="/karaoke" className="nd-helper-v2-shortcut nd-helper-v2-shortcut--clay"><span className="nd-helper-v2-shortcut-copy"><strong>🎤 Karaoké & blind test</strong><small>Chanter ensemble, réserver une chanson et jouer avec OasisLink.</small></span><ArrowRight size={18}/></Link></nav>
       {/* Espace réservé aux responsables */}
       {isResponsable && <ResponsableToolsModule/>}
 

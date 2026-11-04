@@ -197,6 +197,9 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         member = member_response.json()
 
     user_id = (member.get("user") or {}).get("id", "unknown")
+    user = member.get("user") or {}
+    # Pseudo affiché dans le blind test : surnom du serveur > nom global > nom d'utilisateur.
+    user_name = (member.get("nick") or user.get("global_name") or user.get("username") or "Joueur")[:32]
 
     member_roles = set(member.get("roles", []))
     if ACTIVITY_ALLOWED_ROLE_IDS and not member_roles & ACTIVITY_ALLOWED_ROLE_IDS:
@@ -204,14 +207,12 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
     can_control = bool(member_roles & ACTIVITY_CONTROLLER_ROLE_IDS)
 
     path = current_video_path()
-    if path is None or not path.is_file():
-        raise HTTPException(status_code=404, detail="Aucune vidéo disponible.")
-
     video_token = jwt.encode(
         {
             "sub": user_id,
             "aud": AUDIENCE,
             "can_control": can_control,
+            "name": user_name,
             "exp": int(time.time()) + VIDEO_TOKEN_TTL,
         },
         ACTIVITY_TOKEN_KEY,
@@ -222,9 +223,11 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
         "access_token": access_token,
         "video_token": video_token,
         "can_control": can_control,
-        "title": path.stem,
-        "video_version": video_version(path),
-        "playing": ACTIVITY_AUTOSTART,
+        "user_id": user_id,
+        "user_name": user_name,
+        "title": path.stem if path else "Karaoké Oasis",
+        "video_version": video_version(path) if path else 0,
+        "playing": bool(path) and ACTIVITY_AUTOSTART,
     }
 
 
@@ -307,6 +310,7 @@ class Room:
         self.since = time.monotonic()
         self.touched = time.monotonic()
         self.clients: set[WebSocket] = set()
+        self.mode = "cinema" if list_videos() else "karaoke"
 
     def current_position(self) -> float:
         if not self.playing:
@@ -336,10 +340,29 @@ class Room:
             "type": "state",
             "playing": self.playing,
             "position": round(self.current_position(), 2),
+            "mode": self.mode,
         }
 
 
 ROOMS: dict[str, Room] = {}
+
+# Modes de l'Activity : « cinema » (vidéo, par défaut) ou « karaoke » (karaoké + blind test,
+# voir routers/activity_karaoke.py). Les modules intéressés s'y abonnent : callback(instance_id, mode).
+ACTIVITY_MODES = ("cinema", "karaoke")
+MODE_LISTENERS: list = []
+
+
+def set_room_mode(instance_id: str, room: "Room", mode: str) -> None:
+    if mode not in ACTIVITY_MODES or mode == room.mode:
+        return
+    room.mode = mode
+    if mode != "cinema":
+        room.set_playing(False)  # la vidéo ne continue pas d'avancer pendant le karaoké
+    for listener in MODE_LISTENERS:
+        try:
+            listener(instance_id, mode)
+        except Exception:  # noqa: BLE001 - un abonné défaillant ne doit pas bloquer le changement
+            logger.exception("Abonné au changement de mode de l'Activity en échec")
 
 
 def purge_rooms() -> None:
@@ -428,6 +451,11 @@ async def activity_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
                     and math.isfinite(float(raw_position))
                 ):
                     room.set_position(float(raw_position))
+                    await broadcast(room)
+            elif kind == "set_mode" and can_control:
+                requested = message.get("mode")
+                if requested in ACTIVITY_MODES:
+                    set_room_mode(instance_id, room, requested)
                     await broadcast(room)
             elif kind == "list" and can_control:
                 await websocket.send_json(videos_message())

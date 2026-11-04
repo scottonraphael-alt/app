@@ -1,4 +1,5 @@
 const CommandDescriptionsPage=lazy(()=>import("./pages/CommandDescriptionsPage"));
+const KaraokePage=lazy(()=>import("./pages/KaraokePage"));
 const ResolutionsPage=lazy(()=>import("./pages/ResolutionsPage"));
 const AnonymousMessagesPage=lazy(()=>import("./pages/AnonymousMessagesPage"));
 const ModerationPromptPage=lazy(()=>import("./pages/ModerationPromptPage"));
@@ -150,6 +151,7 @@ function AuthenticatedApp({
     >
       <Suspense fallback={<Loading />}>
         <Routes>
+<Route path="/karaoke" element={<KaraokePage/>}/>
 <Route path="/staff/resolutions" element={(canSeeCasework||isHelper) ? <ResolutionsPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/staff/messages-anonymes" element={(canSeeCasework||isHelper) ? <AnonymousMessagesPage/> : <Navigate to={defaultRoute} replace/>}/>
 <Route path="/responsable/commandes-discord" element={isResponsable ? <CommandDescriptionsPage/> : <Navigate to={defaultRoute} replace/>}/>

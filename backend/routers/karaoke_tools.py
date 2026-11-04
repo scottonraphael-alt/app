@@ -1,0 +1,342 @@
+"""Authenticated site entry, preparation and optional OasisLink voice receiver bridge."""
+import hashlib
+import hmac
+import json
+import os
+import time
+from uuid import uuid4
+
+import httpx
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
+import config
+from database import db
+from routers import activity, activity_karaoke as karaoke
+from services.auth_service import current_helper
+from services.casework.policy import fresh_roles
+from services.karaoke_preparation import enqueue, prepared
+from services.karaoke_scoring import result
+
+router = APIRouter(prefix='/activity/karaoke', tags=['karaoke-tools'])
+SESSIONS = {}  # One bot voice connection per guild. Like Activity rooms: one API process.
+
+
+def claims(token):
+    value = activity.decode_video_token(token)
+    if not value:
+        raise HTTPException(401, 'Session expirée : rouvre le karaoké.')
+    return value
+
+
+async def controller(token):
+    value = claims(token)
+    roles = await fresh_roles(value['sub'])
+    allowed = activity.ACTIVITY_CONTROLLER_ROLE_IDS | {str(config.DISCORD_RESPONSABLE_ROLE_ID or ''), str(getattr(config, 'DISCORD_ANIMATEUR_ROLE_ID', '') or '')}
+    if not value.get('can_control') or not roles & (allowed-{''}):
+        raise HTTPException(403, 'Action réservée aux animateurs autorisés.')
+    return value
+
+
+def voice_secret():
+    secret = os.getenv('KARAOKE_VOICE_SECRET', '')
+    if not secret and config.APP_SESSION_SECRET:
+        secret = hmac.new(config.APP_SESSION_SECRET.encode(), b'iris-karaoke-voice-v1', hashlib.sha256).hexdigest()
+    if len(secret) < 32:
+        raise HTTPException(503, 'Le service vocal doit être configuré avant son utilisation.')
+    return secret
+
+
+async def receiver(path, payload):
+    url = os.getenv('KARAOKE_VOICE_URL', 'http://karaoke-voice:8091')
+    try:
+        async with httpx.AsyncClient(timeout=25) as client:
+            response = await client.post(url+path, json=payload, headers={'Authorization': 'Bearer '+voice_secret()})
+            if not response.is_success:
+                raise HTTPException(503, response.json().get('error', 'Le service vocal refuse cette connexion.'))
+            return response.json()
+    except httpx.HTTPError:
+        raise HTTPException(503, 'Service vocal indisponible. Le karaoké reste utilisable sans score vocal.')
+
+
+@router.post('/site-session')
+async def site_session(helper=Depends(current_helper)):
+    roles = await fresh_roles(helper.id)
+    allowed = activity.ACTIVITY_CONTROLLER_ROLE_IDS | {str(config.DISCORD_RESPONSABLE_ROLE_ID or ''), str(getattr(config, 'DISCORD_ANIMATEUR_ROLE_ID', '') or '')}
+    control = bool(roles & (allowed-{''}))
+    if not activity.ACTIVITY_TOKEN_KEY:
+        raise HTTPException(503, 'Clé de session indisponible.')
+    name = getattr(helper, 'global_name', None) or getattr(helper, 'username', None) or 'Joueur'
+    token = jwt.encode({'sub': str(helper.id), 'name': name,
+        'can_control': control, 'aud': activity.AUDIENCE, 'exp': int(time.time())+activity.VIDEO_TOKEN_TTL}, activity.ACTIVITY_TOKEN_KEY, algorithm='HS256')
+    return {'videoToken': token, 'userId': str(helper.id), 'userName': name,
+            'canControl': control, 'instanceId': 'site-oasis'}
+
+
+@router.get('/preparation')
+async def preparation(t: str, id: str):
+    claims(t)
+    track = karaoke.local_library().get(id)
+    if not track:
+        raise HTTPException(404, 'Morceau local introuvable.')
+    from services.karaoke_preparation import fingerprint
+    row = await db.karaoke_preparation.find_one({'_id': fingerprint(track)})
+    ready = prepared(track)
+    return {'status': 'ready' if ready else 'not_prepared' if (row or {}).get('status') == 'ready' else (row or {}).get('status', 'not_prepared'),
+            'error': (row or {}).get('error'), 'language': ready['lyrics']['lang'] if ready else None,
+            'pitch_available': bool(ready and ready.get('pitch'))}
+
+
+@router.post('/prepare')
+async def prepare(t: str, id: str):
+    actor = await controller(t)
+    track = karaoke.local_library().get(id)
+    if not track:
+        raise HTTPException(404, 'Morceau local introuvable.')
+    row = await enqueue(track, actor['sub'])
+    return {'status': row['status']}
+
+
+class VoiceStart(BaseModel):
+    instance_id: str = Field(max_length=128)
+    channel_id: str = Field(pattern=r'^\d{17,20}$')
+
+
+class Consent(BaseModel):
+    enabled: bool
+    latency_ms: int = Field(default=0, ge=-500, le=2000)
+
+
+async def save_scores(session):
+    if session.get('reference'):
+        await db.karaoke_results.update_one({'_id': session['run_id']}, {'$set': {
+            'instance_id': session['instance_id'], 'track_id': session['track_id'], 'at': time.time(),
+            'scores': scores(session)}}, upsert=True)
+
+
+def scores(session):
+    return [{'id': uid, 'name': session['names'].get(uid, 'Joueur'), **result(session['reference'], samples, session.get('until', 0), since=session['consents'][uid].get('start_position', 0))}
+            for uid in session['consents'] for samples in [session['samples'].get(uid, {})]] if session.get('reference') else []
+
+
+async def synchronize(session):
+    room = karaoke.ROOMS.get(session['instance_id'])
+    if not room:
+        return None
+    ident = (room.track_id, getattr(room, 'song_generation', 0))
+    if session.get('song_key') != ident:
+        await save_scores(session)
+        track = karaoke.local_library().get(room.track_id)
+        session.update(song_key=ident, track_id=room.track_id, reference=prepared(track) if track else None,
+                       run_id=uuid4().hex, samples={}, until=0, seen={})
+        for consent in session['consents'].values():
+            consent['start_position'] = room.clock.current()
+    if not session.get('reference') and session.get('reference_checked', 0) < time.time()-3:
+        session['reference_checked'] = time.time()
+        track = karaoke.local_library().get(room.track_id)
+        session['reference'] = prepared(track) if track else None
+        if session.get('reference'):
+            for consent in session['consents'].values():
+                consent['start_position'] = room.clock.current()
+    if room.mode == 'karaoke':
+        position = room.clock.current()
+        # Keep the final score when the host's audio element reports ended.
+        if position >= session.get('until', 0) or room.clock.playing:
+            session['until'] = position
+    return room
+
+
+@router.post('/voice/start')
+async def voice_start(payload: VoiceStart, t: str):
+    actor = await controller(t)
+    if not activity.INSTANCE_ID_RE.fullmatch(payload.instance_id) or payload.instance_id not in karaoke.ROOMS:
+        raise HTTPException(404, 'Salle de karaoké introuvable.')
+    if SESSIONS:
+        raise HTTPException(409, 'OasisLink est déjà utilisé pour une session vocale. Arrête-la avant de continuer.')
+    room = karaoke.ROOMS[payload.instance_id]
+    if room.mode != 'karaoke':
+        raise HTTPException(409, 'Le score vocal est réservé au karaoké.')
+    ident = uuid4().hex
+    # Reserve before awaiting I/O, preventing concurrent starts on one bot.
+    session = {'id': ident, 'instance_id': payload.instance_id, 'channel_id': payload.channel_id,
+               'consents': {}, 'names': {}, 'samples': {}, 'run_id': uuid4().hex, 'until': 0,
+               'created_at': time.time(), 'last_seen': time.time(), 'receiver_at': 0, 'reference': None}
+    SESSIONS[ident] = session
+    try:
+        await receiver('/start', {'id': ident, 'channel_id': payload.channel_id, 'guild_id': str(config.DISCORD_GUILD_ID), 'actor_id': actor['sub']})
+    except Exception:
+        SESSIONS.pop(ident, None)
+        raise
+    return {'status': 'connected', 'id': ident}
+
+
+@router.post('/voice/stop')
+async def voice_stop(t: str):
+    await controller(t)
+    for ident, session in list(SESSIONS.items()):
+        await receiver('/stop', {'id': ident})
+        await save_scores(session)
+        SESSIONS.pop(ident, None)
+    return {'status': 'stopped'}
+
+
+@router.post('/voice/consent')
+async def consent(payload: Consent, t: str, instance_id: str):
+    actor = claims(t)
+    session = next((s for s in SESSIONS.values() if s['instance_id'] == instance_id), None)
+    if not session:
+        raise HTTPException(409, 'L’animateur doit d’abord connecter OasisLink au salon vocal.')
+    uid = str(actor['sub'])
+    if payload.enabled:
+        room = await synchronize(session)
+        if not room or uid not in {c.uid for c in room.clients.values()}:
+            raise HTTPException(403, 'Rejoins cette salle de karaoké avant d’activer ton analyse.')
+        if len(session['consents']) >= 32 and uid not in session['consents']:
+            raise HTTPException(409, 'Le score vocal est limité à 32 participants simultanés.')
+        session['consents'][uid] = {'latency_ms': payload.latency_ms, 'at': time.time(), 'start_position': room.clock.current()}
+        session['names'][uid] = str(actor.get('name') or 'Joueur')[:32]
+    else:
+        session['consents'].pop(uid, None)
+        session['samples'].pop(uid, None)
+    return {'enabled': payload.enabled, 'latency_ms': payload.latency_ms}
+
+
+@router.get('/voice/status')
+async def voice_status(t: str, instance_id: str):
+    actor = claims(t)
+    session = next((s for s in SESSIONS.values() if s['instance_id'] == instance_id), None)
+    if not session:
+        return {'connected': False, 'scores': []}
+    session['last_seen'] = time.time()
+    await synchronize(session)
+    live = session.get('receiver_at', 0) > time.time()-10
+    return {'connected': live, 'connecting': not live, 'channel_id': session['channel_id'],
+            'consented': str(actor['sub']) in session['consents'], 'scores': scores(session),
+            'reference_ready': bool(session.get('reference')), 'pitch_available': bool(session.get('reference', {}).get('pitch')) if session.get('reference') else False}
+
+
+async def internal(request):
+    if request.headers.get('authorization') != 'Bearer '+voice_secret():
+        raise HTTPException(403, 'Service non autorisé.')
+
+
+@router.get('/internal/voice/control')
+async def voice_control(request: Request):
+    await internal(request)
+    configurations = []
+    for session in list(SESSIONS.values()):
+        session['receiver_at'] = time.time() if request.query_params.get('connected_id') == session['id'] else 0
+        room = await synchronize(session)
+        if not room or session['last_seen'] < time.time()-90 or time.time()-session['created_at'] > 6*3600:
+            await save_scores(session)
+            SESSIONS.pop(session['id'], None)
+            continue
+        present = {c.uid for c in room.clients.values() if c.plays}
+        configurations.append({'id': session['id'], 'channel_id': session['channel_id'],
+            'generation': session['run_id'], 'active': room.mode == 'karaoke' and room.clock.playing and bool(session.get('reference')),
+            'consents': [uid for uid in session['consents'] if uid in present]})
+    return {'sessions': configurations}
+
+
+@router.post('/internal/voice/frames')
+async def frames(request: Request):
+    await internal(request)
+    # Per-batch HMAC and timestamp prevent replay/forgery outside the receiver.
+    body = await request.body()
+    if len(body) > 200000:
+        raise HTTPException(413, 'Lot trop volumineux.')
+    stamp = request.headers.get('x-karaoke-time', '')
+    expected = hmac.new(voice_secret().encode(), stamp.encode()+b'.'+body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, request.headers.get('x-karaoke-signature', '')):
+        raise HTTPException(403, 'Signature invalide.')
+    try:
+        if abs(time.time()-float(stamp)) > 10:
+            raise ValueError()
+        payload = json.loads(body)
+        session = SESSIONS[payload['id']]
+    except (ValueError, KeyError, TypeError):
+        raise HTTPException(409, 'Lot expiré ou session terminée.')
+    room = await synchronize(session)
+    if payload.get('generation') != session['run_id'] or not room or room.mode != 'karaoke' or not room.clock.playing or not session.get('reference'):
+        return {'accepted': 0}
+    accepted = 0
+    present = {c.uid for c in room.clients.values() if c.plays}
+    for frame in payload.get('frames', [])[:1000]:
+        uid = str(frame.get('uid'))
+        if uid not in session['consents'] or uid not in present:
+            continue
+        captured = float(frame['at'])
+        if not time.time()-5 <= captured <= time.time()+.2:
+            continue
+        # Each sender stream has a monotonic sequence: retransmitting cannot add points.
+        sequence = int(frame['seq'])
+        if sequence <= session['seen'].get(uid, -1):
+            continue
+        session['seen'][uid] = sequence
+        position = room.clock.current()-(time.time()-captured)-session['consents'][uid]['latency_ms']/1000
+        index = int(position/.1)
+        if index < 0 or index >= 12000:
+            continue
+        hz = frame.get('pitch')
+        samples = session['samples'].setdefault(uid, {})
+        samples[index] = {'voiced': frame.get('voiced') is True, 'pitch': float(hz) if hz and 50 <= float(hz) <= 1500 else None}
+        accepted += 1
+    return {'accepted': accepted}
+
+
+@router.post('/import')
+async def import_track(request: Request, t: str):
+    actor = await controller(t)
+    from services.karaoke_game import AUDIO_TYPES
+    from pathlib import Path
+    form = await request.form(max_files=1, max_fields=3)
+    upload = form.get('file')
+    if upload is None or not hasattr(upload, 'read'):
+        raise HTTPException(422, 'Choisis un fichier audio complet.')
+    extension = Path(upload.filename or '').suffix.lower()
+    if extension not in AUDIO_TYPES:
+        raise HTTPException(422, 'Format audio non pris en charge.')
+    folder = karaoke.KARAOKE_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / (uuid4().hex + extension)
+    temporary = target.with_suffix('.upload')
+    size = 0
+    try:
+        import asyncio
+        with temporary.open('wb') as handle:
+            while chunk := await upload.read(1024*1024):
+                size += len(chunk)
+                if size > 200*1024*1024:
+                    raise HTTPException(413, 'Morceau limité à 200 Mo.')
+                await asyncio.to_thread(handle.write, chunk)
+        if not size:
+            raise HTTPException(422, 'Le fichier est vide.')
+        metadata = {'title': str(form.get('title') or Path(upload.filename or '').stem)[:100],
+                    'artist': str(form.get('artist') or '')[:100], 'source': str(form.get('source') or '')[:100]}
+        target.with_suffix('.json').write_text(json.dumps(metadata, ensure_ascii=False))
+        temporary.replace(target)
+    finally:
+        await upload.close()
+        temporary.unlink(missing_ok=True)
+    karaoke._LIBRARY['at'] = -1e9
+    track = next(v for v in karaoke.local_library().values() if v.path == target)
+    job = await enqueue(track, actor['sub'])
+    return {'track': track.public(), 'preparation': job['status']}
+
+
+@router.get('/catalog/search')
+async def catalog_search(q: str, t: str):
+    await controller(t)
+    if not 2 <= len(q.strip()) <= 80:
+        raise HTTPException(422, 'Recherche de 2 à 80 caractères.')
+    # Only the configured API is called; users cannot supply a download URL.
+    from services import karaoke_catalog as catalog
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(karaoke.DEEZER_URL+'/search', params={'q': q, 'limit': 50})
+        response.raise_for_status()
+        entries = [v for item in response.json().get('data', []) if (v := catalog.parse_track(item))]
+    merged = {entry['id']: entry for entry in karaoke._CATALOG['entries']}
+    merged.update({entry['id']: entry for entry in entries})
+    karaoke._set_catalog(list(merged.values())[-karaoke.CATALOG_TOTAL:], time.time())
+    return {'tracks': [v.public() for v in karaoke.library().values()]}
