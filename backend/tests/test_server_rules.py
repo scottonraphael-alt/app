@@ -8,7 +8,7 @@ from services import server_rules as service
 
 
 def interaction(guild_id=h.GUILD_ID):
-    return SimpleNamespace(guild_id=guild_id, response=SimpleNamespace(send_message=AsyncMock(), is_done=lambda: False),
+    return SimpleNamespace(guild_id=guild_id, guild=None, response=SimpleNamespace(send_message=AsyncMock(), is_done=lambda: False),
                            followup=SimpleNamespace(send=AsyncMock()))
 
 
@@ -18,19 +18,27 @@ def displays(view):
 
 def test_all_screenshot_articles_are_complete_and_within_discord_limits():
     async def run():
-        assert [len(category['articles']) for category in service.RULES] == [2, 5, 5, 2, 3]
-        for category in service.RULES:
+        assert [len(category['articles']) for category in service.BY_ID.values()] == [3, 3, 2, 5, 5, 2, 3, 7]
+        for category in service.BY_ID.values():
             view = service.RuleArticle(category['id'])
             actual = displays(view)
             assert actual[0] == '# ' + category['emoji'] + ' ' + category['title']
             for article in category['articles']:
-                assert '## ' + article['emoji'] + ' ' + article['title'] in actual
-                assert '```\n' + article['text'] + '\n```' in actual
+                if category['id'] == 'charter':
+                    assert category['intro'] in actual
+                    assert '## ' + article['title'] in actual
+                    assert article['text'] in actual
+                    if 'example' in article:
+                        assert '```diff\nExemple de situation :\n' + article['example'] + '\n```' in actual
+                else:
+                    assert '## ' + article['emoji'] + ' ' + article['title'] in actual
+                    assert '```\n' + article['text'] + '\n```' in actual
             assert sum(len(value.encode('utf-16-le'))//2 for value in actual) <= 4000
             assert len(list(view.walk_children())) <= 40
             assert view.to_components()
         assert '<#1081957993492533364>' in json.dumps(service.RULES)
         assert 'sans justification.' in json.dumps(service.RULES)
+        assert 'mais ne peux être imposé.' in json.dumps(service.RULES, ensure_ascii=False)
         assert 'Bannissement définitif' in json.dumps(service.RULES, ensure_ascii=False)
     h.run(run())
 
@@ -42,15 +50,32 @@ def test_index_is_public_but_every_article_opens_privately():
         assert it.response.send_message.call_args.kwargs.get('ephemeral', False) is False
         view = it.response.send_message.call_args.kwargs['view']
         assert view.is_persistent()
+        preamble, sections = view.children
+        assert all(isinstance(box, discord.ui.Container) for box in (preamble, sections))
+        assert [item.content for item in preamble.children if isinstance(item, discord.ui.TextDisplay)][1] == '## Préambule'
+        rows = [item for item in sections.children if isinstance(item, discord.ui.ActionRow)]
+        assert [[button.label for button in row.children] for row in rows] == [
+            ['Accès et Profil', 'Confidentialité & Propriété Intellectuelle'],
+            ['Salons Vocaux', 'Modération', 'Entraide et Discussions'],
+            ['Publicité et Transactions', 'Cadre Médical & Santé Mentale'],
+        ]
+        assert sections.children[-1].accessory.label == "Charte de L'Aidant"
+        assert sections.children[-1].accessory.style == discord.ButtonStyle.success
         buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
-        assert len(buttons) == 5 and len({b.custom_id for b in buttons}) == 5
-        for button, category in zip(buttons, service.RULES):
+        assert len(buttons) == 8 and len({b.custom_id for b in buttons}) == 8
+        for button in buttons:
+            category = service.BY_ID[button.custom_id.rsplit(':', 1)[1]]
             click = interaction()
+            click.guild = SimpleNamespace(channels=[
+                SimpleNamespace(name='🚨・│numéros-d-aide', mention='<#1234>'),
+            ])
             await button.callback(click)
             sent = click.response.send_message.call_args.kwargs
             assert sent['ephemeral'] is True
             assert sent['allowed_mentions'].to_dict() == service.NONE.to_dict()
             assert category['title'] in displays(sent['view'])[0]
+            if category['id'] == 'charter':
+                assert 'L’ensemble des numéros d’aide est disponible dans <#1234>.' in displays(sent['view'])
     h.run(run())
 
 

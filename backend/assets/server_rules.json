@@ -1,5 +1,26 @@
 [
   {
+    "id": "access",
+    "title": "Accès et Profils",
+    "label": "Accès et Profil",
+    "emoji": "🌟",
+    "articles": [
+      {"title": "Role Âge", "emoji": "🎂", "text": "L'attribution du rôle correspondant à votre tranche d'âge est attribué dès la validation de votre formulaire. Tout retrait entrainera une suspension de vos accès au serveur."},
+      {"title": "Conformité du Profil", "emoji": "👤", "text": "L'ensemble des éléments de votre compte (avatar, bannière, biographie, statut personnalisé et pseudonyme) doit respecter le règlement général du serveur."},
+      {"title": "Format du Pseudo", "emoji": "⌨️", "text": "Votre pseudo doit être facilement mentionnable et comporter **au moins 3 caractères figurant directement sur un clavier AZERTY**. Le staff se réserve le droit d'ajuster tout pseudonyme ne respectant pas cette contrainte."}
+    ]
+  },
+  {
+    "id": "privacy",
+    "title": "Confidentialité & Propriété Intellectuelle",
+    "emoji": "❔",
+    "articles": [
+      {"title": "Vie Privée", "emoji": "🔒", "text": "Tout propos, témoignage ou détail partagé par un membre concernant ses troubles ou sa vie privée doit rester strictement sur le serveur. Toute fuite extérieure sans accord écrit est formellement interdite."},
+      {"title": "Protection du Serveur", "emoji": "🛡️", "text": "Il est interdit de divulguer hors du serveur des informations internes pouvant nuire à la tranquillité ou au bon fonctionnement de L'Oasis."},
+      {"title": "Propriété Intellectuelle", "emoji": "✍️", "text": "Les contenus, textes, concepts  et créations publiés sur le serveur appartiennent à leurs auteurs respectifs. Toute copie, diffusion ou réutilisation sans autorisation écrite préalable est proscrite."}
+    ]
+  },
+  {
     "id": "voice",
     "title": "Salons Vocaux",
     "emoji": "🔇",
@@ -23,12 +44,13 @@
   {
     "id": "support",
     "title": "Entraides et Discussions",
+    "label": "Entraide et Discussions",
     "emoji": "💬",
     "articles": [
-      {"title": "Gestion des Triggers", "emoji": "🫧", "text": "L'usage des balises spoiler (||texte||) est obligatoire pour masquer tous les mots ou sujets sensibles lié à l'automutilation, suicide, sang, agressions, mort, harcèlement, viol, violences, drogues. Tout autre sujet non présent dans cette liste et laissé à l'appréciations des membres mais peux être imposé."},
+      {"title": "Gestion des Triggers", "emoji": "🫧", "text": "L'usage des balises spoiler (||texte||) est obligatoire pour masquer tous les mots ou sujets sensibles lié à l'automutilation, suicide, sang, agressions, mort, harcèlement, viol, violences, drogues. Tout autre sujet non présent dans cette liste et laissé à l'appréciations des membres mais ne peux être imposé."},
       {"title": "Interdiction de l'aide en MP", "emoji": "📵", "text": "Tout soutien entre membres doit se faire sur les salons publics du serveur. Il est strictement interdit de rediriger un membre en message privé (MP) pour lui venir en aide."},
       {"title": "Non-Substitution Médicale", "emoji": "🩺", "text": "Les échanges sur le serveur reposent sur le volontariat et le soutien pair. L'Oasis n'est pas un service médical et ne remplace en aucun cas un suivi professionnel ou psychiatrique."},
-      {"title": "Ticket de Soutient", "emoji": "🎫", "text": "Un entretien restreint d'écoute et de soutien put être demandé auprès de l'équipe d'Helper via le salon dédié. L'équipe se réserve le droit d'accepter ou de refuser la demande sans justification."},
+      {"title": "Ticket de Soutient", "emoji": "🎫", "text": "Un entretien restreint d'écoute et de soutien peut être demandé auprès de l'équipe d'Helper via le salon dédié. L'équipe se réserve le droit d'accepter ou de refuser la demande sans justification."},
       {"title": "Urgences", "emoji": "🚨", "text": "Le serveur et ses bénévoles ne peuvent pas gérer des situations de crise immédiate. En cas de danger pour vous-même ou pour autrui, contactez immédiatement le 15 (SAMU / France) ou le 112 (Urgences / Europe)."}
     ]
   },
@@ -44,6 +66,7 @@
   {
     "id": "medical",
     "title": "Cadre Médicale et Santé Mentale",
+    "label": "Cadre Médical & Santé Mentale",
     "emoji": "🎭",
     "articles": [
       {"title": "Pseudo-Sciences", "emoji": "🔬", "text": "L'Oasis reconnaît exclusivement les pathologies répertoriées par le DSM-5 et la CIM-11 (appuyés par l'OMS et l'HAS).\nPar conséquent La promotion de la psychanalyse, de l'homéopathie, de la naturopathie, de la lithothérapie et de toute médecine alternative est formellement interdit"},

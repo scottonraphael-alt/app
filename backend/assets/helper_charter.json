@@ -1,0 +1,42 @@
+{
+  "id": "charter",
+  "title": "Charte de L'Aidant",
+  "emoji": "🩹",
+  "intro": "Notez que cette charte s'applique à toutes les personnes qui souhaitent donner leur soutient, même ponctuel, dans les salons d’aides.",
+  "articles": [
+    {
+      "title": "I / IL EST IMPERATIF DE RESPECTER LA PERSONNE EN TOUTE CIRCONSTANCE.",
+      "text": "La personne doit être respectée, dans sa singularité, tant dans son parcours que dans ses convictions.\nLes aidants doivent respecter la liberté et le rythme de chacun dans son processus d’exploration de soi, aussi la personne à droit à la dignité et à l’intégrité de sa personne physique et mentale, sans discrimination d’aucune sorte."
+    },
+    {
+      "title": "II / ETRE EMPATHIQUE EST PRIMORDIAL.",
+      "text": "Comprendre que la situation de la personne n'est pas facile et que sont vécus peut influencer ses réactions ou interprétations, le tout sans jugement moral.\nCependant il peut être nécessaire d’essayer de lui faire comprendre votre point de vue extérieur tant que cela est fait avec RESPECT.",
+      "example": "+ « Ta situation doit être dur »\n- « Tu t'énerve pour rien, Tu es trop sensible »"
+    },
+    {
+      "title": "III / ÊTRE PATIENT.",
+      "text": "Quand une personne est en crise ou simplement triste, elle n’est pas toujours rationnelle et ne va pas toujours entendre vos conseils.\nCet état crée un flou qui rend difficile de se rendre compte de l’urgence de son l’état où peut rendre complexe l’analyse des solutions possibles.",
+      "example": "+ Ne pas insister si l’a personne n’entend pas et continuer à écouter la personne.\n- « Tu ne veux pas m'écouter, Tu ne veux pas aller mieux »"
+    },
+    {
+      "title": "IV / TOUJOURS DIRIGER VERS LES PROFESSIONNELS DE SANTÉ ET VERS LES NUMÉROS D'AIDE.",
+      "text": "L’ensemble des numéros d’aide est disponible dans 🚨・│ numéros-d-aide.",
+      "example": "+ « Si tu cherches de l'aide psychologique tu peux en trouver ici »\n- « La psychiatrie ne m'a jamais aidé.e, c'est une perte de temps »"
+    },
+    {
+      "title": "V / ÉVITER LE JUGEMENT ENVERS LA PERSONNE ET SES PROCHES.",
+      "text": "Évitez au plus d'utiliser le terme « toxique » pour désigner des personnes, même si vous considérez réellement que l'un où plusieurs de ses proches le sont.\nLui dire directement ne la fera que s'éloigner de vous et la confortera dans sa situation.\nIl faut comprendre que la personne peut ressentir un certain affect pour les personnes de son entourage et qu’il n’est jamais simple de s’affirmer et de se libérer d’emprise quelle qu'elle soit.",
+      "example": "+ « Le comportement de cette personne ne me parait pas très adapté, qu'est-ce que tu en penses ? »\n- « Cette personne est toxique, tu dois coupé les ponts directement avec elle. »"
+    },
+    {
+      "title": "VI / NE PAS S’OBSTINER À AIDER SI LA DISCUSSION VOUS MES MAL À L’AISE OU QUE VOTRE ÉTAT DE NE LE PERMET PAS.",
+      "text": "Il est important de ne pas mettre sa santé mentale après celle des autres.\nIl ne faut pas continuer à discuter avec la personne si cela vous met mal à l'aise, que vous êtes fatigué e ou simplement pas dans les conditions nécessaires.\nPrendre soin de soi prendre soin des autres, Il y aura toujours quelqu’un d’autre pour prendre le relai.",
+      "example": "+ « Ce sujet me trigger je préfère m'arrêter, je t'invite à demander de l’aide à quelqu’un d’autre et te souhaite d'aller vite mieux »\n- Rester avec la personne jusqu'à 4h du matin parce qu'on n'ose pas lui dire que l'on est fatigué.e."
+    },
+    {
+      "title": "VII / IL EST FORMELLEMENT INTERDIT DE CRITIQUER ET DENIGRER LE TRAVAIL D’AUTRE AIDANTS.",
+      "text": "Ne pas dénigrer le travail d'autres aidants et un des principes fondamentaux afin de permettre d’aider au mieux les membres, sauf s'ils font quelque chose de contraire à la présente charte ou aux règles du serveur ( dans ce cas présent, un ticket signalement doit être fait ).",
+      "example": "- « Tu fais n'importe quoi, c'est scandaleux ! »\n- « Tu ne t’y prend pas de la bonne manière »\n- « Tu ne l’aide pas »\n- «  Je sais ce dont il a besoin et pas toi ! »\n- «  j’aurais fait autrement.. »"
+    }
+  ]
+}
