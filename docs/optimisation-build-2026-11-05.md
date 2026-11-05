@@ -33,7 +33,17 @@ Docker n'est pas disponible sur la machine de validation : les images finales, l
 
 ## Utilisation
 
-Pour une modification backend uniquement :
+Pour démarrer ou remettre en route le serveur (MongoDB et API ensemble, sans reconstruction) :
+
+```sh
+docker compose up -d mongodb backend
+```
+
+Le backend attend désormais un contrôle `ping` réussi de MongoDB et les deux services disposent de `restart: unless-stopped`. Cette attente utilise `depends_on: condition: service_healthy` ([documentation Docker](https://docs.docker.com/compose/how-tos/startup-order/)). Le volume `mongo-data` et les noms de conteneurs sont conservés. Le contrôle accepte `mongosh` ou l'ancien shell `mongo` et n'affiche aucun mot de passe.
+
+`--no-deps` ignore cette gestion de dépendances : l'utiliser seulement après avoir vérifié que MongoDB tourne. Sinon, l'API peut s'arrêter avec `ServerSelectionTimeoutError` et le bot n'enregistre aucune commande. Si la base s'arrête en cours d'exploitation, les commandes Discord sont également indisponibles tant que le backend n'est pas opérationnel.
+
+Pour une modification backend uniquement, avec MongoDB déjà démarré :
 
 ```sh
 docker compose up -d --build --no-deps backend

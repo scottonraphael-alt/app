@@ -8,6 +8,20 @@ services:
     # Fixer la version réellement utilisée : docker exec emergent-mongodb mongod --version
     image: mongo:${MONGO_VERSION:?MONGO_VERSION}
     container_name: emergent-mongodb
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          if command -v mongosh >/dev/null 2>&1; then
+            mongosh --quiet --host 127.0.0.1 --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 2)';
+          else
+            mongo --quiet --host 127.0.0.1 --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 2)';
+          fi
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     volumes:
       - mongo-data:/data/db
     environment:
@@ -20,6 +34,7 @@ services:
   backend:
     build: ./backend
     container_name: emergent-backend
+    restart: unless-stopped
     volumes:
       - resources-data:/app/storage
       - ./activity-video:/data/activity:ro
@@ -28,7 +43,8 @@ services:
     env_file:
       - .env
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - npm_default
 
@@ -61,7 +77,9 @@ services:
       - karaoke-models:/models
     cpus: 2
     mem_limit: 6g
-    depends_on: [mongodb]
+    depends_on:
+      mongodb:
+        condition: service_healthy
     restart: unless-stopped
     networks: [npm_default]
 

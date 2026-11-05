@@ -1,5 +1,6 @@
 """Persistent public rules index, private articles. Screenshot wording stays verbatim."""
 import json
+import logging
 from pathlib import Path
 
 import discord
@@ -12,6 +13,7 @@ from services.verification_discord import error
 RULES = json.loads((Path(__file__).resolve().parent.parent / 'assets' / 'server_rules.json').read_text(encoding='utf-8'))
 BY_ID = {category['id']: category for category in RULES}
 NONE = discord.AllowedMentions.none()
+logger = logging.getLogger(__name__)
 
 
 def check(interaction):
@@ -78,3 +80,4 @@ async def install(client):
     from services.discord_command_registration import upsert_commands
     await upsert_commands(client, tree, scope, ('règlement',))
     client.rules_registered = True
+    logger.info("Commande /règlement enregistrée sur le serveur %s (application %s).", config.DISCORD_GUILD_ID, client.application_id)
