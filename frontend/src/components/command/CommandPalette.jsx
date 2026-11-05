@@ -128,6 +128,7 @@ export default function CommandPalette({ onLogout }) {
 
   const themeLabel = { light: "clair", dark: "sombre", system: "système" }[preference];
   const items = useMemo(() => {
+    if (!open) return [];
     const pages = (data?.available || []).map((page) => ({
       id: `page-${page.key}`, label: page.label, hint: page.path, group: "Pages", icon: PAGE_ICONS[page.key] || Star,
       run: () => navigate(page.path),

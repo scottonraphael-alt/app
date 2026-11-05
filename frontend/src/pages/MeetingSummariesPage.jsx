@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarPlus, FileStack, Gavel } from "lucide-react";
 
 import "../Agenda.css";
-import "../components/agenda/meetings/meetings.css";
+import "../MeetingsShared.css";
 
 import AgendaHomeLink from "../components/agenda/AgendaHomeLink";
 import useAgendaNoNav from "../components/agenda/useAgendaNoNav";

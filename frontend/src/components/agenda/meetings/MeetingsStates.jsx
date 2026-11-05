@@ -1,6 +1,6 @@
 import { CircleAlert, Lock } from "lucide-react";
 
-import "./meetings.css";
+import "../../../MeetingsShared.css";
 
 import { agendaErrorMessage } from "../agendaErrors";
 

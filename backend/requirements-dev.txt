@@ -1,4 +1,11 @@
 -r requirements.txt
 
-# Tests de sécurité hors-ligne (tests/test_security_*.py) : MongoDB simulé.
+# Outils réservés au développement et aux tests.
+pytest>=8.0.0
+pytest-xdist>=3.6.0
+black>=24.1.1
+isort>=5.13.2
+flake8>=7.0.0
+mypy>=1.8.0
+requests>=2.31.0
 mongomock-motor>=0.0.36

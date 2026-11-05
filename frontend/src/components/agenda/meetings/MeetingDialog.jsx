@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CircleAlert, ListChecks, Plus, X } from "lucide-react";
 
-import "./meetings.css";
+import "../../../MeetingsShared.css";
 
 import AgendaDialog from "../AgendaDialog";
 import PeoplePicker from "../PeoplePicker";

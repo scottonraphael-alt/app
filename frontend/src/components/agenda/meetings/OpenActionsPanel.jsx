@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowUpRight, CalendarDays, Check, CircleCheckBig, UserX } from "lucide-react";
 
-import "./meetings.css";
+import "../../../MeetingsShared.css";
 
 import { PersonLabel } from "../HelperAvatar";
 import { Pill } from "../TypeBadge";

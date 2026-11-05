@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Bookmark, X } from "lucide-react";
 
 import "../../Agenda.css";
-import "./meetings-extras.css";
+import "../../MeetingsShared.css";
 
 import { agendaErrorMessage, shouldRetryAgendaQuery } from "../agenda/agendaErrors";
 import { extrasKeys, fetchMeetingDecisions, listOf, markDecision, unmarkDecision } from "./meetingExtrasApi";

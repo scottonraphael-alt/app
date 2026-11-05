@@ -49,17 +49,6 @@ _TEST_ENV = {
 for _key, _value in _TEST_ENV.items():
     os.environ[_key] = _value
 
-# emergentintegrations n'est pas publié sur PyPI : module factice si absent.
-try:
-    import emergentintegrations.llm.chat  # noqa: F401
-except ImportError:
-    _chat = types.ModuleType("emergentintegrations.llm.chat")
-    for _name in ("LlmChat", "StreamDone", "TextDelta", "UserMessage"):
-        setattr(_chat, _name, type(_name, (), {}))
-    sys.modules["emergentintegrations"] = types.ModuleType("emergentintegrations")
-    sys.modules["emergentintegrations.llm"] = types.ModuleType("emergentintegrations.llm")
-    sys.modules["emergentintegrations.llm.chat"] = _chat
-
 from mongomock_motor import AsyncMongoMockClient  # noqa: E402
 
 import database  # noqa: E402

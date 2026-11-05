@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { FileStack, Settings2 } from "lucide-react";
 
 import "../../Agenda.css";
-import "./meetings-extras.css";
+import "../../MeetingsShared.css";
 
 import { agendaErrorMessage, shouldRetryAgendaQuery } from "../agenda/agendaErrors";
 import { extrasKeys, fetchTemplates, listOf } from "./meetingExtrasApi";

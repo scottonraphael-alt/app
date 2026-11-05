@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { CalendarPlus, CircleDot, Gavel, ListChecks, Lock, NotebookPen, Search, SearchX, X } from "lucide-react";
 
-import "./meetings.css";
+import "../../../MeetingsShared.css";
 
 import { PhaseBadge, typeClass } from "../TypeBadge";
 import { agendaQueries, flattenMeetingPages } from "../agendaApi";

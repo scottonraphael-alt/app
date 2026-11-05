@@ -86,7 +86,7 @@ export default function ChannelArchiveWorkspacePage() {
   // réinterroge régulièrement pour suivre la progression sans que l'utilisateur ait à
   // recharger la page.
   useEffect(() => {
-    if (!archive || archive.status !== "importing") return undefined;
+    if (archive?.status !== "importing") return undefined;
     const interval = setInterval(async () => {
       try {
         const response = await api.get(`/channel-archives/${archiveId}`);

@@ -44,6 +44,8 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   const transcriptRef = useRef(null);
   const lastSyncRef = useRef(null);
   const openingRequest = useRef(null);
+  const openingUpdate = useRef(onTicketUpdate);
+  useEffect(() => { openingUpdate.current = onTicketUpdate; }, [onTicketUpdate]);
   const searchController = useRef(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,7 +90,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         }
         const response = await openingRequest.current.promise;
         if (!active) return;
-        onTicketUpdate?.(response.data);
+        openingUpdate.current?.(response.data);
         setTicket(response.data);
         setVocalSummary(response.data.vocal_summary || "");
         setPersonTriggers(response.data.person_triggers || "");

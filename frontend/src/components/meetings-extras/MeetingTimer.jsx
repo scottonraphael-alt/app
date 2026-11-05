@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { BellRing, Pause, Play, Plus, RotateCcw, SkipBack, SkipForward, Timer } from "lucide-react";
 
 import "../../Agenda.css";
-import "./meetings-extras.css";
+import "../../MeetingsShared.css";
 
 import { agendaErrorMessage, shouldRetryAgendaQuery } from "../agenda/agendaErrors";
 import { extrasKeys, fetchTimer, formatClock, initTimer, timerAction } from "./meetingExtrasApi";

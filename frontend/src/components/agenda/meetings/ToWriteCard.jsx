@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, CircleCheck } from "lucide-react";
 
-import "./meetings.css";
+import "../../../MeetingsShared.css";
 
 import { formatDayShort } from "../dateUtils";
 import { PanelError } from "./MeetingsStates";

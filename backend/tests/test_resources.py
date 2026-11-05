@@ -82,11 +82,9 @@ class TestResourceRouterContract:
         assert "storage_key: str | None = None" in STORAGE
         assert "if storage_key:" in STORAGE
 
-    def test_emergent_key_is_backend_only(self):
-        assert "EMERGENT_LLM_KEY" in STORAGE
-        for path in Path("/app/frontend/src").rglob("*.*"):
-            if path.suffix in (".js", ".jsx", ".ts", ".tsx"):
-                assert "EMERGENT_LLM_KEY" not in path.read_text()
+    def test_storage_is_local(self):
+        assert "IRIS_STORAGE_ROOT" in STORAGE
+        assert "shutil.copyfile" in STORAGE
 
     def test_model_does_not_expose_storage_path(self):
         assert "storage_path" not in MODEL

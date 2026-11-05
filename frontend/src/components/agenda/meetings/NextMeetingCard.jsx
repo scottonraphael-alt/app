@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, CalendarDays, CalendarPlus, Clock, ListChecks, MapPin, TriangleAlert } from "lucide-react";
 
-import "./meetings.css";
+import "../../../MeetingsShared.css";
 
 import { AvatarStack } from "../HelperAvatar";
 import ReminderSchedule from "../ReminderSchedule";

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 
 import "../../Agenda.css";
-import "./meetings-extras.css";
+import "../../MeetingsShared.css";
 
 import AgendaDialog from "../agenda/AgendaDialog";
 import { agendaErrorMessage, shouldRetryAgendaQuery } from "../agenda/agendaErrors";

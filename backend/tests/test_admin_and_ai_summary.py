@@ -1,5 +1,5 @@
 """
-Iteration 7 — Admin RBAC + Gemini AI-summary regression suite.
+Iteration 7 — Admin RBAC + Anthropic AI-summary regression suite.
 
 Verifies:
  1. All admin endpoints (/admin/overview, /admin/helpers, PATCH
@@ -18,7 +18,7 @@ Verifies:
     Discord `limit`/`after` pagination invariants.
  4. Admin assignment rejects unknown helpers (helper_id not in the
     DiscordService.fetch_helpers list) with 422 — verified statically.
- 5. Gemini service invariants: model 'gemini-3.5-flash' via emergentintegrations,
+ 5. Anthropic service invariants: direct SDK and configured model,
     server-side key only, French system prompt forbids diagnostic/reco
     médicale, structured JSON keys context/expressed_needs/actions/
     next_follow_up, persistence excludes _id.
@@ -245,30 +245,18 @@ class TestAssignmentEndpointContract:
 
 
 # ---------------------------------------------------------------------------
-# 5. Gemini service invariants
+# 5. Anthropic service invariants
 # ---------------------------------------------------------------------------
-class TestGeminiServiceContract:
-    def test_uses_gemini_3_5_flash_via_emergent(self):
+class TestAnthropicServiceContract:
+    def test_uses_direct_anthropic_sdk(self):
         source = _read_backend("services/ai_summary_service.py")
-        assert 'from emergentintegrations.llm.chat import' in source
-        assert '.with_model("gemini", "gemini-3.5-flash")' in source
+        assert "from anthropic import AsyncAnthropic" in source
+        assert "ANTHROPIC_API_KEY" in source
+        assert "TICKET_SUMMARY_MODEL" in source
 
-    def test_uses_emergent_llm_key_server_side_only(self):
-        source = _read_backend("services/ai_summary_service.py")
-        assert "from config import EMERGENT_LLM_KEY" in source
-        assert "api_key=EMERGENT_LLM_KEY" in source
-        # And key must be present in backend env
-        key = _load_secret("EMERGENT_LLM_KEY")
-        assert key, "EMERGENT_LLM_KEY must be configured in backend/.env"
-        # Frontend must NEVER import or reference the emergent key
-        for rel in [
-            "src/pages/TicketWorkspacePage.jsx",
-            "src/pages/AdminDashboardPage.jsx",
-            "src/App.js",
-            "src/api/client.js",
-        ]:
-            content = _read_frontend(rel)
-            assert "EMERGENT_LLM_KEY" not in content, f"{rel} leaks EMERGENT_LLM_KEY"
+    def test_provider_key_stays_server_side(self):
+        for rel in ["src/pages/TicketWorkspacePage.jsx", "src/pages/AdminDashboardPage.jsx", "src/App.js", "src/api/client.js"]:
+            assert "ANTHROPIC_API_KEY" not in _read_frontend(rel)
 
     def test_french_prompt_forbids_diagnostic_and_medical_reco(self):
         source = _read_backend("services/ai_summary_service.py")
