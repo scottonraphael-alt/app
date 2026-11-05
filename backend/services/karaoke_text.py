@@ -3,7 +3,7 @@
 Tout ce module est « pur » (sans état partagé hors caches) pour rester testable hors ligne :
 - `parse_lrc` lit le format LRC (lignes horodatées, tags de mots « enhanced », offset) ;
 - `tokenize` découpe une ligne en mots et ajoute leur romanisation (`r`) :
-    ja → cutlet (MeCab/UniDic, lecture « wa » des particules), zh → pypinyin,
+    ja → pykakasi (léger ; cutlet facultatif si déjà installé), zh → pypinyin,
     ko → romanisation révisée (liaisons simples), autres alphabets → anyascii ;
 - `build_lines` produit le JSON consommé par le front : chaque mot reçoit un début `s` et une
   fin `e` (en secondes), interpolés dans la ligne quand les paroles n'ont pas de tags par mot ;
@@ -90,8 +90,29 @@ def _needs_reading(surface: str, romaji: str) -> bool:
     return bool(romaji) and romaji != surface and not surface.isascii()
 
 
+@lru_cache(maxsize=1)
+def _kakasi():
+    from pykakasi import kakasi
+    return kakasi()
+
+
+def _tokens_ja_light(text: str) -> list[dict]:
+    tokens = []
+    for item in _kakasi().convert(text):
+        surface = item['orig']
+        if not surface.strip():
+            continue
+        reading = {'は': 'wa', 'へ': 'e', 'を': 'o'}.get(surface, item['hepburn'])
+        tokens.append({'t': surface, 'r': reading if _needs_reading(surface, reading) else '',
+                       'sp': surface.isascii() and surface.endswith(' ')})
+    return tokens
+
+
 def _tokens_ja(text: str) -> list[dict]:
-    from cutlet.cutlet import normalize_text
+    try:
+        from cutlet.cutlet import normalize_text
+    except ImportError:
+        return _tokens_ja_light(text)
 
     engine = _cutlet()
     words = engine.tagger(normalize_text(text))

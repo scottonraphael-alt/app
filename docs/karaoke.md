@@ -79,7 +79,7 @@ Whisper n'analyse pas les joueurs en direct. Les extraits Deezer ne sont jamais 
 
 ## Validation et limites de la livraison
 
-Validation locale : 482 tests backend, 32 tests web et deux tests audio Node passent.
+Validation locale : 485 tests backend, 32 tests web et deux tests audio Node passent.
 
 Tests locaux : règles du blind test et paroles de l'archive ; file, favoris, roulette, droits, consentement/retrait, signature et anti-rejeu des lots, scoring silencieux/rythme/octave, invalidation du cache, publication atomique d'une préparation simulée et import protégé. Le décodeur Opus installé a été testé avec du son synthétique réel. La dépendance DAVE est chargée (`@discordjs/voice` 0.19.2, `@snazzah/davey` 0.1.12). Tests des composants web et vérification indépendante des règles Hooks/variables JavaScript.
 
@@ -90,3 +90,28 @@ Aucun accès au serveur de production ni salon Discord de test n'a été utilis�
 Après déploiement : importer un morceau, attendre sa préparation, rejoindre le vocal à deux, connecter OasisLink, vérifier l'annonce, tester sans accord puis avec accord, retirer l'accord, comparer une note à l'octave et calibrer la latence. Vérifier desktop et mobile. La réception audio Discord reste expérimentale dans la bibliothèque et ne bénéficie pas d'une garantie officielle de stabilité.
 
 Sources techniques : [Discord Voice/DAVE](https://github.com/discord/discord-api-docs/blob/main/developers/topics/voice-connections.mdx), [récepteur @discordjs/voice](https://github.com/discordjs/discord.js/tree/main/packages/voice), [WhisperX](https://github.com/m-bain/whisperX).
+
+## Si le build échoue avec « No space left on device »
+
+Cette erreur concerne le disque (ou les inodes), pas le plafond de RAM du worker. La première version installait UniDic dans le backend et réinstallait toutes les dépendances d'Iris dans le worker. Cette duplication est supprimée : le japonais utilise désormais pykakasi, livré dans une petite wheel pure Python, et le worker a une liste minimale de dépendances sans les intégrations du backend. Cutlet reste utilisable si déjà installé, mais n'est plus une dépendance du build.
+
+Vérifier l'espace sur le serveur :
+
+```sh
+df -h
+df -i
+docker system df
+```
+
+On peut supprimer les caches de construction inutilisés avec `docker builder prune` ; cette commande demande confirmation et ne supprime pas les volumes MongoDB, chansons ou modèles. Elle oblige à retélécharger/reconstruire les couches supprimées. Ne pas utiliser une purge des volumes pour résoudre ce problème.
+
+Après récupération du commit correctif, construire les images séparément pour réduire le pic d'espace temporaire :
+
+```sh
+docker compose build backend
+docker compose --profile karaoke build karaoke-preparation
+docker compose --profile karaoke build karaoke-voice
+docker compose --profile karaoke up -d --no-deps backend karaoke-preparation karaoke-voice
+```
+
+Cette séquence suppose que MongoDB est déjà en fonctionnement et ne reconstruit pas le frontend. Whisper/PyTorch et les modèles nécessitent toujours de l'espace disque ; la correction ne peut pas rendre exploitable un disque encore saturé.

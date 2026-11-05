@@ -174,3 +174,38 @@ def test_import_rejects_paths_and_queues_a_real_uploaded_file(monkeypatch,tmp_pa
 def test_activity_without_video_starts_in_karaoke(monkeypatch):
     monkeypatch.setattr(activity,'list_videos',lambda:[])
     assert activity.Room().mode=='karaoke'
+
+
+def test_light_japanese_romanization_without_cutlet_or_unidic(monkeypatch):
+    import sys
+    from services import karaoke_text as text
+    monkeypatch.setitem(sys.modules,'cutlet',None)
+    monkeypatch.setitem(sys.modules,'cutlet.cutlet',None)
+    tokens=text.tokenize('夜に駆ける','ja')
+    assert ''.join(t['t'] for t in tokens)=='夜に駆ける'
+    assert ''.join(t['r'] for t in tokens)=='yorunikakeru'
+    assert text.tokenize('は','ja')[0]['r']=='wa'
+    timed=text.build_lines('[00:10]夜空の向こう\n[00:30]fin','ja')
+    assert all(t['e']>t['s'] for t in timed['lines'][0]['tokens'])
+
+
+def test_router_package_does_not_eagerly_import_application_in_worker():
+    from pathlib import Path
+    import subprocess,sys
+    backend=Path(__file__).resolve().parents[1]
+    result=subprocess.run([sys.executable,'-c',
+        "import routers,sys; assert 'routers.auth' not in sys.modules; assert 'services.auth_service' not in sys.modules"],
+        cwd=backend,capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
+
+
+def test_preparation_transport_imports_without_the_rest_of_iris():
+    from pathlib import Path
+    import subprocess,sys
+    backend=Path(__file__).resolve().parents[1]
+    result=subprocess.run([sys.executable,'-c',
+        "import services.karaoke_prepare_worker; import routers.activity_karaoke; import sys; "
+        "assert 'services.auth_service' not in sys.modules; "
+        "assert 'discord' not in sys.modules; assert 'anthropic' not in sys.modules; "
+        "assert 'torch' not in sys.modules"],cwd=backend,capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
