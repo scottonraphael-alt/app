@@ -1,0 +1,54 @@
+[
+  {
+    "id": "voice",
+    "title": "Salons Vocaux",
+    "emoji": "🔇",
+    "articles": [
+      {"title": "Bienséance", "emoji": "🤝", "text": "Veillez à ne pas couper la parole et à respecter le temps de parole de chacun. Si vous préférez ne pas parler, vous pouvez utiliser le salon textuel associé au vocal, que l'ensemble des participants doit consulter régulièrement."},
+      {"title": "Partage d'Ecran", "emoji": "🖥️", "text": "La diffusion de vos parties de jeux vidéo est autorisée, à l'exclusion des jeux à caractère gore, trash ou sexiste. La retransmission de contenus sous droits d'auteur (chaînes TV, compétitions sportives) est proscrite."}
+    ]
+  },
+  {
+    "id": "moderation",
+    "title": "Modération",
+    "emoji": "🛡️",
+    "articles": [
+      {"title": "Exclusivité de la modération", "emoji": "🛡️", "text": "La gestion du serveur et l'application du règlement sont de la seule responsabilité du staff. Il est strictement interdit d'intervenir à la place des modérateurs, de réprimander ou de menacer un membre."},
+      {"title": "Signalement", "emoji": "🚩", "text": "Si vous êtes témoin d'une infraction ou d'un comportement suspect, contactez le Staff en mentionnant le rôle dédié ou en ouvrant un ticket dans <#1081957993492533364> ."},
+      {"title": "Echelle de Sanction", "emoji": "⚖️", "text": "Selon la gravité et la répétition des actes, les sanctions suivantes peuvent être appliquées, à la seule appréciation du staff :\n\nRappel à l'ordre\nAvertissement\nExclusion temporaire des salons\nExpulsion du serveur\nBannissement temporaire\nBannissement définitif"},
+      {"title": "Convocations", "emoji": "📩", "text": "En cas de convocation par le staff (pour échange, clarification ou médiation), vous devez répondre dans les plus brefs délais. Une absence de réponse après deux relances sera sanctionnée."},
+      {"title": "Contestation et Confidentialité", "emoji": "🔒", "text": "Toute contestation se fait exclusivement en privé et par la personne concernée via un ticket <#1081957993492533364>. Il est interdit de débattre ou de contester une sanction dans les salons publics."}
+    ]
+  },
+  {
+    "id": "support",
+    "title": "Entraides et Discussions",
+    "emoji": "💬",
+    "articles": [
+      {"title": "Gestion des Triggers", "emoji": "🫧", "text": "L'usage des balises spoiler (||texte||) est obligatoire pour masquer tous les mots ou sujets sensibles lié à l'automutilation, suicide, sang, agressions, mort, harcèlement, viol, violences, drogues. Tout autre sujet non présent dans cette liste et laissé à l'appréciations des membres mais peux être imposé."},
+      {"title": "Interdiction de l'aide en MP", "emoji": "📵", "text": "Tout soutien entre membres doit se faire sur les salons publics du serveur. Il est strictement interdit de rediriger un membre en message privé (MP) pour lui venir en aide."},
+      {"title": "Non-Substitution Médicale", "emoji": "🩺", "text": "Les échanges sur le serveur reposent sur le volontariat et le soutien pair. L'Oasis n'est pas un service médical et ne remplace en aucun cas un suivi professionnel ou psychiatrique."},
+      {"title": "Ticket de Soutient", "emoji": "🎫", "text": "Un entretien restreint d'écoute et de soutien put être demandé auprès de l'équipe d'Helper via le salon dédié. L'équipe se réserve le droit d'accepter ou de refuser la demande sans justification."},
+      {"title": "Urgences", "emoji": "🚨", "text": "Le serveur et ses bénévoles ne peuvent pas gérer des situations de crise immédiate. En cas de danger pour vous-même ou pour autrui, contactez immédiatement le 15 (SAMU / France) ou le 112 (Urgences / Europe)."}
+    ]
+  },
+  {
+    "id": "advertising",
+    "title": "Publicité et Transactions",
+    "emoji": "💎",
+    "articles": [
+      {"title": "Publicités", "emoji": "📢", "text": "Toute publicité (serveurs Discord, réseaux sociaux, projets personnels) est interdite. Pour promouvoir un projet de recherche universitaire lié à la santé mentale, faites une demande préalable par ticket contact Staff."},
+      {"title": "Argent", "emoji": "💰", "text": "Les cagnottes, demandes de prêts, ventes de services ou sollicitations financières sont strictement interdites."}
+    ]
+  },
+  {
+    "id": "medical",
+    "title": "Cadre Médicale et Santé Mentale",
+    "emoji": "🎭",
+    "articles": [
+      {"title": "Pseudo-Sciences", "emoji": "🔬", "text": "L'Oasis reconnaît exclusivement les pathologies répertoriées par le DSM-5 et la CIM-11 (appuyés par l'OMS et l'HAS).\nPar conséquent La promotion de la psychanalyse, de l'homéopathie, de la naturopathie, de la lithothérapie et de toute médecine alternative est formellement interdit"},
+      {"title": "Rôle du Serveur", "emoji": "🤲", "text": "L'Oasis est un espace d'entraide et non un substitut à un suivi médical ou psychiatrique. Aucun harcèlement envers les bénévoles pour obtenir de l'aide ne sera toléré."},
+      {"title": "Autodiagnostique", "emoji": "💊", "text": "`L'auto-diagnostic est interdit (utilisez le système de rôles de difficultés).\nIl est strictement interdit d'inciter un membre à modifier ou interrompre son traitement médical prescrits."}
+    ]
+  }
+]
