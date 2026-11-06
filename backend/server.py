@@ -35,6 +35,7 @@ from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
 from services.ticket_reminders import run_ticket_reminders
 from services.defouloir_reset import run as run_defouloir_reset
+from services.community_prompts import run as run_community_prompts
 from services.project_reminders import run_project_reminders
 from services.announcement_publishing import run_announcements
 from services.sanction_actions import run as run_sanction_maintenance
@@ -225,6 +226,7 @@ async def startup() -> None:
         asyncio.create_task(supervise("resolutions", run_resolutions(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("anonymous_messages", run_anonymous_messages(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("defouloir_reset", run_defouloir_reset(moderation_client, _feature_stop_event))),
+        asyncio.create_task(supervise("community_prompts", run_community_prompts(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("purgatory", run_purgatory(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("member_casework", run_migration_runtime(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_operations", run_operations(moderation_client, _feature_stop_event))),

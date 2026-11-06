@@ -280,3 +280,17 @@ Commande réservée aux Responsables et Administrateurs, limitée à une exécut
 Contrôles : aller-retour MongoDB sur un témoin isolé nettoyé, fichier temporaire dans le stockage des archives nettoyé, connexion Gateway et intents, commandes locales/distantes, hiérarchie des rôles, catégories des tickets, santé des boucles supervisées et erreurs persistées des tickets, configuration des parcours, accueil web, réception des formulaires, bienvenue, logs vocaux, défouloir, rappels et salons de modération.
 
 Ce diagnostic n’applique aucune sanction, ne crée aucun ticket et ne publie aucun message dans les salons testés. Il ne valide pas le parcours OAuth d’un utilisateur, les interactions complètes ni les réponses réelles de l’IA : la présence de la clé Anthropic est présentée comme une configuration à vérifier, sans appel facturé. Un état OK sur les permissions ne garantit pas à lui seul qu’une action complète réussira. Les erreurs techniques affichées sont filtrées pour ne pas exposer les secrets.
+
+### Rappels communautaires à 18 h
+
+OasisLink publie « Ma journée ? » et « Positivité » chaque jour à 18 h, heure de
+Paris. « Comment je me sens ? » suit un cycle de trois jours à la même heure,
+calé sur la publication BotGhost du 5 novembre 2026. Les cartes Components V2
+incluent les deux images originales et mentionnent chacune son propre rôle.
+
+Pour basculer, désactiver ces trois programmations dans BotGhost, puis définir
+`COMMUNITY_PROMPTS_ENABLED=true` dans le `.env` du déploiement et recréer le
+backend. OasisLink doit pouvoir envoyer des messages, joindre les images et
+mentionner les rôles concernés. En cas de redémarrage, la fenêtre de publication
+se ferme à 18 h 30, sans rattrapage le lendemain. Un reçu par salon et par date
+empêche les doubles publications.
