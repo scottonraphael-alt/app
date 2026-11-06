@@ -38,6 +38,7 @@ import "../ResponsableAuthLogs.css";
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const TIME_ZONE = "Europe/Paris";
+const GUIDE_LOG_EVENT = "wellbeing.help_channel.requested";
 
 // Clés acceptées par `categories` côté API (routers/responsable.py).
 const CATEGORIES = [
@@ -55,6 +56,7 @@ const CATEGORIES = [
   { key: "annonces", label: "Annonces", hint: "Composition, fichiers, publications et programmations Discord" },
   { key: "projets", label: "Projets", hint: "Projets, tâches et ressources" },
   { key: "tickets", label: "Tickets", hint: "Consultations, recherches et actions manuelles sur les suivis" },
+  { key: "orientation", label: "Orientation", hint: "Demandes du guide des salons d’aide" },
   { key: "autres", label: "Autres", hint: "Tous les autres événements" },
 ];
 
@@ -102,6 +104,7 @@ const TICKET_EVENT_LABELS = {
 };
 
 const EVENT_LABELS = {
+  [GUIDE_LOG_EVENT]: "Demande d’orientation vers un salon d’aide",
   ...CASEWORK_AUDIT_LABELS,
   ...VERIFICATION_AUDIT_LABELS,
   ...ANNOUNCEMENT_AUDIT_LABELS,
@@ -614,6 +617,7 @@ function categoryLabel(type) {
   if (/^announcement\./.test(type)) return "Annonces";
   if (/^project\./.test(type)) return "Projets";
   if (/^ticket\./.test(type)) return "Tickets";
+  if (type === GUIDE_LOG_EVENT) return "Orientation";
 
   return "Autres";
 }
@@ -650,6 +654,8 @@ function buildCsv(logs) {
 
   const rows = logs.map((log) => {
     const date = parseDate(log.created_at);
+    const details = { ...log.details };
+    if (log.event_type === GUIDE_LOG_EVENT) delete details.input;
 
     return [
       date
@@ -670,8 +676,8 @@ function buildCsv(logs) {
       log.method,
       log.path,
       log.status_code,
-      log.details && Object.keys(log.details).length
-        ? JSON.stringify(log.details)
+      Object.keys(details).length
+        ? JSON.stringify(details)
         : "",
     ];
   });
@@ -792,7 +798,7 @@ function TechnicalDetails({ log }) {
     <details className="ral-tech">
       <summary>
         <ChevronRight size={13} aria-hidden="true" />
-        Détails techniques
+        {log.event_type === GUIDE_LOG_EVENT ? "Voir la demande" : "Détails techniques"}
       </summary>
 
       <dl className="ral-tech-grid">

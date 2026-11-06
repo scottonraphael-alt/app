@@ -198,12 +198,16 @@ def log_payload(job,channel_id):
             'nonce':hashlib.sha256(f"sanction:{job['_id']}:{channel_id}".encode()).hexdigest()[:25],'enforce_nonce':True}
 
 
-async def post_log(channel_id,payload):
+async def post_log(channel_id,payload,*,verified_channel=None):
     from services.announcement_publishing import discord_request
     from services.moderation_bot import moderation_client
     guild=moderation_client.get_guild(int(config.DISCORD_GUILD_ID))
     if not guild:raise HTTPException(503,'Serveur indisponible pour publier le log.')
-    channel=await log_channel(guild,channel_id)
+    channel=verified_channel
+    if channel is None:
+        channel=await log_channel(guild,channel_id)
+    elif str(channel.id)!=str(channel_id) or channel.guild.id!=guild.id:
+        raise HTTPException(403,'Le salon de log ne correspond pas à la destination configurée.')
     if isinstance(channel,discord.Thread) and channel.archived and channel.locked:
         # Reactivate the existing post; never unlock it or create a replacement post.
         await channel.edit(archived=False,reason='Iris /sanction : publication dans le post de logs configuré')

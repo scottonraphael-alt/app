@@ -402,6 +402,7 @@ async def install(client):
     tree=getattr(client,'sanction_tree',None)
     if tree is None:tree=app_commands.CommandTree(client);client.sanction_tree=tree
     scope=discord.Object(id=int(config.DISCORD_GUILD_ID))
+    from services.help_channel_guide import HelpChannelPanel, publish as publish_help_channel
     if tree.get_command('panel',guild=scope) is None:
         group=app_commands.Group(name='panel',description='Panneaux natifs OasisLink',guild_only=True)
         for name,kind in [('verification','verification'),('contact-staff','contact_staff'),('soutient','support')]:
@@ -418,6 +419,11 @@ async def install(client):
                 await publish_moderation_panel(interaction)
             except Exception as exc:await error(interaction,exc)
         group.add_command(app_commands.Command(name='moderation',description='Publier le panneau de modération permanent',callback=moderation));tree.add_command(group,guild=scope)
+    group = tree.get_command('panel', guild=scope)
+    if group.get_command('salon-aide') is None:
+        group.add_command(app_commands.Command(
+            name='salon-aide', description='Publier le guide permanent des salons d’aide', callback=publish_help_channel,
+        ))
     for name,kind in [('convocation','summons'),('bulle','bubble')]:
         if tree.get_command(name,guild=scope):continue
         def invitation(kind):
@@ -439,6 +445,7 @@ async def install(client):
     from services import purgatory
     purgatory.register(tree,scope)
     client.add_view(StaffMenu())
+    client.add_view(HelpChannelPanel())
     client.add_view(PublicPanel('support'));client.add_view(PublicPanel('contact_staff'))
     async for row in db.case_requests.find({'guild_id':str(config.DISCORD_GUILD_ID),'status':{'$in':['waiting','open']}}):
         if row.get('notification') and row['status']=='waiting':client.add_view(SupportDecision(row),message_id=int(row['notification']['message_id']))

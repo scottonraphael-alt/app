@@ -406,3 +406,20 @@ def test_summary_counts_today_paris_only():
 def test_summary_is_zero_without_logs():
     body = _get("/api/responsable/auth-logs/summary").json()
     assert (body["access_denied"], body["login_success"], body["login_failure"], body["casier_changes"]) == (0, 0, 0, 0)
+
+
+def test_guide_request_text_is_visible_in_iris_for_30_days_but_excluded_from_csv():
+    event = responsable.GUIDE_LOG_EVENT
+    actor = h.USER_IDS['member']
+    _seed({'event_type': event, 'helper_id': actor, 'details': {'reference': '123', 'guild_id': h.GUILD_ID}})
+    h.run(h.db.wellbeing_requests.insert_one({
+        '_id': '123', 'kind': 'salon-aide', 'input': 'Texte privé',
+        'actor_id': actor, 'guild_id': h.GUILD_ID, 'status': 'completed', 'route': 'sommeil',
+        'expires_at': datetime.now(UTC) + timedelta(days=1),
+    }))
+    assert _get(categories='orientation').json()['items'][0]['details']['input'] == 'Texte privé'
+    assert 'Texte privé' not in _get('/api/responsable/auth-logs/export', event_type=event).text
+    h.run(h.db.wellbeing_requests.update_one(
+        {'_id': '123'}, {'$set': {'expires_at': datetime.now(UTC) - timedelta(seconds=1)}},
+    ))
+    assert 'input' not in _get(event_type=event).json()['items'][0]['details']

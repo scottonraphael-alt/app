@@ -315,7 +315,7 @@ def test_command_registration_preserves_existing_commands_and_spelling(monkeypat
         client=discord.Client(intents=discord.Intents.none());client._connection.application_id=123
         await commands.install(client)
         tree=client.sanction_tree;group=tree.get_command('panel',guild=discord.Object(id=int(h.GUILD_ID)))
-        assert {c.name for c in group.commands}=={'verification','contact-staff','soutient','moderation'}
+        assert {c.name for c in group.commands}=={'verification','contact-staff','soutient','moderation','salon-aide'}
         assert {p['name'] for p in posted}=={'panel','convocation','bulle','dossier','purgatoire'}
         await client.close()
     h.run(install())

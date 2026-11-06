@@ -11,6 +11,7 @@ from database import db
 from models.audit import AuthLogListResponse, AuthLogSummary
 from models.ticket import AuthenticatedHelper
 from services.auth_service import current_responsable
+from services.wellbeing_service import GUIDE_LOG_EVENT
 
 router = APIRouter(prefix="/responsable", tags=["responsable"])
 
@@ -27,6 +28,7 @@ CATEGORY_CLAUSES = {
     "annonces": {"event_type": {"$regex": r"^announcement\."}},
     "projets": {"event_type": {"$regex": r"^project\."}},
     "tickets": {"event_type": {"$regex": r"^(ticket|casework|verification)\."}},
+    "orientation": {"event_type": GUIDE_LOG_EVENT},
 }
 CATEGORY_KEYS = (*CATEGORY_CLAUSES, "autres")
 
@@ -169,6 +171,25 @@ async def list_auth_logs(
         .to_list(limit)
     )
 
+    # Read private text from the 30-day wellbeing store instead of duplicating
+    # it in the longer-lived activity log or its CSV export.
+    guide_logs = [
+        item for item in items
+        if item["event_type"] == GUIDE_LOG_EVENT and item.get("details", {}).get("reference")
+    ]
+    if guide_logs:
+        references = [item["details"]["reference"] for item in guide_logs]
+        records = await db.wellbeing_requests.find(
+            {"_id": {"$in": references}, "kind": "salon-aide",
+             "expires_at": {"$gt": datetime.now(timezone.utc)}},
+            {"input": 1, "actor_id": 1, "guild_id": 1, "status": 1, "route": 1},
+        ).to_list(len(references))
+        by_id = {row["_id"]: row for row in records}
+        for item in guide_logs:
+            details = item["details"]
+            row = by_id.get(details["reference"])
+            if row and row["actor_id"] == item["helper_id"] and row["guild_id"] == details.get("guild_id"):
+                details.update({key: row[key] for key in ("input", "status", "route") if key in row})
     return {"total": total, "items": items}
 
 
