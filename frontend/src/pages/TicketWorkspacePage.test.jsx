@@ -62,13 +62,28 @@ it("ouvre la rédaction à la demande et conserve le brouillon entre les onglets
 });
 
 it("enregistre les repères et indique les modifications en attente", async () => {
-  expect(container.querySelector('[data-testid="save-ticket-button"]').disabled).toBe(true);
+  const saveSelector = '[data-testid="save-ticket-button"]';
+  const button = () => container.querySelector(saveSelector);
+  expect(button().disabled).toBe(true);
+  expect(button().dataset.confirmed).toBeUndefined();
   await tab("reperes");
   await type('#tw-person-triggers', 'Prendre le temps');
   expect(container.textContent).toContain('Modifications non enregistrées');
-  await click('[data-testid="save-ticket-button"]');
+  let rejectSave;
+  api.patch.mockImplementationOnce(() => new Promise((_, reject) => { rejectSave = reject; }));
+  await click(saveSelector);
+  expect(button().getAttribute('aria-busy')).toBe('true');
+  expect(button().textContent).toContain('Enregistrement…');
+  await act(async () => rejectSave(new Error('Échec')));
+  expect(button().disabled).toBe(false);
+  expect(button().dataset.confirmed).toBeUndefined();
+  expect(container.querySelector('#tw-person-triggers').value).toBe('Prendre le temps');
+
+  await click(saveSelector);
   expect(api.patch).toHaveBeenCalledWith('/tickets/ticket', expect.objectContaining({ person_triggers: 'Prendre le temps' }));
-  expect(container.querySelector('[data-testid="save-ticket-button"]').disabled).toBe(true);
+  expect(button().disabled).toBe(true);
+  expect(button().dataset.confirmed).toBe('true');
+  expect(button().textContent).toContain('Enregistré');
 });
 
 

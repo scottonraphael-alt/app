@@ -68,6 +68,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedTicketId, setSavedTicketId] = useState(null);
   const [error, setError] = useState("");
   const [followUpStatus, setFollowUpStatus] = useState("en attente de réponse");
   const [helpers, setHelpers] = useState([]);
@@ -189,6 +190,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
 
   const save = async () => {
     setSaving(true);
+    setSavedTicketId(null);
     try {
       const response = await api.patch(`/tickets/${ticketId}`, {
         vocal_summary: vocalSummary,
@@ -197,6 +199,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       });
       setTicket(response.data);
       onTicketUpdate?.(response.data);
+      setSavedTicketId(ticketId);
       toast.success("Dossier enregistré.");
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
@@ -334,6 +337,8 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   const visibleMessages = page === 1 && messages[0]?.author?.is_bot ? messages.slice(1) : messages;
   const pageCount = Math.max(1, Math.ceil(ticket.message_count / pageSize));
   const dirty = vocalSummary !== (ticket.vocal_summary || "") || personTriggers !== (ticket.person_triggers || "") || followUpStatus !== (ticket.follow_up_status || "en attente de réponse");
+  const saveConfirmed = savedTicketId === ticketId && !dirty && !saving;
+  const dossierTabIndex = dossierTabs.indexOf(selectedDossierTab);
   const noteCount = (ticket.notes_entries || []).length + (ticket.notes ? 1 : 0);
   const pageRange = ticket.message_count ? `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, ticket.message_count)}` : "0";
 
@@ -349,7 +354,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           <Link to="/" className="tw-button tw-home" data-testid="ticket-back-link">Accueil <ArrowRight size={17} /></Link>
           <button className="tw-button" disabled={syncing} onClick={sync} type="button" data-testid="sync-ticket-button">{syncing ? <LoaderCircle className="tw-spin" size={15} /> : <RefreshCw size={15} />} Actualiser</button>
           <button className="tw-button" onClick={archive} type="button" data-testid="archive-ticket-button"><Archive size={15} /> {ticket.status === "active" ? "Archiver" : "Réactiver"}</button>
-          <ActionProgressButton className="tw-button tw-button-primary" busy={saving} disabled={!dirty} onClick={save} type="button" data-testid="save-ticket-button"><Save size={15} /> Enregistrer</ActionProgressButton>
+          <ActionProgressButton className="tw-button tw-button-primary tw-save-button" busy={saving} confirmed={saveConfirmed} disabled={!dirty} onClick={save} type="button" data-testid="save-ticket-button"><Save size={15} aria-hidden="true" /> Enregistrer</ActionProgressButton>
           {isAdmin && <details className="tw-menu"><summary aria-label="Actions du dossier"><MoreHorizontal size={20} /></summary><div className="tw-menu-content"><button className="tw-danger" onClick={deleteTicket} type="button" data-testid="delete-ticket-button"><Trash2 size={15} /> Supprimer le dossier</button></div></details>}
         </div>
       </header>
@@ -428,9 +433,9 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
             setDossierTab({ ticketId, value, notesVisited: value === "notes" || Boolean(currentDossierTab?.notesVisited) });
             ticketEvent("workspace.tab_changed", ticketId, value);
           }}>
-            <Tabs.List className="tw-tabs" aria-label="Contenu du dossier"><Tabs.Trigger className="tw-tab" value="resume"><Bot size={15} /> Résumé</Tabs.Trigger><Tabs.Trigger className="tw-tab" value="notes"><FileText size={15} /> Notes <span>{noteCount}</span></Tabs.Trigger><Tabs.Trigger className="tw-tab" value="reperes"><HeartHandshake size={15} /> Repères</Tabs.Trigger></Tabs.List>
+            <Tabs.List className="tw-tabs" aria-label="Contenu du dossier" style={{ "--tw-tab-index": dossierTabIndex }}><Tabs.Trigger className="tw-tab" value="resume"><Bot size={15} /> Résumé</Tabs.Trigger><Tabs.Trigger className="tw-tab" value="notes"><FileText size={15} /> Notes <span>{noteCount}</span></Tabs.Trigger><Tabs.Trigger className="tw-tab" value="reperes"><HeartHandshake size={15} /> Repères</Tabs.Trigger></Tabs.List>
             <div className="tw-dossier-content">
-              <SlidingPanels active={dossierTabs.indexOf(selectedDossierTab)}>
+              <SlidingPanels active={dossierTabIndex}>
               <Tabs.Content forceMount value="resume" className="tw-tab-content">
                 <section className="tw-summary" data-testid="ai-summary-panel"><header className="tw-section-title tw-section-title--violet"><span className="tw-panel-icon"><Bot size={22} /></span><h2>Synthèse du dossier</h2><span className="tw-claude">Claude</span></header>
                 {ticket.summary_status === "generating" && <p className="tw-summary-state" role="status"><LoaderCircle size={14} className="tw-spin" /> Actualisation de la synthèse en cours…</p>}

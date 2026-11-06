@@ -4,7 +4,7 @@
   overflow: clip;
   overflow-clip-margin: 4px;
   height: var(--case-panel-height, auto);
-  transition: height 320ms cubic-bezier(.25, .8, .25, 1);
+  transition: height var(--case-slide-duration) cubic-bezier(.25, .8, .25, 1);
 }
 
 .case-slide-track {
@@ -12,7 +12,7 @@
   align-items: flex-start;
   gap: var(--case-slide-gap);
   transform: translateX(calc(var(--case-panel-index) * (-100% - var(--case-slide-gap))));
-  transition: transform 320ms cubic-bezier(.25, .8, .25, 1);
+  transition: transform var(--case-slide-duration) cubic-bezier(.25, .8, .25, 1);
 }
 
 .case-slide-panel {
@@ -73,14 +73,44 @@
   gap: 6px;
 }
 
+.case-panel-loading {
+  display: grid;
+  gap: 14px;
+  color: var(--cz-muted);
+  animation: case-status-arrive 240ms ease-out;
+}
+
+.case-panel-loading-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 16px;
+  align-items: center;
+  min-height: 42px;
+  border-top: 1px solid var(--cz-line, var(--cz-subtle));
+}
+
+.case-panel-loading-row > i {
+  width: 72%;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--cz-subtle);
+}
+
+.case-panel-loading-row:nth-child(even) > i { width: 55%; }
+
 .case-action-progress[aria-busy="true"]::before {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 27%, transparent));
+  background: linear-gradient(90deg, color-mix(in srgb, currentColor 8%, transparent), color-mix(in srgb, currentColor 30%, transparent));
+  border-inline-end: 2px solid color-mix(in srgb, currentColor 40%, transparent);
   transform-origin: left;
   animation: case-action-fill 1.25s cubic-bezier(.18, .7, .22, 1) both;
+}
+
+.case-action-progress[data-confirmed="true"] > span {
+  animation: case-status-arrive 240ms cubic-bezier(.25, .8, .25, 1);
 }
 
 @keyframes case-action-fill {
@@ -103,5 +133,5 @@
     animation: none;
     transform: scaleX(.5);
   }
-  .case-status-feedback { animation: none; }
+  .case-status-feedback, .case-panel-loading, .case-action-progress[data-confirmed="true"] > span { animation: none; }
 }

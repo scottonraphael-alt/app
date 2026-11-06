@@ -6,7 +6,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, RefreshCw, Search, FileText, LockKeyhole } from 'lucide-react';
 import { api, getErrorMessage } from '../api/client';
 import { Modal } from '../components/projects/ProjectUI';
-import { ActionProgressButton, SlidingPanels } from '../components/casework/CaseMotion';
+import { ActionProgressButton, CasePanelLoading, SlidingPanels } from '../components/casework/CaseMotion';
 import '../Casier.css';
 import '../Casework.css';
 
@@ -87,7 +87,7 @@ function CaseList({ kind }) {
       {[false, true].map(view => {
         const panelData = view === archived ? data : views[view]?.data;
         const panelOffset = view === archived ? offset : views[view]?.offset ?? 0;
-        if (!panelData) return <section key={String(view)} className="cw-card">{view === archived && !error && <p role="status">Chargement des dossiers…</p>}</section>;
+        if (!panelData) return !error || view !== archived ? <section key={String(view)} className="cw-card"><CasePanelLoading /></section> : null;
         return <section key={String(view)} className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
       <tbody>{panelData.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>

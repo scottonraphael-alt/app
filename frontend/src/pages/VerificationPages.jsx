@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { api, getErrorMessage } from '../api/client';
 import { Modal } from '../components/projects/ProjectUI';
-import { ActionProgressButton, SlidingPanels } from '../components/casework/CaseMotion';
+import { ActionProgressButton, CasePanelLoading, SlidingPanels } from '../components/casework/CaseMotion';
 import '../Casier.css';
 import '../Verifications.css';
 
@@ -42,7 +42,7 @@ export function VerificationListPage({responsable=false}) {
       {[false,true].map(view=>{
         const panelData=view===archive ? data : views[view]?.data;
         const panelOffset=view===archive ? offset : views[view]?.offset ?? 0;
-        if(!panelData)return <section key={String(view)} className="vf-card">{view===archive&&!error&&<p role="status">Chargement des dossiers…</p>}</section>;
+        if(!panelData)return !error||view!==archive ? <section key={String(view)} className="vf-card"><CasePanelLoading /></section> : null;
         return <section key={String(view)} className="vf-card"><div className="vf-table-wrap"><table className="vf-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Dernier formulaire</th><th>Prise en charge</th><th>Tentatives</th></tr></thead><tbody>{panelData.items.map(row=><tr key={row.member_id}><td><Link to={`${BASE}/${row.member_id}`}>{row.member?.display_name||row.member?.username||row.member_id}</Link>{row.training&&<small className="vf-training">Formation / test</small>}</td><td><Badge status={row.status}/></td><td>{date(row.last_form_at)}</td><td>{row.claimed_by||'À attribuer'}</td><td>{row.form_count}</td></tr>)}</tbody></table></div>{!panelData.items.length&&<p className="vf-empty">Aucun dossier dans cette vue.</p>}<footer className="vf-toolbar"><button className="vf-button" disabled={!panelOffset} onClick={()=>setOffset(n=>Math.max(0,n-25))}>Précédent</button><span>Page {Math.floor(panelOffset/25)+1} sur {Math.max(1,Math.ceil(panelData.total/25))}</span><button className="vf-button" disabled={panelOffset+25>=panelData.total} onClick={()=>setOffset(n=>n+25)}>Suivant</button></footer></section>;
       })}
     </SlidingPanels></Shell>;
