@@ -196,3 +196,52 @@ def test_ticket_cannot_be_requested_twice_for_same_form_even_after_completion():
         buttons=staff_buttons(owner,row,[('approve','Valider'),('ticket','Créer un ticket'),('close','Clore')])
         assert all(button.label!='Créer un ticket' for button in buttons.children)
     h.run(check())
+
+
+def test_departure_archives_blocked_validation_and_keeps_unconfirmed_decision(monkeypatch):
+    import discord
+    from types import SimpleNamespace
+    from services import verification_runtime as runtime
+
+    submit()
+    act('approve')
+    stalled = h.run(jobs.run_job(MID, h.run(s.load(MID))['jobs'][0]['id'], Adapter(fail='member_access')))
+    assert stalled['status'] == 'action_required'
+    discord_error = discord.NotFound(SimpleNamespace(status=404, reason='Not Found'),
+                                     {'code': 10007, 'message': 'Unknown Member'})
+    guild = SimpleNamespace(fetch_member=AsyncMock(side_effect=discord_error))
+    bot = SimpleNamespace(user=SimpleNamespace(id=987), is_ready=lambda: True, get_guild=lambda _: guild)
+    cleanup = AsyncMock()
+    monkeypatch.setattr(runtime, 'cleanup_staff', cleanup)
+
+    async def check():
+        await runtime.check_departures(bot)
+        await runtime.check_departures(bot)
+        row = await s.load(MID)
+        assert [job['status'] for job in row['jobs']] == ['cancelled', 'pending']
+        await runtime.process_case(bot, row)
+        result = await s.load(MID)
+        assert result['status'] == 'closed' and not result['active']
+        assert result['forms'][-1]['answers'] == ANS
+        assert not result['forms'][-1]['decision']['confirmed']
+        assert 'quitté' in result['forms'][-1]['decision']['cancelled_reason']
+        assert [step['name'] for step in result['jobs'][-1]['steps']] == ['archive']
+        assert await s.db.auth_logs.count_documents({'event_type': 'verification.departure_closed'}) == 1
+        cleanup.assert_awaited_once()
+
+    h.run(check())
+
+
+@pytest.mark.parametrize('code', [10004, 0])
+def test_other_discord_404_is_not_treated_as_departure(code):
+    import discord
+    from types import SimpleNamespace
+    from services import verification_runtime as runtime
+
+    submit()
+    discord_error = discord.NotFound(SimpleNamespace(status=404, reason='Not Found'),
+                                     {'code': code, 'message': 'Discord lookup failed'})
+    guild = SimpleNamespace(fetch_member=AsyncMock(side_effect=discord_error))
+    bot = SimpleNamespace(user=SimpleNamespace(id=987), is_ready=lambda: True, get_guild=lambda _: guild)
+    h.run(runtime.check_departures(bot))
+    assert h.run(s.load(MID))['status'] == 'waiting'

@@ -35,6 +35,7 @@ from services.ticket_refresh import run_ticket_refresh
 from services.ticket_import import run_ticket_import
 from services.ticket_reminders import run_ticket_reminders
 from services.defouloir_reset import run as run_defouloir_reset
+from services.verification_runtime import run_departure_checks
 from services.community_prompts import run as run_community_prompts
 from services.project_reminders import run_project_reminders
 from services.announcement_publishing import run_announcements
@@ -235,6 +236,7 @@ async def startup() -> None:
         asyncio.create_task(supervise("verification_advisories", run_verification_advisories(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_closures", run_closures(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("verification_delivery", run_verifications(moderation_client, _feature_stop_event))),
+        asyncio.create_task(supervise("verification_departures", run_departure_checks(moderation_client, _feature_stop_event))),
         asyncio.create_task(supervise("ticket_crisis", run_ticket_crisis_loop(_feature_stop_event))),
         asyncio.create_task(supervise("sla", run_sla_loop(_feature_stop_event))),
         asyncio.create_task(supervise("load_watch", run_load_watch_loop(_feature_stop_event))),

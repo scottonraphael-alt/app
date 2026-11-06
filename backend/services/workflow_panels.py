@@ -41,18 +41,20 @@ def values(row):
     except (ValueError,TypeError):pass
     def short(value,units):
         return str(value or 'Non renseigné').encode('utf-16-le')[:units*2].decode('utf-16-le','ignore')
+    member = row.get('member') or {}
+    member_id = row.get('member_id') or member.get('id')
     answers=row.get('answers') or {}
     fields=[('name','👤 Prénom / pseudo',80),('age','🎂 Tranche d’âge',24),('reason','🌱 Motif de venue',500),('psychiatry','💬 Avis sur la psychiatrie',1300)]
     response='\n'.join('### '+label+'\n```\n'+short(answers.get(key),limit).strip().replace('`','ˋ')+'\n```' for key,label,limit in fields)
     response+='\n-# '+('✅ Règlement accepté : Oui' if answers.get('rules') else '⚠️ Règlement accepté : Non renseigné')
-    return {'membre_id':str(row.get('member_id') or 'ID indisponible'),'membre_username':str(row.get('member_username') or (row.get('member') or {}).get('username') or 'Pseudo indisponible')[:32],
+    return {'membre_id':str(member_id or 'ID indisponible'),'membre_username':str(row.get('member_username') or member.get('username') or 'Pseudo indisponible')[:32],
         'motif':short(row.get('reason'),1000),'triggers':short(row.get('triggers'),1000),
         'motif_refus':short(row.get('decision_reason') or row.get('reason'),1000),
         'statut':short(row.get('status_label') or {'waiting':'En attente','claimed':'Pris en charge','pending':'En attente','approved':'Publication en cours','published':'Publié','rejected':'Refusé','open':'Ouvert','suspended':'Suspendu','restricted':'Accès restreint','archived':'Archivé'}.get(row.get('status'),'À vérifier'),40),
         'reponses_formulaire':response,
         'identifiant_anonyme':str(row.get('alias') or 'ANO-XXXX-XX'),'message_anonyme':str(row.get('text') or ''),
         'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:2000].decode('utf-16-le','ignore'),
-        'membre':mention(row.get('member_id'),'Membre à sélectionner'),
+        'membre':mention(member_id,'Membre à sélectionner'),
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
         'date_traitement':stamp,
@@ -175,4 +177,5 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 
 def revision(key):
-    return hashlib.sha256(json.dumps({'layout':7,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]
+    layout = 8 if key in ('staff:verification', 'form:verification') else 7
+    return hashlib.sha256(json.dumps({'layout':layout,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]

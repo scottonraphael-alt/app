@@ -30,6 +30,9 @@ PLANS={
     'ban':['notify_refusal','ban','moderation_log','archive'],
 }
 OPTIONAL={'notify_closed','notify_ticket','notify_refusal','notify_clarification'}
+OPEN_JOBS = {'pending', 'running', 'retry', 'uncertain'}
+DEPARTURE = 'member_departure'
+DEPARTURE_REASON = 'Le membre a quitté le serveur. Formulaire archivé automatiquement.'
 
 def now():return datetime.now(timezone.utc)
 def stamp():return now().isoformat()
@@ -39,6 +42,58 @@ def ident():return uuid4().hex
 
 def event(kind,actor_id,form_id=None,**details):
     return {'id':ident(),'at':stamp(),'kind':kind,'actor_id':str(actor_id),'form_id':form_id,**details}
+
+
+def departure_close(job):
+    return (
+        job.get('origin') == DEPARTURE and job['action'] == 'close'
+        and [step['name'] for step in job['steps']] == ['archive']
+    )
+
+
+def can_close_departure(row):
+    if not row.get('active') or row.get('training') or not row.get('forms'):
+        return False
+    return not any(
+        job['status'] in OPEN_JOBS and (
+            departure_close(job) or job['action'] in ('refuse', 'kick', 'ban')
+            or (job['status'] == 'running' and (job.get('lease_until') or '') > stamp())
+        ) for job in row.get('jobs', [])
+    )
+
+
+async def queue_departure_close(row, bot_id):
+    """Record the close against the exact revision checked for membership."""
+    if not can_close_departure(row):
+        return False
+    changed = copy.deepcopy(row)
+    form = changed['forms'][-1]
+    for job in changed['jobs']:
+        if job['status'] in OPEN_JOBS:
+            job.update(status='cancelled', lease_until=None, token=None)
+    decision = form.get('decision')
+    if decision and not decision.get('confirmed'):
+        decision['cancelled_reason'] = DEPARTURE_REASON
+    changed['jobs'].append({
+        'id': ident(), 'action': 'close', 'origin': DEPARTURE, 'actor_id': str(bot_id),
+        'form_id': form['id'], 'created_at': stamp(), 'status': 'pending', 'lease_until': None, 'token': None,
+        'payload': {'actor_id': str(bot_id), 'member_id': row['member_id'], 'form_id': form['id'],
+                    'action': 'close', 'training': False, 'origin': DEPARTURE},
+        'steps': [{'name': 'archive', 'status': 'pending'}],
+    })
+    if len(row['events']) >= 2500:
+        raise HTTPException(409, 'Historique volumineux : une intervention Responsable est nécessaire.')
+    result = await db.verification_cases.update_one(
+        {'_id': row['_id'], 'guild_id': guild(), 'revision': row['revision']},
+        {'$set': {'status': 'processing', 'forms': changed['forms'], 'jobs': changed['jobs'], 'updated_at': stamp()},
+         '$inc': {'revision': 1},
+         '$push': {'events': event('action.departure_close', bot_id, form['id'], rationale=DEPARTURE_REASON)}},
+    )
+    if not result.matched_count:
+        return False
+    from services.migration_runtime import wake_verifications
+    wake_verifications()
+    return True
 
 async def authority(actor_id,*,responsable=False):
     roles={str(value) for value in await DiscordService().fetch_member_role_ids(str(actor_id))}

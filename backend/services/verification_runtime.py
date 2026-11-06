@@ -1,4 +1,5 @@
 """Native verification transport. Side effects require explicit BotGhost handover."""
+import asyncio
 import hashlib
 import json
 import logging
@@ -39,6 +40,48 @@ async def guild_for(client):
     if not guild or not client.is_ready():
         raise HTTPException(503, 'Le bot Discord n’est pas connecté au serveur configuré.')
     return guild
+
+
+async def member_absent(guild, member_id):
+    try:
+        await guild.fetch_member(int(member_id))
+    except discord.NotFound as exc:
+        if exc.code == 10007:  # Unknown Member; other 404s do not establish absence.
+            return True
+        raise
+    return False
+
+
+async def check_departures(client):
+    guild = await guild_for(client)
+    from services.workflow_batch import process
+
+    async def check(row):
+        if service.can_close_departure(row) and await member_absent(guild, row['member_id']):
+            await service.queue_departure_close(row, client.user.id)
+
+    await process(db.verification_cases.find({
+        'guild_id': service.guild(), 'active': True, 'training': {'$ne': True}, 'forms.0': {'$exists': True},
+    }), check)
+
+
+async def run_departure_checks(client, stop):
+    loop = asyncio.get_running_loop()
+    while not stop.is_set():
+        started = loop.time()
+        if client.is_ready() and policy.Settings().enabled and discord_actions_enabled():
+            try:
+                await check_departures(client)
+            except Exception:
+                logger.exception('Vérification des départs interrompue.')
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=max(0.1, 20 - (loop.time() - started)))
+        except asyncio.TimeoutError:
+            pass
+
+
+def departure_audit_id(form_id):
+    return f'verification.departure_closed:{service.guild()}:{form_id}'
 
 
 async def private_review_channel(guild):
@@ -288,11 +331,15 @@ class Adapter:
 
     async def authorize(self, job, step):
         require_native_workflows()
+        if service.departure_close(job):
+            return
         self.guild = await guild_for(self.client)
         await service.authority(job['actor_id'])
         if job['payload']['training']:
             return
         if job['action']=='approve' and step in ('member_access','welcome'):
+            if await member_absent(self.guild, job['payload']['member_id']):
+                raise HTTPException(409, 'Le membre a quitté le serveur. Son formulaire va être archivé automatiquement.')
             self.welcome_gifs()
             await welcome_channel(self.guild)
         if job['action'] == 'approve' and step == 'member_access':
@@ -353,6 +400,15 @@ class Adapter:
     async def perform(self, step, payload, nonce):
         require_native_workflows()
         member_id = payload['member_id']
+        if step == 'archive' and payload.get('origin') == service.DEPARTURE:
+            key = departure_audit_id(payload['form_id'])
+            await db.auth_logs.update_one({'_id': key}, {'$setOnInsert': {
+                'id': key, 'event_type': 'verification.departure_closed', 'created_at': service.now(),
+                'helper_id': payload['actor_id'], 'username': 'OasisLink', 'method': 'SYSTEM', 'path': '/member-workflows',
+                'status_code': 200, 'details': {'member_id': member_id, 'form_id': payload['form_id'],
+                                               'reason': service.DEPARTURE_REASON},
+            }}, upsert=True)
+            return {'confirmed': True}
         if step == 'member_access':
             member_role, age_role, remove = await self.role_configuration(payload['age'])
             member = await self.guild.fetch_member(int(member_id))
@@ -481,6 +537,9 @@ class Adapter:
         if receipt and receipt.get('status') == 'sent':
             return 'applied'
         if step == 'archive':
+            if payload.get('origin') == service.DEPARTURE:
+                receipt = await db.auth_logs.find_one({'_id': departure_audit_id(payload['form_id'])})
+                return 'applied' if receipt else 'not_applied'
             return 'applied'  # The form itself is already durably stored before this step.
         if step == 'member_access':
             member_role, age_role, remove = await self.role_configuration(payload['age'])

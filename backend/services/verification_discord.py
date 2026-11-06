@@ -92,6 +92,21 @@ def staff_status(row):
     return ('**🧪 Formation / test : simulation, aucun rôle ni accueil réel.**\n' if row.get('training') else '')+'**État :** '+STATUS_LABELS.get(row['status'],'À vérifier')+'\n**Pris en charge par :** '+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'Personne pour le moment')
 
 
+def add_member_identity(box, member_id, row, *, custom):
+    mention = f'<@{member_id}>'
+    texts = [item.content for item in box.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+    if custom and not any(mention in text for text in texts):
+        return  # Respect custom panels that omit the member variable.
+    member = (row or {}).get('member') or {}
+    name = ' '.join(str(member.get('username') or member.get('display_name') or '').split())[:32]
+    name = discord.utils.escape_mentions(discord.utils.escape_markdown(name))
+    identity = f'{name} · ' if name else ''
+    line = f'-# Membre : {mention} · {identity}`{member_id}`'
+    units = sum(len(text.encode('utf-16-le')) // 2 for text in texts)
+    if units + len(line.encode('utf-16-le')) // 2 <= 4000:
+        box.add_item(discord.ui.TextDisplay(line))
+
+
 def staff_buttons(owner,row,choices):
     actions=discord.ui.ActionRow()
     blocked=bool(row and (not row.get('active') or any(j['status'] in ('pending','running','uncertain','retry') for j in row.get('jobs',[]))))
@@ -150,6 +165,7 @@ class StaffForm(StaffActions,discord.ui.LayoutView):
                 box.add_item(discord.ui.TextDisplay('-# Réponses abrégées pour tenir dans Discord. Le formulaire complet reste disponible dans Iris.'))
             box.add_item(discord.ui.TextDisplay('-# Règlement accepté : '+('Oui' if form['answers'].get('rules') else 'Non renseigné')))
             box.add_item(discord.ui.Separator())
+        add_member_identity(box, member_id, row, custom=custom)
         box.add_item(staff_buttons(self,row,[('approve','Valider'),('ticket','Créer un ticket'),('close','Clore sans expulser')]))
         if not custom:box.add_item(discord.ui.TextDisplay(IRIS_DECISIONS))
         box.add_item(discord.ui.ActionRow(discord.ui.Button(label='Dossier et historique dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id))))
@@ -178,6 +194,7 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         if advisory and not custom:
             short=str(advisory).encode('utf-16-le')[:2000].decode('utf-16-le','ignore')
             box.add_item(discord.ui.TextDisplay('### 🧠 Préavis IA · décision humaine\n'+short+'\n-# Analyse complète dans Iris. Ce préavis ne prend aucune décision.'))
+        add_member_identity(box, self.member_id, row, custom=custom)
         box.add_item(staff_buttons(self,row,[('claim','Je m’en occupe')]))
         links=discord.ui.ActionRow(discord.ui.Button(label='Gérer dans Iris',style=discord.ButtonStyle.link,url=dossier_url(base_url,member_id)))
         if thread_url:links.add_item(discord.ui.Button(label='Lire le formulaire',emoji='📝',style=discord.ButtonStyle.link,url=thread_url))

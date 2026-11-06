@@ -32,10 +32,11 @@ async def update(member_id,job_id,token,change):
 
 async def run_job(member_id,job_id,adapter):
     row=await service.load(member_id);job=find_job(row,job_id)
-    if job['status']=='completed':return service.public(row)
+    if job['status'] in ('completed', 'cancelled'):return service.public(row)
     if job['lease_until'] and job['lease_until']>service.stamp():raise HTTPException(409,'Cette action est déjà en cours de traitement.')
+    departure = service.departure_close(job)
     try:
-        roles=await service.authority(job['actor_id'])
+        roles=set() if departure else await service.authority(job['actor_id'])
         if job['action']=='ban' and str(service.config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID) not in roles:
             raise HTTPException(403,'Rôle administrateur de sanction requis.')
     except HTTPException as error:
@@ -53,7 +54,7 @@ async def run_job(member_id,job_id,adapter):
         uncertain=step['status'] in ('inflight','uncertain')
         nonce=hashlib.sha256(f'{service.key(member_id)}:{job_id}:{step["name"]}'.encode()).hexdigest()[:24]
         try:
-            roles=await service.authority(claimed['actor_id'])
+            roles=set() if departure else await service.authority(claimed['actor_id'])
             if claimed['action']=='ban' and str(service.config.SANCTION_PERMANENT_BAN_ADMIN_ROLE_ID) not in roles:
                 raise HTTPException(403,'Rôle administrateur de sanction requis.')
             await adapter.authorize(claimed,step['name'])
@@ -77,15 +78,19 @@ async def run_job(member_id,job_id,adapter):
             def failed(row,job):
                 job['steps'][index].update(status='optional_failed' if optional else 'uncertain',error_type=type(error).__name__,error_message=detail[:2200])
                 if not optional:
-                    job.update(status='uncertain',lease_until=None);row['status']='action_required'
-                    row['events'].append(service.event('effect.unconfirmed',job['actor_id'],job['form_id'],step=step['name']))
+                    job.update(status='pending' if departure else 'uncertain',lease_until=None)
+                    if not departure:
+                        row['status']='action_required'
+                        row['events'].append(service.event('effect.unconfirmed',job['actor_id'],job['form_id'],step=step['name']))
             row=await update(member_id,job_id,token,failed)
             if not optional:return service.public(row)
     def finished(row,job):
         status={'approve':'approved','refuse':'refused','kick':'refused','ban':'refused','close':'closed','ticket':'claimed','clarify':'clarification'}[job['action']]
         job.update(status='completed',lease_until=None)
         row.update(status=status,active=status not in service.FINAL)
+        if departure and row.get('staff_delivery'):
+            row['staff_delivery']['cleanup_status'] = 'pending'
         form=next(item for item in row['forms'] if item['id']==job['form_id']);form['status']=status
-        if form.get('decision'):form['decision']['confirmed']=True
+        if form.get('decision') and not departure:form['decision']['confirmed']=True
         row['events'].append(service.event('action.confirmed',job['actor_id'],job['form_id'],action=job['action'],training=job['payload']['training']))
     return service.public(await update(member_id,job_id,token,finished))

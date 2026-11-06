@@ -104,6 +104,7 @@ const TICKET_EVENT_LABELS = {
 };
 
 const EVENT_LABELS = {
+  "verification.departure_closed": "Formulaire archivé après le départ du membre",
   [GUIDE_LOG_EVENT]: "Demande d’orientation vers un salon d’aide",
   ...CASEWORK_AUDIT_LABELS,
   ...VERIFICATION_AUDIT_LABELS,
