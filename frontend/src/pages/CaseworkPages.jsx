@@ -6,6 +6,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, RefreshCw, Search, FileText, LockKeyhole } from 'lucide-react';
 import { api, getErrorMessage } from '../api/client';
 import { Modal } from '../components/projects/ProjectUI';
+import { ActionProgressButton, SlidingPanels } from '../components/casework/CaseMotion';
 import '../Casier.css';
 import '../Casework.css';
 
@@ -51,18 +52,19 @@ function Frame({ kind, title, children, back, refresh }) {
 }
 
 function State({ row }) {
-  return <span className={`cw-state cw-state-${row.status}`}>{STATES[row.status] || row.status}</span>;
+  return <span key={row.status} className={`cw-state cw-state-${row.status} case-status-feedback`}>{STATES[row.status] || row.status}</span>;
 }
 
 function CaseList({ kind }) {
   const [archived, setArchived] = useState(false), [attention, setAttention] = useState(false), [offset, setOffset] = useState(0);
-  const [data, setData] = useState(null), [error, setError] = useState(''), [loading, setLoading] = useState(true), [refresh, setRefresh] = useState(0);
+  const [views, setViews] = useState({}), [error, setError] = useState(''), [refresh, setRefresh] = useState(0);
   const [importing, setImporting] = useState(false), [channelId, setChannelId] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
-    setLoading(true); setData(null); setError('');
-    api.get(BASE, { params: { kind, archived, attention, offset, limit: 25 } }).then(r => { if (live) setData(r.data); })
-      .catch(e => { if (live) setError(errorText(e)); }).finally(() => { if (live) setLoading(false); });
+    setError('');
+    api.get(BASE, { params: { kind, archived, attention, offset, limit: 25 } }).then(r => {
+      if (live) setViews(current => ({ ...current, [archived]: { data: r.data, offset, attention } }));
+    }).catch(e => { if (live) setError(errorText(e)); });
     return () => { live = false; };
   }, [kind, archived, attention, offset, refresh]);
   async function importChannel(e) {
@@ -70,29 +72,37 @@ function CaseList({ kind }) {
     try { await api.post(`${BASE}/imports`, { channel_id: channelId, kind }); setImporting(false); setChannelId(''); setRefresh(n => n + 1); }
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
+  const activeView = views[archived];
+  const data = activeView?.offset === offset && activeView.attention === attention ? activeView.data : null;
   return <Frame kind={kind} refresh={() => setRefresh(n => n + 1)}>
     <WorkflowRequests kind={kind}/>
     <section className="cw-guide"><FileText size={22} /><div><h2>Le suivi des échanges</h2><p>Retrouvez les conversations, leur intervenant et les actions à mener. Les échanges restent consultables après la clôture du salon.</p></div><span className="cw-guide-count"><strong>{data?.total ?? "—"}</strong>dossiers dans cette vue</span></section>
     <div className="cw-toolbar">
-      <div className="cw-toolbar" role="group" aria-label="État des dossiers">{[[false, 'Ouverts'], [true, 'Archives']].map(([value, label]) =>
+      <div className="case-slide-tabs" style={{ '--case-panel-index': Number(archived) }} role="group" aria-label="État des dossiers">{[[false, 'Ouverts'], [true, 'Archives']].map(([value, label]) =>
         <button className="cw-button" key={label} aria-pressed={archived === value} onClick={() => { setArchived(value); setOffset(0); }}>{label}</button>)}</div>
       {!archived && <button className="cw-button" aria-pressed={attention} onClick={() => { setAttention(x => !x); setOffset(0); }}>À traiter</button>}
       <span className="cw-spacer" /><button className="cw-button" onClick={() => setImporting(true)}>Ajouter un salon existant</button>
     </div>
-    {error && <p role="alert" className="cw-alert">{error}</p>}{loading && <p role="status">Chargement des dossiers…</p>}
-    {data && <section className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
-      <tbody>{data.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link>
+    {error && <p role="alert" className="cw-alert">{error}</p>}<SlidingPanels active={Number(archived)}>
+      {[false, true].map(view => {
+        const panelData = view === archived ? data : views[view]?.data;
+        const panelOffset = view === archived ? offset : views[view]?.offset ?? 0;
+        if (!panelData) return <section key={String(view)} className="cw-card">{view === archived && !error && <p role="status">Chargement des dossiers…</p>}</section>;
+        return <section key={String(view)} className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
+      <tbody>{panelData.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>
         <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</tbody></table></div>
-      {!data.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
-      <footer className="cw-toolbar"><button className="cw-button" disabled={!offset} onClick={() => setOffset(n => Math.max(0, n - 25))}>Précédent</button>
-        <span>Page {Math.floor(offset / 25) + 1} sur {Math.max(1, Math.ceil(data.total / 25))} · {data.total} dossiers</span>
-        <button className="cw-button" disabled={offset + 25 >= data.total} onClick={() => setOffset(n => n + 25)}>Suivant</button></footer>
-    </section>}
+      {!panelData.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
+      <footer className="cw-toolbar"><button className="cw-button" disabled={!panelOffset} onClick={() => setOffset(n => Math.max(0, n - 25))}>Précédent</button>
+        <span>Page {Math.floor(panelOffset / 25) + 1} sur {Math.max(1, Math.ceil(panelData.total / 25))} · {panelData.total} dossiers</span>
+        <button className="cw-button" disabled={panelOffset + 25 >= panelData.total} onClick={() => setOffset(n => n + 25)}>Suivant</button></footer>
+    </section>;
+      })}
+    </SlidingPanels>
     {importing && <Modal title="Ajouter un salon existant" eyebrow="DOSSIERS IRIS" onClose={() => setImporting(false)} busy={busy}>
       <form className="cw-modal" onSubmit={importChannel}><p>Le salon doit appartenir aux catégories autorisées et posséder un panneau d’ouverture reconnu. Cette opération ne crée aucun salon Discord.</p>
         {error && <p role="alert">{error}</p>}<label>Identifiant du salon<input required pattern="[0-9]{17,20}" value={channelId} onChange={e => setChannelId(e.target.value)} /></label>
-        <button className="cw-button cw-primary" disabled={busy}>{busy ? 'Vérification…' : 'Vérifier et ajouter'}</button></form>
+        <ActionProgressButton className="cw-button cw-primary" busy={busy} pendingLabel="Vérification…">Vérifier et ajouter</ActionProgressButton></form>
     </Modal>}
   </Frame>;
 }
@@ -166,18 +176,20 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
           {row.status!=='closing'&&row.status!=='reopening'&&<form onSubmit={e=>{e.preventDefault();action(opAction,{text:opReason,participant_id:['add_member','remove_member'].includes(opAction)?participant:null});}}><label>Gestion des accès<select value={opAction} onChange={e=>setOpAction(e.target.value)}>{[['suspend','Suspendre'],['reopen','Rouvrir et restaurer les participants'],...(kind==='support'?[]:[['restrict','Restreindre à l’administration'],['unrestrict','Lever la restriction']]),['add_member','Ajouter un participant'],['remove_member','Retirer un participant']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>{['add_member','remove_member'].includes(opAction)&&<label>Identifiant du participant<input required pattern="[0-9]{17,20}" value={participant} onChange={e=>setParticipant(e.target.value)}/></label>}<label>Motif<textarea required minLength={10} maxLength={1000} value={opReason} onChange={e=>setOpReason(e.target.value)}/></label><button className="cw-button" disabled={busy||row.native_workflows_enabled===false}>Vérifier l’action sur les accès</button></form>}
         </div>}</section>
         <section className="cw-card cw-followup"><header className="cw-section-head"><div><p className="cz-eyebrow">SUIVI DU DOSSIER</p><h2>Repères et historique</h2></div></header>
-          <div className="cw-tabs" role="group" aria-label="Informations du dossier">{[['notes', 'Notes'], ['history', 'Historique'], ['links', 'Parcours']].map(([value, label]) => <button className="cw-button" key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div>
-          {tab === 'notes' && <>{row.opening_context?.reason && <details className="cw-note"><summary>Motif d’ouverture</summary><p>{row.opening_context.reason}</p></details>}{row.status !== 'archived' && <form className="cw-note-form" onSubmit={e => { e.preventDefault(); send({ action: 'note', revision: row.revision, text: draftNote }); }}><label>Nouvelle note interne<textarea required maxLength={25000} value={draftNote} onChange={e => setDraftNote(e.target.value)} /></label><button className="cw-button cw-primary" disabled={busy}>Ajouter la note</button></form>}{[...(row.notes || [])].reverse().map(note => <article className="cw-note" key={note.id}><p>{note.text}</p><small>{date(note.at)} · {note.actor_id}</small></article>)}</>}
-          {tab === 'history' && <ol className="cw-history">{[...(row.events || [])].reverse().map(item => <li key={item.id}><strong>{item.action ? ACTIONS[item.action] : EVENTS[item.kind] || 'Événement du dossier'}</strong><time>{date(item.at)}</time>{item.actor_id && <small>Par {item.actor_id}</small>}</li>)}</ol>}
-          {tab === 'links' && <div className="cw-actions"><p>Le dossier reste relié au membre après la fermeture du salon.</p>{canSeeMember360 && <Link className="cw-button" to={`/moderation/membres/${row.member?.id}`}>Vue membre 360°</Link>}
+          <div className="cw-tabs"><div className="case-slide-tabs case-slide-tabs-three" role="group" aria-label="Informations du dossier" style={{ '--case-panel-index': ['notes', 'history', 'links'].indexOf(tab) }}>{[['notes', 'Notes'], ['history', 'Historique'], ['links', 'Parcours']].map(([value, label]) => <button className="cw-button" key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div></div>
+          <SlidingPanels active={['notes', 'history', 'links'].indexOf(tab)}>
+            <>{row.opening_context?.reason && <details className="cw-note"><summary>Motif d’ouverture</summary><p>{row.opening_context.reason}</p></details>}{row.status !== 'archived' && <form className="cw-note-form" onSubmit={e => { e.preventDefault(); send({ action: 'note', revision: row.revision, text: draftNote }); }}><label>Nouvelle note interne<textarea required maxLength={25000} value={draftNote} onChange={e => setDraftNote(e.target.value)} /></label><ActionProgressButton className="cw-button cw-primary" busy={busy}>Ajouter la note</ActionProgressButton></form>}{[...(row.notes || [])].reverse().map(note => <article className="cw-note" key={note.id}><p>{note.text}</p><small>{date(note.at)} · {note.actor_id}</small></article>)}</>
+            <ol className="cw-history">{[...(row.events || [])].reverse().map(item => <li key={item.id}><strong>{item.action ? ACTIONS[item.action] : EVENTS[item.kind] || 'Événement du dossier'}</strong><time>{date(item.at)}</time>{item.actor_id && <small>Par {item.actor_id}</small>}</li>)}</ol>
+            <div className="cw-actions"><p>Le dossier reste relié au membre après la fermeture du salon.</p>{canSeeMember360 && <Link className="cw-button" to={`/moderation/membres/${row.member?.id}`}>Vue membre 360°</Link>}
             {kind === 'verification' && <Link className="cw-button" to={`/staff/verifications/${row.member?.id}`}>Formulaires d’admission</Link>}
-            {row.status !== 'archived' && <a className="cw-button" href={`https://discord.com/channels/${row.guild_id}/${row.channel_id}`} target="_blank" rel="noreferrer">Ouvrir le salon Discord</a>}</div>}
+            {row.status !== 'archived' && <a className="cw-button" href={`https://discord.com/channels/${row.guild_id}/${row.channel_id}`} target="_blank" rel="noreferrer">Ouvrir le salon Discord</a>}</div>
+          </SlidingPanels>
         </section>
       </aside></div></>}
     {confirm && <Modal title="Confirmer l’action" eyebrow={FAMILIES[kind].short.toUpperCase()} busy={busy} onClose={() => setConfirm(null)}><div className="cw-modal"><h3>{ACTIONS[confirm.action]}</h3>
       {error && <p role="alert" className="cw-alert">{error}</p>}
       {confirm.action === 'archive' ? <><p>La conversation et ses fichiers seront vérifiés dans Iris avant la suppression du salon Discord. Une pièce jointe manquante bloque cette suppression. Le dossier restera consultable dans les archives et le parcours du membre.</p><p>{confirm.text}</p></> : <p>L’attribution sera enregistrée sans réduire l’accès des autres intervenants autorisés.</p>}
-      <button className="cw-button cw-primary" disabled={busy} onClick={() => send(confirm)}>{busy ? 'Enregistrement…' : 'Confirmer'}</button></div></Modal>}
+      <ActionProgressButton className="cw-button cw-primary" busy={busy} onClick={() => send(confirm)}>Confirmer</ActionProgressButton></div></Modal>}
   </Frame>;
 }
 

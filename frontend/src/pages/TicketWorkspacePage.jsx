@@ -11,10 +11,12 @@ import CrisisBanner from "../components/tickets/ai/CrisisBanner";
 import TicketSignals from "../components/tickets/ai/TicketSignals";
 import ReplyComposer from "../components/tickets/ai/ReplyComposer";
 import TicketExtrasPanel from "../components/tickets/extras/TicketExtrasPanel";
+import { ActionProgressButton, SlidingPanels } from "../components/casework/CaseMotion";
 import usePresence from "../components/tickets/ai/usePresence";
 import "../TicketWorkspace.css";
 
 
+const dossierTabs = ["resume", "notes", "reperes"];
 const formatTime = (timestamp) => new Date(timestamp).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 
 
@@ -29,6 +31,9 @@ function MessageAvatar({ author }) {
 
 export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, isAdmin, helper }) {
   const { ticketId } = useParams();
+  const [dossierTab, setDossierTab] = useState(null);
+  const currentDossierTab = dossierTab?.ticketId === ticketId ? dossierTab : null;
+  const selectedDossierTab = currentDossierTab?.value ?? "resume";
 
   useEffect(() => {
     document.body.classList.add("ticket-workspace-no-nav");
@@ -344,7 +349,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           <Link to="/" className="tw-button tw-home" data-testid="ticket-back-link">Accueil <ArrowRight size={17} /></Link>
           <button className="tw-button" disabled={syncing} onClick={sync} type="button" data-testid="sync-ticket-button">{syncing ? <LoaderCircle className="tw-spin" size={15} /> : <RefreshCw size={15} />} Actualiser</button>
           <button className="tw-button" onClick={archive} type="button" data-testid="archive-ticket-button"><Archive size={15} /> {ticket.status === "active" ? "Archiver" : "Réactiver"}</button>
-          <button className="tw-button tw-button-primary" disabled={saving || !dirty} onClick={save} type="button" data-testid="save-ticket-button">{saving ? <LoaderCircle className="tw-spin" size={15} /> : <Save size={15} />} {saving ? "Enregistrement…" : "Enregistrer"}</button>
+          <ActionProgressButton className="tw-button tw-button-primary" busy={saving} disabled={!dirty} onClick={save} type="button" data-testid="save-ticket-button"><Save size={15} /> Enregistrer</ActionProgressButton>
           {isAdmin && <details className="tw-menu"><summary aria-label="Actions du dossier"><MoreHorizontal size={20} /></summary><div className="tw-menu-content"><button className="tw-danger" onClick={deleteTicket} type="button" data-testid="delete-ticket-button"><Trash2 size={15} /> Supprimer le dossier</button></div></details>}
         </div>
       </header>
@@ -419,10 +424,14 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         </section>
 
         <aside className="tw-dossier" data-testid="vocal-panel" aria-label="Dossier et suivi">
-          <Tabs.Root defaultValue="resume" className="tw-dossier-tabs" key={ticketId} onValueChange={(value) => ticketEvent("workspace.tab_changed", ticketId, value)}>
+          <Tabs.Root value={selectedDossierTab} className="tw-dossier-tabs" key={ticketId} onValueChange={(value) => {
+            setDossierTab({ ticketId, value, notesVisited: value === "notes" || Boolean(currentDossierTab?.notesVisited) });
+            ticketEvent("workspace.tab_changed", ticketId, value);
+          }}>
             <Tabs.List className="tw-tabs" aria-label="Contenu du dossier"><Tabs.Trigger className="tw-tab" value="resume"><Bot size={15} /> Résumé</Tabs.Trigger><Tabs.Trigger className="tw-tab" value="notes"><FileText size={15} /> Notes <span>{noteCount}</span></Tabs.Trigger><Tabs.Trigger className="tw-tab" value="reperes"><HeartHandshake size={15} /> Repères</Tabs.Trigger></Tabs.List>
             <div className="tw-dossier-content">
-              <Tabs.Content value="resume" className="tw-tab-content">
+              <SlidingPanels active={dossierTabs.indexOf(selectedDossierTab)}>
+              <Tabs.Content forceMount value="resume" className="tw-tab-content">
                 <section className="tw-summary" data-testid="ai-summary-panel"><header className="tw-section-title tw-section-title--violet"><span className="tw-panel-icon"><Bot size={22} /></span><h2>Synthèse du dossier</h2><span className="tw-claude">Claude</span></header>
                 {ticket.summary_status === "generating" && <p className="tw-summary-state" role="status"><LoaderCircle size={14} className="tw-spin" /> Actualisation de la synthèse en cours…</p>}
                 {ticket.summary_status === "error" && <p className="tw-summary-state is-error" role="alert">{ticket.summary_error || "La synthèse quotidienne a échoué."}</p>}
@@ -431,12 +440,13 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
                 {personTriggers && <section className="tw-trigger-reminder"><h3><HeartHandshake size={14} /> Points de vigilance</h3><p>{personTriggers}</p></section>}
               </Tabs.Content>
 
-              <Tabs.Content value="notes" className="tw-tab-content"><section data-testid="notes-panel"><header className="tw-section-title tw-section-title--sage"><span className="tw-panel-icon"><FileText size={22} /></span><h2>Notes privées</h2><button className="tw-button tw-button-small" type="button" onClick={() => { setNoteComposerOpen(true); ticketEvent("note.composer_opened", ticketId); }}><FilePlus2 size={14} /> Ajouter</button></header>
+              <Tabs.Content forceMount value="notes" className="tw-tab-content"><section data-testid="notes-panel"><header className="tw-section-title tw-section-title--sage"><span className="tw-panel-icon"><FileText size={22} /></span><h2>Notes privées</h2><button className="tw-button tw-button-small" type="button" onClick={() => { setNoteComposerOpen(true); ticketEvent("note.composer_opened", ticketId); }}><FilePlus2 size={14} /> Ajouter</button></header>
               {noteComposerOpen && <form className="tw-note-form" onSubmit={addNote} data-testid="new-ticket-note-form"><label htmlFor="tw-note-title">Titre<input id="tw-note-title" autoFocus value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} placeholder="Objet de la note" maxLength={120} required data-testid="ticket-note-title-input" /></label><label htmlFor="tw-note-content">Note<textarea id="tw-note-content" rows={5} value={noteContent} onChange={(event) => setNoteContent(event.target.value)} placeholder="Les informations utiles au suivi…" required data-testid="ticket-note-content-input" /></label><div><button className="tw-button" type="button" onClick={() => { setNoteComposerOpen(false); ticketEvent("note.composer_closed", ticketId); }}><X size={14} /> Fermer</button><button className="tw-button tw-button-primary" type="submit" disabled={addingNote || !noteTitle.trim() || !noteContent.trim()} data-testid="add-ticket-note-button">{addingNote ? "Ajout…" : "Ajouter la note"}</button></div></form>}
               <div className="tw-notes" data-testid="ticket-notes-list">{ticket.notes && <article className="tw-note" data-testid="legacy-ticket-note"><h3>Note générale</h3><p>{ticket.notes}</p></article>}{[...(ticket.notes_entries || [])].reverse().map((note) => <article className="tw-note" key={note.id} data-testid={`ticket-note-${note.id}`}><header><h3>{note.title}</h3>{(isAdmin || note.author.id === helper?.id) && <button className="tw-icon-button tw-danger" type="button" onClick={() => deleteNote(note.id)} data-testid={`delete-note-${note.id}`} aria-label="Supprimer la note"><Trash2 size={14} /></button>}</header><p className="tw-note-byline">{note.author.display_name || note.author.username} · {formatTime(note.updated_at)}</p><p>{note.content}</p></article>)}</div>
-              {!noteCount && !noteComposerOpen && <div className="tw-empty-notes"><FileText size={24} /><h3>Gardez une trace utile</h3><p>Ajoutez une observation ou une décision pour le prochain échange.</p><button className="tw-button" onClick={() => { setNoteComposerOpen(true); ticketEvent("note.composer_opened", ticketId); }} type="button"><FilePlus2 size={14} /> Première note</button></div>}</section><TicketExtrasPanel ticketId={ticketId} isAdmin={isAdmin} helperId={helper?.id} /></Tabs.Content>
+              {!noteCount && !noteComposerOpen && <div className="tw-empty-notes"><FileText size={24} /><h3>Gardez une trace utile</h3><p>Ajoutez une observation ou une décision pour le prochain échange.</p><button className="tw-button" onClick={() => { setNoteComposerOpen(true); ticketEvent("note.composer_opened", ticketId); }} type="button"><FilePlus2 size={14} /> Première note</button></div>}</section>{currentDossierTab?.notesVisited && <TicketExtrasPanel ticketId={ticketId} isAdmin={isAdmin} helperId={helper?.id} />}</Tabs.Content>
 
-              <Tabs.Content value="reperes" className="tw-tab-content"><section className="tw-fields" data-testid="person-triggers-panel"><header className="tw-section-title tw-section-title--clay"><span className="tw-panel-icon"><HeartHandshake size={22} /></span><h2>Repères de l’accompagnement</h2></header><label htmlFor="tw-person-triggers">Points de vigilance<span>Sujets, situations ou formulations sensibles.</span><textarea id="tw-person-triggers" rows={4} value={personTriggers} onChange={(event) => setPersonTriggers(event.target.value)} placeholder="Ce qui aide à adapter l’écoute…" data-testid="person-triggers-input" /></label><label htmlFor="tw-vocal-summary">Compte-rendu d’échange<span>Les éléments à garder pour la suite.</span><textarea id="tw-vocal-summary" rows={6} value={vocalSummary} onChange={(event) => setVocalSummary(event.target.value)} placeholder="Repères et synthèse de l’échange…" data-testid="ticket-vocal-input" /></label><p className="tw-caption">Utilisez « Enregistrer » pour conserver vos modifications.</p></section></Tabs.Content>
+              <Tabs.Content forceMount value="reperes" className="tw-tab-content"><section className="tw-fields" data-testid="person-triggers-panel"><header className="tw-section-title tw-section-title--clay"><span className="tw-panel-icon"><HeartHandshake size={22} /></span><h2>Repères de l’accompagnement</h2></header><label htmlFor="tw-person-triggers">Points de vigilance<span>Sujets, situations ou formulations sensibles.</span><textarea id="tw-person-triggers" rows={4} value={personTriggers} onChange={(event) => setPersonTriggers(event.target.value)} placeholder="Ce qui aide à adapter l’écoute…" data-testid="person-triggers-input" /></label><label htmlFor="tw-vocal-summary">Compte-rendu d’échange<span>Les éléments à garder pour la suite.</span><textarea id="tw-vocal-summary" rows={6} value={vocalSummary} onChange={(event) => setVocalSummary(event.target.value)} placeholder="Repères et synthèse de l’échange…" data-testid="ticket-vocal-input" /></label><p className="tw-caption">Utilisez « Enregistrer » pour conserver vos modifications.</p></section></Tabs.Content>
+              </SlidingPanels>
             </div>
             <footer className="tw-dossier-footer"><ShieldCheck size={13} /><span>{ticket.status === "active" ? "Messages et résumé actualisés chaque jour" : "Dossier archivé · Actualisation manuelle"}</span></footer>
           </Tabs.Root>

@@ -241,3 +241,26 @@ body.ticket-workspace-no-nav .app-shell > .app-main { margin:0 !important; paddi
 :root[data-theme="dark"] .tw-search-result time { color:var(--iris-text-soft,#7d8b84); }
 :root[data-theme="dark"] .tw-search-result > span { color:var(--iris-accent,#8fbba3); }
 :root[data-theme="dark"] .tw-message.is-search-hit { background:var(--iris-accent-soft,rgba(143,187,163,.14)); box-shadow:0 0 0 8px rgba(143,187,163,.14); }
+
+.tw-dossier-content {
+  --tw-panel-pad-block: 24px;
+  --tw-panel-pad-inline: 24px;
+}
+.tw-dossier-content > .case-slide-viewport {
+  margin-block-start: calc(-1 * var(--tw-panel-pad-block));
+  margin-inline: calc(-1 * var(--tw-panel-pad-inline));
+}
+.tw-dossier-content .case-slide-panel {
+  padding-block-start: var(--tw-panel-pad-block);
+  padding-inline: var(--tw-panel-pad-inline);
+  box-sizing: border-box;
+}
+@media (min-width: 1800px) {
+  .tw-dossier-content { --tw-panel-pad-block: 28px; --tw-panel-pad-inline: 32px; }
+}
+@media (max-width: 1100px) {
+  .tw-dossier-content { --tw-panel-pad-block: 20px; --tw-panel-pad-inline: 20px; }
+}
+@media (max-width: 760px) {
+  .tw-dossier-content { --tw-panel-pad-block: 22px; --tw-panel-pad-inline: 22px; }
+}
