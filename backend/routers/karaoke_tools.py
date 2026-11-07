@@ -340,3 +340,23 @@ async def catalog_search(q: str, t: str):
     merged.update({entry['id']: entry for entry in entries})
     karaoke._set_catalog(list(merged.values())[-karaoke.CATALOG_TOTAL:], time.time())
     return {'tracks': [v.public() for v in karaoke.library().values()]}
+
+
+@router.get('/catalog/categories')
+async def catalog_categories(t: str):
+    await controller(t)
+    from services import karaoke_catalog as catalog
+    return catalog.category_options()
+
+
+@router.get('/catalog/category')
+async def catalog_category(t: str, style: str = '', decade: str = ''):
+    await controller(t)
+    if not style and not decade:
+        raise HTTPException(422, 'Choisis un style ou une décennie.')
+    try:
+        import asyncio
+        tracks = await asyncio.wait_for(karaoke.category_tracks(style, decade), timeout=35)
+    except asyncio.TimeoutError:
+        raise HTTPException(503, 'Le chargement Deezer a pris trop de temps. Réessaie.')
+    return {'count': len(tracks), 'style': style, 'decade': decade}

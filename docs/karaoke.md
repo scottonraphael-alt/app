@@ -115,3 +115,16 @@ docker compose --profile karaoke up -d --no-deps backend karaoke-preparation kar
 ```
 
 Cette séquence suppose que MongoDB est déjà en fonctionnement et ne reconstruit pas le frontend. Whisper/PyTorch et les modèles nécessitent toujours de l'espace disque ; la correction ne peut pas rendre exploitable un disque encore saturé.
+
+## Catégories Deezer du blind test
+
+Dans **Blind test → Lancer un blind test**, les animateurs disposent de deux filtres combinables :
+
+- **20 styles** : Animé, Pop, Rock, J-pop, K-pop, Jazz, Électro, Rap/Hip-hop, R&B, Soul, Funk, Disco, Metal, Reggae, Country, Blues, Classique, Chanson française, Latino, Indie/Alternative.
+- **8 décennies** : années 1950, 1960, 1970, 1980, 1990, 2000, 2010 et 2020.
+
+Exemple : sélectionner **Rock** et **Années 1980**. Le choix d’une catégorie passe la source sur les extraits Deezer ; les fichiers locaux ne sont pas classés automatiquement. « Rejouer » conserve les filtres de la partie.
+
+Les sélections utilisent des playlists publiques Deezer dont les titres correspondent aux thèmes demandés. Il s’agit de sélections thématiques, pas d’une vérification de l’année de sortie originale de chaque enregistrement. Seuls les morceaux disposant d’un extrait valide sont retenus. Une sélection vide ou indisponible est signalée, sans remplacer silencieusement le thème par le classement général.
+
+Les catégories sont chargées uniquement à la demande. Les requêtes simultanées pour une même sélection sont regroupées, les chargements réseau sont limités et 24 sélections au maximum restent en cache mémoire. Aucun service karaoké/Whisper supplémentaire n’est nécessaire.

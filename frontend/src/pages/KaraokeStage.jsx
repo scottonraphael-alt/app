@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
+import BlindTestCategories from "./BlindTestCategories";
 import KaraokeBackdrop from "./KaraokeBackdrop";
 
 // Même principe que CinéStream : tout passe par /.proxy (URL Mappings du portail Discord).
@@ -10,6 +11,9 @@ const DRIFT_SECONDS = 1.2;
 
 const CATEGORY_LABELS = { title: "Titre", artist: "Artiste", source: "Source" };
 const NOTICES = {
+  invalid_catalog_category: "Ce style ou cette décennie ne sont pas disponibles.",
+  catalog_category_unavailable: "Cette sélection Deezer est indisponible. Réessaie dans un instant.",
+  empty_catalog_category: "Aucun extrait pour cette combinaison. Choisis un autre style ou une autre décennie.",
   game_running: "Une partie est en cours : arrête-la avant de changer de morceau.",
   empty_library: "Aucun morceau disponible : dossier vide et catalogue Deezer pas encore chargé (réessaie dans un instant).",
 };
@@ -221,7 +225,7 @@ function BlindTestView({ state, send, canControl, userId, feedback, plays, setPl
         </button>
       )}
       {bt.phase === "final" && (
-        <button type="button" style={S.button} onClick={() => send({ type: "bt_start", rounds: bt.total, seconds: bt.seconds })}>
+        <button type="button" style={S.button} onClick={() => send({ type: "bt_start", rounds: bt.total, seconds: bt.seconds, ...(bt.selection || {}) })}>
           🔁 Rejouer
         </button>
       )}
@@ -356,7 +360,9 @@ export default function KaraokeStage({ session, onExit }) {
   const [feedback, setFeedback] = useState(null);
   const [notice, setNotice] = useState("");
   const [panel, setPanel] = useState(null); // "tracks" | "blindtest" | null
-  const [settings, setSettings] = useState({ rounds: 10, seconds: 20, pool: "all" });
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [settings, setSettings] = useState({ rounds: 10, seconds: 20, pool: "all", style: "", decade: "" });
 
   const audioRef = useRef(null);
   const socketRef = useRef(null);
@@ -396,18 +402,26 @@ export default function KaraokeStage({ session, onExit }) {
           const stamped = { ...message, at: performance.now() };
           stateRef.current = stamped;
           setState(stamped);
+          if (message.mode === 'blindtest' && message.bt?.phase !== 'final') {
+            setStarting(false);
+            setPanel(null);
+          }
         } else if (message.type === "favorites") {
           setFavorites(message.ids || []);
         } else if (message.type === "library") {
           setLibrary(message.tracks || []);
         } else if (message.type === "guess_result") {
           setFeedback({ ...message, key: Date.now() });
+        } else if (message.type === "catalog_loading") {
+          setStarting(true);
         } else if (message.type === "error") {
+          setStarting(false);
           setNotice(NOTICES[message.code] || "Action impossible.");
         }
       };
       socket.onclose = () => {
         setConnected(false);
+        setStarting(false);
         if (!closed) {
           reconnectTimer = window.setTimeout(connect, Math.min(1000 * 2 ** retries, 10000));
           retries += 1;
@@ -666,13 +680,21 @@ export default function KaraokeStage({ session, onExit }) {
                 <select
                   value={settings.pool}
                   style={{ padding: 6, borderRadius: 8, maxWidth: 260 }}
-                  onChange={(event) => setSettings({ ...settings, pool: event.currentTarget.value })}
+                  onChange={(event) => {
+                    if (event.currentTarget.value === "local") setCategoryLoading(false);
+                    setSettings({ ...settings, pool: event.currentTarget.value, ...(event.currentTarget.value === "local" ? { style: "", decade: "" } : {}) });
+                  }}
                 >
                   <option value="all">Tout ({library.length})</option>
                   <option value="local">Mes fichiers ({localTracks.length})</option>
                   <option value="preview">Catalogue Deezer ({library.length - localTracks.length})</option>
                 </select>
               </label>
+              {settings.pool !== "local" && <BlindTestCategories session={session} style={settings.style} decade={settings.decade}
+                onLoading={setCategoryLoading} onChange={selection => {
+                  setCategoryLoading(Boolean(selection.style || selection.decade));
+                  setSettings(current => ({ ...current, ...selection, pool: "preview" }));
+                }} />}
               <label style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                 Nombre de manches
                 <input
@@ -705,12 +727,14 @@ export default function KaraokeStage({ session, onExit }) {
               <button
                 type="button"
                 style={S.button}
+                disabled={starting || categoryLoading || !connected}
                 onClick={() => {
-                  setPanel(null);
-                  send({ type: "bt_start", rounds: settings.rounds, seconds: settings.seconds, pool: settings.pool });
+                  setStarting(true);
+                  setNotice("");
+                  send({ type: "bt_start", ...settings });
                 }}
               >
-                Lancer la partie
+                {starting ? "Préparation de la partie…" : categoryLoading ? "Chargement de la sélection…" : "Lancer la partie"}
               </button>
             </div>
           )}

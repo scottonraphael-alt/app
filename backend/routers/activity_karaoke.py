@@ -22,6 +22,7 @@ Variables d'environnement du catalogue (toutes facultatives) :
   KARAOKE_CATALOG_PER_SOURCE  titres lus par source (200 par défaut) ; KARAOKE_CATALOG_TTL_HOURS (24)
 """
 import asyncio
+from collections import OrderedDict
 import logging
 import math
 import os
@@ -88,6 +89,11 @@ router = APIRouter(prefix="/activity/karaoke", tags=["activity-karaoke"])
 # --------------------------------------------------------------------------------------
 _LIBRARY: dict = {"at": -1e9, "tracks": {}}
 # Catalogue Deezer : `entries` vient du disque ou du réseau ; `tracks` en est la version « Track ».
+_CATEGORY_CACHE = OrderedDict()
+_CATEGORY_TASKS = {}
+_CATEGORY_LIMIT = 24
+_CATEGORY_SLOTS = asyncio.Semaphore(2)
+
 _CATALOG: dict = {"entries": [], "tracks": {}, "fetched_at": 0.0, "disk": False, "task": None}
 
 
@@ -134,7 +140,8 @@ def library() -> dict[str, Track]:
             _set_catalog(entries, fetched)
     active = {track.id: track for room in globals().get('ROOMS', {}).values()
               if room.game for track in room.game.queue}
-    return {**local, **_CATALOG["tracks"], **active}
+    themed = {track.id: track for cached in _CATEGORY_CACHE.values() for track in cached["tracks"]}
+    return {**local, **_CATALOG["tracks"], **themed, **active}
 
 
 async def _refresh_catalog() -> None:
@@ -167,6 +174,42 @@ def ensure_catalog() -> asyncio.Task | None:
         return None
     _CATALOG["task"] = asyncio.create_task(_refresh_catalog())
     return _CATALOG["task"]
+
+
+async def category_tracks(style='', decade=''):
+    try:
+        catalog.validate_category(style, decade)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
+    if not CATALOG_ENABLED:
+        raise HTTPException(503, 'Le catalogue Deezer est désactivé.')
+    key = (style, decade)
+    cached = _CATEGORY_CACHE.get(key)
+    if cached and time.time() - cached['at'] < (CATALOG_TTL if cached['tracks'] else 60):
+        _CATEGORY_CACHE.move_to_end(key)
+        return cached['tracks']
+    async def load():
+        try:
+            async with _CATEGORY_SLOTS:
+                async with httpx.AsyncClient(timeout=10, headers={'User-Agent': LRCLIB_USER_AGENT}) as client:
+                    entries = await catalog.build_category(client, DEEZER_URL, style, decade)
+                tracks = [game_rules.make_remote_track(entry, _token_key(), _previews_dir()) for entry in entries]
+                _CATEGORY_CACHE[key] = {'at': time.time(), 'tracks': tracks}
+                _CATEGORY_CACHE.move_to_end(key)
+                while len(_CATEGORY_CACHE) > _CATEGORY_LIMIT:
+                    _CATEGORY_CACHE.popitem(last=False)
+                return tracks
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(503, 'Cette sélection Deezer est indisponible. Réessaie dans un instant.') from exc
+        finally:
+            _CATEGORY_TASKS.pop(key, None)
+    task = _CATEGORY_TASKS.get(key)
+    if task is None:
+        if len(_CATEGORY_TASKS) >= 6:
+            raise HTTPException(429, 'Des sélections Deezer sont déjà en chargement. Réessaie dans un instant.')
+        task = _CATEGORY_TASKS[key] = asyncio.create_task(load())
+        task.add_done_callback(lambda done: done.exception() if not done.cancelled() else None)
+    return await asyncio.shield(task)
 
 
 # --------------------------------------------------------------------------------------
@@ -432,7 +475,7 @@ def snapshot(room: KRoom) -> dict:
             "playing": room.clock.playing,
             "position": round(room.clock.current(), 2),
         },
-        "bt": room.game.snapshot() if room.game else None,
+        "bt": {**room.game.snapshot(), "selection": getattr(room.game, "selection", {})} if room.game else None,
     }
 
 
@@ -553,18 +596,42 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
         await broadcast(room)
     elif kind == "bt_start":
         if running:
+            await websocket.send_json({'type': 'error', 'code': 'game_running'})
             return
-        pending = ensure_catalog()
-        if pending is not None and not _CATALOG["tracks"]:
-            try:  # premier lancement : on laisse quelques secondes au catalogue pour se remplir
-                await asyncio.wait_for(asyncio.shield(pending), timeout=15)
-            except (asyncio.TimeoutError, Exception):  # noqa: BLE001
-                pass
-        pool = message.get("pool")
-        candidates = [
-            track for track in library().values()
-            if pool not in ("local", "preview") or bool(track.remote) == (pool == "preview")
-        ]
+        style, decade = message.get('style', ''), message.get('decade', '')
+        pool = message.get('pool', 'all')
+        try:
+            catalog.validate_category(style, decade)
+            if (style or decade) and pool == 'local':
+                raise ValueError('Les catégories Deezer ne filtrent pas les fichiers locaux.')
+        except ValueError:
+            await websocket.send_json({'type': 'error', 'code': 'invalid_catalog_category'})
+            return
+        if style or decade:
+            await websocket.send_json({'type': 'catalog_loading'})
+            try:
+                candidates = await asyncio.wait_for(category_tracks(style, decade), timeout=35)
+            except (HTTPException, asyncio.TimeoutError):
+                await websocket.send_json({'type': 'error', 'code': 'catalog_category_unavailable'})
+                return
+            if not candidates:
+                await websocket.send_json({'type': 'error', 'code': 'empty_catalog_category'})
+                return
+        else:
+            pending = ensure_catalog()
+            if pending is not None and not _CATALOG["tracks"]:
+                try:
+                    await asyncio.wait_for(asyncio.shield(pending), timeout=15)
+                except Exception:  # The cached/local library remains playable.
+                    pass
+            candidates = [
+                track for track in library().values()
+                if (CATALOG_ENABLED or not track.remote)
+                and (pool not in ("local", "preview") or bool(track.remote) == (pool == "preview"))
+            ]
+        if room.game is not None and room.game.phase in ('round', 'reveal'):
+            await websocket.send_json({'type': 'error', 'code': 'game_running'})
+            return
         test = BlindTest(
             candidates,
             game_rules.clamp_int(message.get("rounds"), game_rules.MIN_ROUNDS, game_rules.MAX_ROUNDS, game_rules.DEFAULT_ROUNDS),
@@ -576,6 +643,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
         for other in room.clients.values():
             if other.plays:
                 test.player(other.uid, other.name)
+        test.selection = {'pool': 'preview' if style or decade else pool, 'style': style, 'decade': decade}
         test.start()
         prefetch_previews(test.queue)
         room.clock.set_playing(False)

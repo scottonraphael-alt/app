@@ -189,3 +189,91 @@ def save_catalog_file(path: Path, entries: list[dict]) -> None:
         temporary.replace(path)
     except OSError as exc:
         logger.warning("Catalogue non enregistré (%s) : %s", path, exc)
+
+
+# Stable IDs are shared with the host controls; labels describe thematic selections,
+# not an inferred genre or original release date for every recording.
+STYLES = {
+    'anime': ('Animé', 'anime', ('anime', 'animé', 'アニメ', 'otaku')),
+    'pop': ('Pop', 'pop', ('pop',)),
+    'rock': ('Rock', 'rock', ('rock',)),
+    'jpop': ('J-pop', 'jpop', ('jpop', 'j-pop', 'j pop', 'japanese pop')),
+    'kpop': ('K-pop', 'kpop', ('kpop', 'k-pop', 'k pop', 'korean pop')),
+    'jazz': ('Jazz', 'jazz', ('jazz',)),
+    'electro': ('Électro', 'electro', ('electro', 'electronic', 'edm', 'techno', 'house')),
+    'hiphop': ('Rap / Hip-hop', 'hip hop rap', ('rap', 'hip hop', 'hip-hop', 'hiphop')),
+    'rnb': ('R&B', 'rnb', ('rnb', 'r&b', 'r and b', 'rhythm and blues')),
+    'soul': ('Soul', 'soul', ('soul',)),
+    'funk': ('Funk', 'funk', ('funk',)),
+    'disco': ('Disco', 'disco', ('disco',)),
+    'metal': ('Metal', 'metal', ('metal',)),
+    'reggae': ('Reggae', 'reggae', ('reggae',)),
+    'country': ('Country', 'country', ('country',)),
+    'blues': ('Blues', 'blues', ('blues',)),
+    'classical': ('Classique', 'classical', ('classical', 'classique')),
+    'french': ('Chanson française', 'chanson française', ('chanson', 'francais', 'french')),
+    'latin': ('Latino', 'latin', ('latin', 'latino', 'reggaeton', 'salsa')),
+    'indie': ('Indie / Alternative', 'indie alternative', ('indie', 'alternative')),
+}
+DECADES = tuple(str(year) for year in range(1950, 2030, 10))
+
+
+def category_options():
+    return {'styles': [{'id': key, 'label': value[0]} for key, value in STYLES.items()],
+            'decades': [{'id': year, 'label': 'Années ' + year} for year in DECADES]}
+
+
+def validate_category(style, decade):
+    if not isinstance(style, str) or not isinstance(decade, str) or (style and style not in STYLES) or (decade and decade not in DECADES):
+        raise ValueError('Style ou décennie inconnus.')
+
+
+def _themed_title(title, style, decade):
+    import re
+    import unicodedata
+    def normalize(value):
+        return ''.join(c for c in unicodedata.normalize('NFKD', value.casefold()) if not unicodedata.combining(c))
+    title = normalize(title)
+    if style and not any(re.search(r'(?<!\w)' + re.escape(normalize(alias)) + r'(?!\w)', title) for alias in STYLES[style][2]):
+        return False
+    if decade:
+        short = decade[2:]
+        if not re.search(r'(?<!\d)' + re.escape(decade[:3]) + r'\d(?!\d)|(?<!\d)' + short + r"(?:\s*['’]?s|\s*['’]?\s*$|(?=\s|[.,:/-]))", title):
+            return False
+    return True
+
+
+async def build_category(client, base_url, style='', decade='', limit=160):
+    """Use matching public playlist titles, never silently fall back to global charts."""
+    validate_category(style, decade)
+    if not style and not decade:
+        raise ValueError('Choisis un style ou une décennie.')
+    query = ' '.join(part for part in (STYLES[style][1] if style else '', decade + 's' if decade else '') if part)
+    base = base_url.rstrip('/')
+    response = await client.get(base + '/search/playlist', params={'q': query, 'limit': 20})
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or payload.get('error'):
+        raise ValueError('La sélection Deezer est indisponible.')
+    playlists = payload.get('data', [])
+    if not isinstance(playlists, list):
+        raise ValueError('Réponse Deezer invalide.')
+    found, seen = {}, set()
+    for playlist in playlists:
+        if not isinstance(playlist, dict):
+            continue
+        ident = playlist.get('id')
+        if isinstance(ident, bool) or not isinstance(ident, int) or ident <= 0 or ident in seen:
+            continue
+        if not _themed_title(_text(playlist.get('title')), style, decade):
+            continue
+        seen.add(ident)
+        try:
+            for entry in await _pages(client, f'{base}/playlist/{ident}/tracks', {}, min(limit, 100)):
+                found.setdefault(entry['id'], entry)
+        except (httpx.HTTPError, ValueError):
+            logger.warning('Playlist thématique Deezer %s indisponible', ident)
+        if len(found) >= limit or len(seen) >= 3:
+            break
+        await asyncio.sleep(PAUSE_BETWEEN_CALLS)
+    return list(found.values())[:limit]
