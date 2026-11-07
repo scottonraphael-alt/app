@@ -107,8 +107,23 @@ def test_provider_contract_sends_text_only_and_accepts_only_completed_tool(monke
     track, ready = NS(title='Song', artist='Artist'), {'lyrics': lyrics()}
     assert asyncio.run(review.request_review(track, ready, 'test-model')) == {'edits': [], 'warnings': []}
     payload = json.loads(create.call_args.kwargs['messages'][0]['content'])
-    assert payload['lines'][0][0] == {'id': '0:0', 'text': 'Helo'}
-    assert all(set(token) == {'id', 'text'} for line in payload['lines'] for token in line)
+    assert payload['lines'][0][0] == {'id': '0:0', 'text': 'Helo', 'reading': ''}
+    assert all(set(token) == {'id', 'text', 'reading'} for line in payload['lines'] for token in line)
     response.stop_reason = 'max_tokens'
     with pytest.raises(ValueError):
         asyncio.run(review.request_review(track, ready, 'test-model'))
+
+
+def test_contextual_reading_can_change_without_changing_japanese_or_time():
+    value = lyrics()
+    value['lang'] = 'ja'
+    value['lines'][0]['tokens'][0].update(t='明日', r='myounichi')
+    corrected, changes, _ = review.apply_review(value, {'edits': [
+        {'id': '0:0', 'text': '明日', 'reading': 'ashita'}], 'warnings': []}, 3)
+    assert corrected['lines'][0]['tokens'][0]['t'] == '明日'
+    assert corrected['lines'][0]['tokens'][0]['r'] == 'ashita'
+    assert review.timing_signature(corrected) == review.timing_signature(value)
+    assert changes[0]['reading_before'] == 'myounichi' and changes[0]['reading_after'] == 'ashita'
+    for invalid in ('あした', '', 'ashita\n', '<script>'):
+        with pytest.raises(ValueError):
+            review.apply_review(value, {'edits': [{'id': '0:0', 'text': '明日', 'reading': invalid}], 'warnings': []}, 3)

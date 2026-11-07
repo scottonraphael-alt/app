@@ -88,6 +88,8 @@ IRIS réutilise `ANTHROPIC_API_KEY` du backend. Aucune clé n'est nécessaire su
 
 L'API reçoit le titre, l'artiste, la langue et les blocs de texte identifiés, sans audio ni timestamps. L'IA ne peut proposer que du texte pour des identifiants existants. Le code refuse les ajouts/suppressions de blocs, les réponses invalides et toute modification des timestamps. Les romaji des blocs corrigés sont recalculés ; les originaux sur disque restent intacts. Les corrections sont rechargées automatiquement dans le navigateur une fois prêtes.
 
+Les lectures latines existantes sont également relues dans le contexte des phrases. L'IA peut proposer un romaji différent pour un kanji ambigu sans modifier son texte ni son timing. Ce changement de lecture est conservé dans l'historique avant/après. Une lecture particulière propre à l'interprétation chantée ne peut pas être garantie sans écouter l'audio ; les cas incertains doivent être signalés.
+
 Configuration facultative du backend : `KARAOKE_LYRICS_AI_MODEL` (par défaut le modèle de synthèse déjà configuré dans IRIS), `KARAOKE_LYRICS_AI_ENABLED=false` pour désactiver. Une seule chanson est relue à la fois ; les demandes simultanées sont dédupliquées. Les erreurs conservent les paroles d'origine, avec au plus trois tentatives espacées. Les appels utilisent les crédits Anthropic du serveur, une relecture par version de chanson.
 
 L'IA peut encore se tromper. Sans écouter l'audio, elle ne peut pas garantir le mot exact ni corriger un vrai décalage temporel. Ces cas sont signalés ; une LRC ou un TXT correct reste la référence pour réaligner le morceau sur le Mac.
