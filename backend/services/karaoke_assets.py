@@ -85,6 +85,8 @@ def validate_lyrics(lyrics, duration):
                 raise ValueError('Horodatage de mot invalide.')
             if token.get('r') is not None and (not isinstance(token['r'], str) or len(token['r']) > 1000):
                 raise ValueError('Romanisation invalide.')
+            if 'reading_locked' in token and not isinstance(token['reading_locked'], bool):
+                raise ValueError('Indication de lecture confirmée invalide.')
             last = token['e']
     return lyrics
 

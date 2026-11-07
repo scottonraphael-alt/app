@@ -186,7 +186,8 @@ def test_cli_batch_uses_output_and_writes_report_without_loading_models(monkeypa
     assert json.loads((output/'preparation-report.json').read_text())['processed'] == 1
 
 
-def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypatch, tmp_path):
+@pytest.mark.parametrize('language', ['en', 'ja'])
+def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypatch, tmp_path, language):
     """Stub model/codec boundaries, exercise the real bundle assembly and validator."""
     import numpy as np
     import sys
@@ -195,13 +196,22 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
     folder.mkdir(); destination.mkdir()
     source = folder/'Artist - Song.mp3'
     source.write_bytes(b'source-original')
-    source.with_suffix('.lrc').write_text('[00:00.00]Hello world')
+    source.with_suffix('.lrc').write_text('[00:00.00]'+('この宇宙' if language == 'ja' else 'Hello world'))
+    if language == 'ja':
+        source.with_suffix('.readings.json').write_text(json.dumps({'この宇宙': {'宇宙': 'そら'}}, ensure_ascii=False))
     aligned = {'language': 'en', 'segments': [{'words': [
         {'word': 'Hello', 'start': np.float64(0.), 'end': np.float64(.5), 'probability': np.float64(.1)},
         {'word': 'world', 'start': .5, 'end': 1., 'probability': .9}]}]}
     from unittest.mock import Mock
+    def alignment(audio, text, **kwargs):
+        if language == 'en':
+            return NS(to_dict=lambda: aligned)
+        spoken = ''.join(text.split())
+        value = {'language': 'ja', 'segments': [{'words': [
+            {'word': char, 'start': i*.1, 'end': (i+1)*.1} for i, char in enumerate(spoken)]}]}
+        return NS(to_dict=lambda: value)
     model = NS(transcribe=Mock(return_value=NS(to_dict=lambda: aligned)),
-               align=Mock(return_value=NS(to_dict=lambda: aligned)),
+               align=Mock(side_effect=alignment),
                refine=Mock(side_effect=lambda audio, result, **kwargs: result))
     monkeypatch.setitem(sys.modules, 'stable_whisper', NS(load_model=lambda *args, **kwargs: model))
     monkeypatch.setitem(sys.modules, 'torch', NS(set_num_threads=lambda value: None,
@@ -228,36 +238,40 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
         replacements.append(Path(destination_path).name)
         replace(source_path, destination_path)
     monkeypatch.setattr(cli.os, 'replace', commit)
-    cli.prepare(source, destination, NS(threads=2, device='auto', no_lrclib=True, model='base', language=None))
+    cli.prepare(source, destination, NS(threads=2, device='auto', no_lrclib=True, model='base', language='ja' if language == 'ja' else None))
     song = next(iter(rules.scan_library(destination, 'server-key').values()))
     ready = prep.prepared(song)
-    assert ready and ready['portable'] and ready['lyrics']['lang'] == 'en'
+    assert ready and ready['portable'] and ready['lyrics']['lang'] == language
     assert ready['pitch'] == [220]*20
     assert replacements[-1] == 'Artist - Song.karaoke.json'
     assert source.read_bytes() == b'source-original'
     model.align.assert_called_once()
     model.refine.assert_called_once()
-    assert model.transcribe.call_args.kwargs['beam_size'] == 5
-    assert model.transcribe.call_args.kwargs['condition_on_previous_text'] is False
-    assert song.path.with_suffix('.lrc').read_text().count('<00:00.50>') == 2
+    if language == 'en':
+        assert model.transcribe.call_args.kwargs['beam_size'] == 5
+        assert model.transcribe.call_args.kwargs['condition_on_previous_text'] is False
+        assert song.path.with_suffix('.lrc').read_text().count('<00:00.50>') == 2
+    else:
+        sora = next(t for t in ready['lyrics']['lines'][0]['tokens'] if t['t'] == '宇宙')
+        assert sora['r'] == 'sora' and sora['reading_locked'] is True
     reused = tmp_path/'repaired'
     reused.mkdir()
     def no_separation(*args, **kwargs):
         raise AssertionError('Demucs must not run when reusing verified stems')
     monkeypatch.setattr(cli, 'separate', no_separation)
-    cli.prepare(source, reused, NS(threads=2, device='cpu', no_lrclib=True, model='base', language='en', reuse_stems=destination))
-    assert model.transcribe.call_count == 1  # Known-language supplied lyrics go straight to forced alignment.
+    cli.prepare(source, reused, NS(threads=2, device='cpu', no_lrclib=True, model='base', language=language, reuse_stems=destination))
+    assert model.transcribe.call_count == (1 if language == 'en' else 0)
     assert assets.portable(NS(path=reused/source.name, remote=''))
     for suffix in ('.inst.mp3', '.voix.mp3'):
         assert (reused/(source.stem+suffix)).read_bytes() == (destination/(source.stem+suffix)).read_bytes()
     def no_model(*args, **kwargs):
         raise AssertionError('Whisper must not load when resuming a verified alignment')
     monkeypatch.setitem(sys.modules, 'stable_whisper', NS(load_model=no_model))
-    cli.prepare(source, destination, NS(threads=2, device='cpu', no_lrclib=True, model='base', language='en',
+    cli.prepare(source, destination, NS(threads=2, device='cpu', no_lrclib=True, model='base', language=language,
                                        reuse_stems=destination, resume_alignment=True))
     assert assets.portable(NS(path=destination/source.name, remote=''))
     with pytest.raises(ValueError):
-        cli.load_alignment_checkpoint(source, destination, NS(model='large-v3', language='en'), 2)
+        cli.load_alignment_checkpoint(source, destination, NS(model='large-v3', language=language), 2)
 
 
 def test_demucs_auto_retries_cpu_but_explicit_device_and_cpu_failures_propagate(monkeypatch, tmp_path):

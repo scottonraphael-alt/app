@@ -107,8 +107,8 @@ def test_provider_contract_sends_text_only_and_accepts_only_completed_tool(monke
     track, ready = NS(title='Song', artist='Artist'), {'lyrics': lyrics()}
     assert asyncio.run(review.request_review(track, ready, 'test-model')) == {'edits': [], 'warnings': []}
     payload = json.loads(create.call_args.kwargs['messages'][0]['content'])
-    assert payload['lines'][0][0] == {'id': '0:0', 'text': 'Helo', 'reading': ''}
-    assert all(set(token) == {'id', 'text', 'reading'} for line in payload['lines'] for token in line)
+    assert payload['lines'][0][0] == {'id': '0:0', 'text': 'Helo', 'reading': '', 'reading_locked': False}
+    assert all(set(token) == {'id', 'text', 'reading', 'reading_locked'} for line in payload['lines'] for token in line)
     response.stop_reason = 'max_tokens'
     with pytest.raises(ValueError):
         asyncio.run(review.request_review(track, ready, 'test-model'))
@@ -127,3 +127,12 @@ def test_contextual_reading_can_change_without_changing_japanese_or_time():
     for invalid in ('あした', '', 'ashita\n', '<script>'):
         with pytest.raises(ValueError):
             review.apply_review(value, {'edits': [{'id': '0:0', 'text': '明日', 'reading': invalid}], 'warnings': []}, 3)
+
+
+def test_confirmed_sung_reading_cannot_be_replaced_by_dictionary_reading():
+    value = lyrics()
+    value['lang'] = 'ja'
+    value['lines'][0]['tokens'][0].update(t='宇宙', r='sora', reading_locked=True)
+    corrected, changes, _ = review.apply_review(value, {'edits': [
+        {'id': '0:0', 'text': '宇宙', 'reading': 'uchuu'}], 'warnings': []}, 3)
+    assert corrected == value and changes == []

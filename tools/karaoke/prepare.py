@@ -285,6 +285,9 @@ def load_alignment_checkpoint(source, destination, args, seconds):
         raise ValueError('Le diagnostic d’alignement est incomplet.')
     if args.language and args.language != checkpoint.get('language'):
         raise ValueError('La langue demandée diffère du diagnostic enregistré.')
+    hints_path = source.with_suffix('.readings.json')
+    if checkpoint.get('reading_hints_sha256') != (sha256(hints_path) if hints_path.is_file() else None):
+        raise ValueError('Les lectures chantées ont changé ; un nouvel alignement est nécessaire.')
     return checkpoint
 
 
@@ -294,8 +297,13 @@ def prepare(source, destination, args):
     import stable_whisper
     import torch
     from services.karaoke_alignment import align_payload, phrase_lines
+    from services.karaoke_phonetics import build_plan, restore_text
     from services.karaoke_text import parse_lrc
     seconds = duration(source)
+    hints_path = source.with_suffix('.readings.json')
+    if hints_path.is_file() and (hints_path.is_symlink() or hints_path.stat().st_size > 64_000):
+        raise ValueError('Fichier de lectures chantées invalide.')
+    hints = json.loads(hints_path.read_text(encoding='utf-8')) if hints_path.is_file() else {}
     resume_checkpoint = load_alignment_checkpoint(source, destination, args, seconds) if getattr(args, 'resume_alignment', False) else None
     metadata = {}
     if source.with_suffix('.json').is_file():
@@ -329,11 +337,13 @@ def prepare(source, destination, args):
             raise ValueError('Demucs n’a pas produit les deux pistes attendues.')
         model = transcript = None
         refinement_used = not getattr(args, 'no_refine', False)
+        phonetic_plan = None
         if resume_checkpoint:
             checkpoint = resume_checkpoint
             language = checkpoint['language']
             result, origin = checkpoint['refined'], checkpoint['lyrics_origin']
             supplied_lines = checkpoint.get('provided_lines')
+            phonetic_plan = checkpoint.get('phonetic_plan')
             anchored_alignment = checkpoint.get('lrc_anchored_alignment', False)
             refinement_used = checkpoint.get('timestamp_refinement', False)
             print('  Reprise de l’alignement enregistré et vérifié ; Whisper ignoré.', flush=True)
@@ -361,12 +371,25 @@ def prepare(source, destination, args):
                 if not provided:
                     provided = re.sub(r'\[[^\]]*\]|<\d[^>]*>', '', raw).strip()
                     supplied_lines = [line.strip() for line in provided.splitlines() if line.strip()]
+            if language == 'ja':
+                entries = [entry for entry in parse_lrc(raw or '') if entry['text'].strip()]
+                if not supplied_lines:
+                    draft = phrase_lines(align_payload(result, language))
+                    supplied_lines = [''.join(t['t']+(' ' if t.get('sp') else '') for t in line['tokens']) for line in draft['lines']]
+                    entries = [{'t': line['t'], 'text': text} for line, text in zip(draft['lines'], supplied_lines)]
+                phonetic_plan = build_plan(supplied_lines, hints)
+                spoken = '\n'.join(line['spoken'] for line in phonetic_plan)
+                spoken_raw = '\n'.join(f"[{timestamp(entry['t'])}]"+line['spoken'] for entry, line in zip(entries, phonetic_plan)) if entries else spoken
+                print('  Japonais : alignement des sons en kana, conservation des kanji à l’affichage.', flush=True)
+                transcript, anchored_alignment = align_supplied(model, vocals, spoken_raw, spoken, language, seconds)
+            elif raw:
                 transcript, anchored_alignment = align_supplied(model, vocals, raw, provided, language, seconds)
             alignment_path = destination/(source.stem+'.alignment.json')
             checkpoint = {'source_sha256': sha256(source), 'duration': seconds, 'language': language,
                           'lyrics_origin': origin, 'provided_lines': supplied_lines, 'whisper_model': args.model,
                           'aligned': transcript.to_dict(), 'lrc_anchored_alignment': anchored_alignment,
-                          'timestamp_refinement': not getattr(args, 'no_refine', False)}
+                          'timestamp_refinement': not getattr(args, 'no_refine', False),
+                          'phonetic_plan': phonetic_plan, 'reading_hints_sha256': sha256(hints_path) if hints_path.is_file() else None}
             def save_alignment():
                 temporary = alignment_path.with_suffix('.json.tmp')
                 temporary.write_text(json.dumps(checkpoint, ensure_ascii=False), encoding='utf-8')
@@ -387,7 +410,7 @@ def prepare(source, destination, args):
             print(f'  À vérifier : {uncertain} blocs de texte ont une confiance de reconnaissance faible.', flush=True)
         if instant:
             print(f'  À vérifier : {instant} blocs sans durée fiable sont conservés dans le texte.', flush=True)
-        lyrics = phrase_lines(align_payload(result, language, source='stable-ts-mac'), supplied_lines)
+        lyrics = restore_text(result, phonetic_plan) if phonetic_plan else phrase_lines(align_payload(result, language, source='stable-ts-mac'), supplied_lines)
         from services.karaoke_text import has_native_script
         if not has_native_script(''.join(token['t'] for line in lyrics['lines'] for token in line['tokens']), language):
             raise ValueError('Transcription sans écriture originale ; fournir une LRC en kana/kanji (ou dans la langue du morceau).')
@@ -429,6 +452,7 @@ def prepare(source, destination, args):
                         'timestamp_refinement': refinement_used, 'low_confidence_words': uncertain,
                         'zero_duration_words': instant,
                         'lrc_anchored_alignment': anchored_alignment,
+                        'phonetic_japanese_alignment': bool(phonetic_plan),
                         'pitch_engine': 'crepe-full' if pitch_engine == 'crepe' else 'pyin'},
                     'files': {path.name: sha256(path) for path in [*produced, lrc_path]}}
         manifest_path = work/(source.stem+'.karaoke.json')
