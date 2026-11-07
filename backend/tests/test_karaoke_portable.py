@@ -452,10 +452,13 @@ def test_lrc_anchors_keep_alignment_after_a_long_instrumental_break(monkeypatch)
     monkeypatch.setitem(sys.modules, 'librosa', NS(load=lambda *a, **k: (np.zeros(16000*100), 16000)))
     monkeypatch.setitem(sys.modules, 'stable_whisper', NS(WhisperResult=lambda data, **kwargs: NS(to_dict=lambda: data)))
     from unittest.mock import Mock
+    calls = []
     def align(audio, text, **kwargs):
         assert isinstance(audio, np.ndarray)
-        return NS(to_dict=lambda: {'segments': [{'start': .5, 'end': 1.5,
-            'words': [{'word': text, 'start': .5, 'end': 1.5}]}]})
+        calls.append(text)
+        onset = 4.5 if len(calls) in (2, 3) else .5
+        return NS(to_dict=lambda: {'segments': [{'start': onset, 'end': onset+1,
+            'words': [{'word': text, 'start': onset, 'end': onset+1}]}]})
     model = NS(align=Mock(side_effect=align))
     result, anchored = cli.align_supplied(model, Path('voice.wav'),
         '[00:00]Hello\n[00:45]World\n[01:30]Again', 'Hello\nWorld\nAgain', 'en', 100)
@@ -464,11 +467,84 @@ def test_lrc_anchors_keep_alignment_after_a_long_instrumental_break(monkeypatch)
     assert len(segments) == 3 and segments[1]['start'] > 40 and segments[2]['start'] > 85
     assert [s['words'][0]['word'] for s in segments] == ['Hello', 'World', 'Again']
     # Overlong ends from one phrase must not push later onsets progressively.
+    calls.clear()
     def overlap(audio, text, **kwargs):
-        return NS(to_dict=lambda: {'segments': [{'start': .5, 'end': 12.,
-            'words': [{'word': text, 'start': .5, 'end': 12.}]}]})
+        calls.append(text)
+        onset = 4.5 if len(calls) in (2, 3) else .5
+        return NS(to_dict=lambda: {'segments': [{'start': onset, 'end': 12.,
+            'words': [{'word': text, 'start': onset, 'end': 12.}]}]})
     overlapping, _ = cli.align_supplied(NS(align=overlap), Path('voice.wav'),
         '[00:00]Hello\n[00:10]World\n[00:20]Again', 'Hello\nWorld\nAgain', 'en', 30)
     parts = overlapping.to_dict()['segments']
     assert parts[1]['start'] == 8 and parts[2]['start'] == 18
     assert parts[0]['end'] <= parts[1]['start'] and parts[1]['end'] <= parts[2]['start']
+
+
+def test_lrc_offset_consensus_and_wider_phrase_retry(monkeypatch):
+    import numpy as np
+    import sys
+    cli = load_cli()
+    monkeypatch.setitem(sys.modules, 'librosa', NS(load=lambda *a, **k: (np.zeros(16000*100), 16000)))
+    monkeypatch.setitem(sys.modules, 'stable_whisper', NS(WhisperResult=lambda data: NS(to_dict=lambda: data)))
+    calls = []
+    def align(audio, text, **kwargs):
+        calls.append((text, len(audio)/16000))
+        # Opening falsely matches +7.96s; the two later probes agree on zero.
+        onset = {1: 7.96, 2: 4., 3: 4.}.get(len(calls), 3.)
+        word = 'missing' if len(calls) == 5 else text
+        return NS(to_dict=lambda: {'segments': [{'start': onset, 'end': onset+1,
+            'words': [{'word': word, 'start': onset, 'end': onset+1}]}]})
+    result, anchored = cli.align_supplied(NS(align=align), Path('voice.wav'),
+        '[00:05]One\n[00:45]Two words\n[01:30]Three', 'One\nTwo words\nThree', 'en', 100)
+    assert anchored
+    assert result.to_dict()['segments'][0]['start'] == 5
+    assert calls[4][0] == calls[5][0] == 'Two words'
+    assert calls[5][1] > calls[4][1]
+    assert cli.aligned_text(result.to_dict()) == 'OneTwowordsThree'
+
+
+def test_failed_phrase_retries_global_without_dropping_words(monkeypatch):
+    import numpy as np
+    import sys
+    cli = load_cli()
+    monkeypatch.setitem(sys.modules, 'stable_whisper', NS())
+    monkeypatch.setitem(sys.modules, 'librosa', NS(load=lambda *a, **k: (np.zeros(16000*100), 16000)))
+    calls = []
+    def align(audio, text, **kwargs):
+        calls.append(audio)
+        global_pass = isinstance(audio, str)
+        onset = 4. if len(calls) in (2, 3) else 0.
+        word = text if len(calls) <= 3 or global_pass else 'partial'
+        return NS(to_dict=lambda: {'segments': [{'start': onset, 'end': onset+1,
+            'words': [{'word': word, 'start': onset, 'end': onset+1}]}]})
+    result, anchored = cli.align_supplied(NS(align=align), Path('voice.wav'),
+        '[00:00]One\n[00:45]Two\n[01:30]Three', 'One\nTwo\nThree', 'en', 100)
+    assert not anchored and isinstance(calls[-1], str)
+    assert cli.aligned_text(result.to_dict()) == 'OneTwoThree'
+
+
+def test_separation_cache_survives_failure_and_rejects_changed_audio(monkeypatch, tmp_path):
+    cli = load_cli()
+    source = tmp_path/'song.mp3'
+    source.write_bytes(b'original')
+    destination = tmp_path/'out'
+    destination.mkdir()
+    args = NS(threads=2, device='cpu')
+    calls = []
+    def separate(source, output, *a, **kwargs):
+        calls.append(source.name)
+        base = output/kwargs['model']/source.stem
+        base.mkdir(parents=True)
+        (base/'vocals.wav').write_bytes(b'voice')
+        (base/'no_vocals.wav').write_bytes(b'music')
+    monkeypatch.setattr(cli, 'separate', separate)
+    monkeypatch.setattr(cli, 'duration', lambda _: 100.)
+    first = cli.separated_stems(source, destination, args, 100., 'cpu')
+    assert cli.separated_stems(source, destination, args, 100., 'cpu') == first
+    assert len(calls) == 1
+    first[0].write_bytes(b'corrupted')
+    cli.separated_stems(source, destination, args, 100., 'cpu')
+    assert len(calls) == 2
+    source.write_bytes(b'new original')
+    second = cli.separated_stems(source, destination, args, 100., 'cpu')
+    assert second[2] != first[2] and len(calls) == 3

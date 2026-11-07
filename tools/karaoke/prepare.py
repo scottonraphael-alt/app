@@ -6,6 +6,8 @@ Copy the contents of the output directory to KARAOKE_DIR on the VPS.
 """
 import argparse
 import gc
+import hashlib
+import statistics
 import json
 import math
 import os
@@ -217,6 +219,54 @@ def bridge_pitch_gaps(values, levels):
     return result
 
 
+def compact_text(text):
+    return ''.join(text.split())
+
+
+def aligned_text(result):
+    return compact_text(''.join(word['word'] for segment in result['segments'] for word in segment.get('words', [])))
+
+
+def separated_stems(source, destination, args, seconds, device):
+    """Cache completed lossless stems until the whole bundle is published."""
+    settings = {'version': 1, 'source': sha256(source),
+                'model': getattr(args, 'demucs_model', 'htdemucs_ft'),
+                'shifts': getattr(args, 'shifts', 2), 'overlap': getattr(args, 'overlap', .5)}
+    key = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
+    root = destination/'.iris-stem-cache'
+    cached = root/key
+    if root.is_symlink() or cached.is_symlink():
+        raise ValueError('Le cache des pistes ne doit pas être un lien symbolique.')
+    marker = cached/'complete.json'
+    vocals, instrumental = cached/'vocals.wav', cached/'no_vocals.wav'
+    try:
+        saved = json.loads(marker.read_text())
+        if saved['settings'] == settings and all(not path.is_symlink() and path.stat().st_size > 0
+                and saved['files'][path.name] == sha256(path)
+                and abs(duration(path)-seconds) < .15 for path in (vocals, instrumental)):
+            print('  Pistes séparées vérifiées récupérées après interruption ; Demucs ignoré.', flush=True)
+            return vocals, instrumental, cached
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    root.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.separating-', dir=root) as temporary:
+        stage = Path(temporary)
+        separate(source, stage, device, args.threads, allow_cpu_fallback=args.device == 'auto',
+                 model=settings['model'], shifts=settings['shifts'], overlap=settings['overlap'])
+        paths = [stage/settings['model']/source.stem/name for name in ('vocals.wav', 'no_vocals.wav')]
+        if any(not path.is_file() or path.is_symlink() or abs(duration(path)-seconds) >= .15 for path in paths):
+            raise ValueError('Pistes Demucs absentes ou de durée incompatible avec le morceau.')
+        saved = {'settings': settings, 'files': {path.name: sha256(path) for path in paths}}
+        cached.mkdir(exist_ok=True)
+        marker.unlink(missing_ok=True)
+        for path in paths:
+            os.replace(path, cached/path.name)
+        pending = cached/'complete.json.tmp'
+        pending.write_text(json.dumps(saved))
+        os.replace(pending, marker)
+    return vocals, instrumental, cached
+
+
 def align_supplied(model, vocals, raw, provided, language, seconds):
     """Use LRC line anchors to avoid drifting through long instrumental breaks."""
     import librosa
@@ -229,15 +279,26 @@ def align_supplied(model, vocals, raw, provided, language, seconds):
     if not anchored:
         return model.align(str(vocals), provided, language=language), False
     audio, sr = librosa.load(str(vocals), sr=16000, mono=True)
-    first = entries[0]
-    probe_start = max(0, first['t']-4)
-    probe_end = min(seconds, entries[1]['t']+6, first['t']+25)
-    probe = model.align(audio[round(probe_start*sr):round(probe_end*sr)], first['text'], language=language, verbose=None)
-    words = [word for segment in probe.to_dict()['segments'] for word in segment.get('words', []) if word['end'] > word['start']]
-    offset = words[0]['start']+probe_start-first['t'] if words else None
-    if offset is None or abs(offset) > 8:
-        print('  Repères LRC initiaux non confirmés ; alignement global du texte.', flush=True)
-        return model.align(str(vocals), provided, language=language), False
+    # A single repeated/misheard opening can match the wrong occurrence. Require
+    # agreement across distant phrases before shifting every LRC timestamp.
+    offsets = []
+    for index in sorted({0, len(entries)//2, len(entries)-1}):
+        entry = entries[index]
+        start = max(0, entry['t']-4)
+        stop = min(seconds, entry['t']+15)
+        probe = model.align(audio[round(start*sr):round(stop*sr)], entry['text'], language=language, verbose=None).to_dict()
+        words = [word for segment in probe['segments'] for word in segment.get('words', []) if word['end'] > word['start']]
+        if words and aligned_text(probe) == compact_text(entry['text']):
+            candidate = words[0]['start']+start-entry['t']
+            if abs(candidate) <= 8:
+                offsets.append(candidate)
+    offset = statistics.median(offsets) if offsets else None
+    if offset is None or sum(abs(value-offset) <= 1.5 for value in offsets) < 2:
+        print('  Repères LRC non concordants ; alignement global du texte.', flush=True)
+        result = model.align(str(vocals), provided, language=language)
+        if aligned_text(result.to_dict()) != compact_text(provided):
+            raise ValueError('Alignement global incomplet ; pistes conservées pour une nouvelle tentative.')
+        return result, False
     segments = []
     print(f'  Alignement phrase par phrase : {len(entries)} repères LRC, décalage initial {offset:+.2f} s.', flush=True)
     for index, entry in enumerate(entries):
@@ -248,9 +309,17 @@ def align_supplied(model, vocals, raw, provided, language, seconds):
         if stop <= start:
             raise ValueError('Les repères des paroles ne correspondent pas à cet enregistrement.')
         result = model.align(audio[round(start*sr):round(stop*sr)], entry['text'], language=language, verbose=None).to_dict()
-        combined = ''.join(word['word'] for segment in result['segments'] for word in segment.get('words', []))
-        if ''.join(combined.split()) != ''.join(entry['text'].split()):
-            raise ValueError(f'Alignement incomplet de la phrase {index+1}.')
+        if aligned_text(result) != compact_text(entry['text']):
+            print(f'  Phrase {index+1} incomplète ; recherche élargie…', flush=True)
+            start = max(0, expected-8)
+            stop = min(seconds, following+8, expected+40)
+            result = model.align(audio[round(start*sr):round(stop*sr)], entry['text'], language=language, verbose=None).to_dict()
+        if aligned_text(result) != compact_text(entry['text']):
+            print(f'  Phrase {index+1} non résolue ; nouvel alignement sur le morceau entier…', flush=True)
+            global_result = model.align(str(vocals), provided, language=language)
+            if aligned_text(global_result.to_dict()) != compact_text(provided):
+                raise ValueError(f'Alignement incomplet après plusieurs tentatives (phrase {index+1}) ; pistes conservées.')
+            return global_result, False
         for segment in result['segments']:
             for word in segment.get('words', []):
                 word['start'] = round(min(stop, max(start, word['start']+start)), 3)
@@ -329,10 +398,7 @@ def prepare(source, destination, args):
             instrumental = existing.with_suffix('.inst.mp3')
         else:
             demucs_model = getattr(args, 'demucs_model', 'htdemucs_ft')
-            separate(source, work/'stems', device, args.threads, allow_cpu_fallback=args.device == 'auto',
-                     model=demucs_model, shifts=getattr(args, 'shifts', 2), overlap=getattr(args, 'overlap', .5))
-            vocals = work/'stems'/demucs_model/source.stem/'vocals.wav'
-            instrumental = vocals.with_name('no_vocals.wav')
+            vocals, instrumental, stem_cache = separated_stems(source, destination, args, seconds, device)
         if not vocals.is_file() or not instrumental.is_file():
             raise ValueError('Demucs n’a pas produit les deux pistes attendues.')
         model = transcript = None
@@ -462,6 +528,9 @@ def prepare(source, destination, args):
         # Commit the manifest last: an interrupted copy cannot expose half a bundle.
         for path in [copied, *produced, lrc_path, meta_path, manifest_path]:
             os.replace(path, destination/path.name)
+
+        if not reuse:
+            shutil.rmtree(stem_cache)
 
 
 def main(argv=None):
