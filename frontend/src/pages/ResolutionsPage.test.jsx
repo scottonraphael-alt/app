@@ -35,3 +35,20 @@ test('non-Responsables cannot see counter controls and get an empty state',async
  expect(api.get).toHaveBeenCalledTimes(1);
  }finally{await act(async()=>root.unmount());}
 });
+
+test('ban archives distinguish decision, target and confirmed native execution',async()=>{
+ const ban={...row,source_kind:'permanent_ban',target:{id:'710000000000000001',display_name:'Compte ciblé'},
+ execution:{status:'uncertain'}};
+ api.get.mockResolvedValue({data:{items:[ban],total:1,can_manage_counter:false}});
+ const host=document.createElement('div'),root=createRoot(host);
+ try{
+ await act(async()=>root.render(<Page/>));
+ expect(host.textContent).toContain('Bannissement définitif');
+ expect(host.textContent).toContain('Compte ciblé');
+ await act(async()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='Consulter').click());
+ const dialog=host.querySelector('[role="dialog"]');
+ expect(dialog.textContent).toContain('710000000000000001');
+ expect(dialog.textContent).toContain('aucun nouvel envoi automatique');
+ expect(dialog.textContent).not.toContain('Bannissement exécuté et enregistré');
+ }finally{await act(async()=>root.unmount());}
+});

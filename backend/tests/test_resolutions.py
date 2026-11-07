@@ -104,6 +104,8 @@ def test_suggestion_enrollment_delivery_restart_and_sync(monkeypatch):
         await svc.tick(client)
         send.assert_awaited_once()
         assert await h.db.resolutions.count_documents({}) == 1
+        from services import resolution_commands
+        monkeypatch.setattr(resolution_commands, 'install', AsyncMock())
         await svc.install(client)
         assert client.resolutions_registered
         await svc.act(row['_id'], 'responsable', 'approve')

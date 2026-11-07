@@ -552,7 +552,7 @@ async def add_sanction(
         raise ValueError(f"Type de sanction invalide : {sanction_type}")
     if sanction_id is not None and not (isinstance(sanction_id, str) and _HEX_ID.fullmatch(sanction_id)):
         raise ValueError("Identifiant de sanction invalide.")
-    if command_id is not None and not re.fullmatch(r'[0-9]{15,22}', command_id):
+    if command_id is not None and not re.fullmatch(r'(?:[0-9]{15,22}|resolution:[0-9a-f]{32})', command_id):
         raise ValueError("Identifiant de commande invalide.")
 
     casier = await get_or_create_casier(discord_id, snapshot, created_by)

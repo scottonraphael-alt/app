@@ -47,10 +47,10 @@ def is_protected(member):
 async def audit(event, actor=None, member_id=None, job=None, **details):
     if job:
         actor=job['actor'];member_id=job['member_id']
-        details={'command_id':job['_id'],'sanction_id':job['sanction_id'],'sanction_type':job['type'],**details}
+        details={'command_id':job['_id'],'sanction_id':job['sanction_id'],'sanction_type':job['type'],**({'resolution_id':job['resolution_id']} if job.get('resolution_id') else {}),**details}
     author=actor if isinstance(actor,dict) else identity(actor) if actor else {}
     await db.auth_logs.insert_one({'id':str(uuid4()),'created_at':now(),'event_type':event,
-        'helper_id':author.get('id'),'username':author.get('username'),'method':'DISCORD','path':'/sanction',
+        'helper_id':author.get('id'),'username':author.get('username'),'method':'DISCORD','path':'/résolution' if job and job.get('workflow')=='resolution' else '/sanction',
         'status_code':403 if event.endswith('.denied') else 500 if event.endswith('.failed') else 200,
         'details':{'member_id':str(member_id) if member_id else None,**details}})
 
@@ -189,7 +189,7 @@ def log_payload(job,channel_id):
     children.extend([{'type':14,'divider':True,'spacing':1},
                      {'type':10,'content':f"### 📎 Justificatifs conservés sur Iris · {len(job['files'])}\n{proofs}"}])
     if job['purge_seconds']:children.append({'type':10,'content':f"### 🗑️ Messages supprimés\n{job['purge_seconds']//3600} heures."})
-    children.append({'type':10,'content':f"-# Iris /sanction · Référence : {job['_id']}"})
+    children.append({'type':10,'content':f"-# Iris {'/résolution' if job.get('workflow') == 'resolution' else '/sanction'} · Référence : {job['_id']}"})
     if job.get('casier_id') and config.FRONTEND_URL.startswith('https://'):
         children.append({'type':1,'components':[{'type':2,'style':5,'label':'Consulter le casier Iris',
             'url':f"{config.FRONTEND_URL}/moderation/casiers?casier={job['casier_id']}&sanction={job['sanction_id']}"}]})
@@ -289,7 +289,7 @@ async def prepare(guild, actor_id, member_id, values, attachments, interaction_i
 
 
 def native_reason(job):
-    command='/verification' if job.get('workflow')=='verification' else '/sanction'
+    command={'verification':'/verification','resolution':'/résolution'}.get(job.get('workflow'),'/sanction')
     prefix=f'Iris {command} [{job["_id"]}] · {job["actor"]["id"]} · '
     remaining=510-len(prefix.encode())
     return prefix+job['reason'].encode()[:remaining].decode('utf-8','ignore')

@@ -67,3 +67,19 @@ def test_journal_result_has_no_buttons():
             import discord
             assert not any(isinstance(x, discord.ui.Button) for x in view.walk_children())
     asyncio.run(run())
+
+
+def test_ban_archive_exposes_target_execution_and_casier_reference():
+    async def seed():
+        row = await svc.create(source_kind='permanent_ban', source_id='ban-archive', title='Demande de ban',
+            explanation='Les raisons de la demande', author_id='456',
+            target={'id': '710000000000000001', 'display_name': 'Compte ciblé', 'username': 'compte'})
+        await h.db.resolutions.update_one({'_id': row['_id']}, {'$set': {
+            'status': 'approved', 'execution': {'status': 'applied', 'casier_id': 'casier-123'},
+            'lease_token': 'private-token', 'lease_until': 'private-lease'}})
+    asyncio.run(seed())
+    response = client.get('/resolutions?status=approved').json()['items'][0]
+    assert response['source_kind'] == 'permanent_ban'
+    assert response['target']['id'] == '710000000000000001'
+    assert response['execution'] == {'status': 'applied', 'casier_id': 'casier-123'}
+    assert 'lease_token' not in response and 'lease_until' not in response
