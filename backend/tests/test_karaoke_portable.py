@@ -233,6 +233,33 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
     assert song.path.with_suffix('.lrc').read_text().count('<00:00.50>') == 2
 
 
+def test_demucs_auto_retries_cpu_but_explicit_device_and_cpu_failures_propagate(monkeypatch, tmp_path):
+    import subprocess
+    cli = load_cli()
+    calls = []
+    output = tmp_path/'stems'
+    output.mkdir()
+    (output/'partial.wav').write_bytes(b'incomplete')
+    def process(arguments, **kwargs):
+        device = arguments[arguments.index('-d')+1]
+        calls.append(device)
+        if device == 'mps':
+            raise subprocess.CalledProcessError(1, arguments)
+        assert not output.exists()
+    monkeypatch.setattr(cli, 'run', process)
+    cli.separate(tmp_path/'song.mp3', output, 'mps', 4, allow_cpu_fallback=True)
+    assert calls == ['mps', 'cpu']
+    calls.clear()
+    with pytest.raises(subprocess.CalledProcessError):
+        cli.separate(tmp_path/'song.mp3', output, 'mps', 4)
+    assert calls == ['mps']
+    def fail(arguments, **kwargs):
+        raise subprocess.CalledProcessError(1, arguments)
+    monkeypatch.setattr(cli, 'run', fail)
+    with pytest.raises(subprocess.CalledProcessError):
+        cli.separate(tmp_path/'song.mp3', output, 'cpu', 4, allow_cpu_fallback=True)
+
+
 def test_technique_counts_use_pitch_variation_without_rewarding_flat_notes():
     import math
     from services.karaoke_techniques import observe, summary

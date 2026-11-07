@@ -28,7 +28,7 @@ Le dossier de sortie doit être séparé du dossier source. Les originaux ne son
 
 Options utiles :
 
-- `--device auto` utilise MPS pour Demucs sur un Mac compatible, CPU sinon. `--device cpu` permet de contourner un problème MPS. Whisper reste sur CPU pour la compatibilité de son alignement.
+- `--device auto` utilise MPS pour Demucs sur un Mac compatible, CPU sinon. Si Demucs échoue sur MPS, ce mode relance automatiquement la séparation complète sur CPU. `--device cpu` permet de contourner directement un problème MPS. Whisper reste sur CPU pour la compatibilité de son alignement.
 - `--model base` est plus léger ; `small` est le choix par défaut. La qualité n'est pas garantie sur le chant, en particulier avec chœurs, rap ou cris.
 - `--language ja` impose une langue si la détection est mauvaise.
 - `--recursive` parcourt les sous-dossiers.

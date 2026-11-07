@@ -28,6 +28,24 @@ def run(arguments, **options):
     subprocess.run(arguments, check=True, timeout=7200, **options)
 
 
+def separate(source, output, device, threads, allow_cpu_fallback=False):
+    environment = {**os.environ, 'PYTORCH_ENABLE_MPS_FALLBACK': '1',
+                   'OMP_NUM_THREADS': str(threads), 'VECLIB_MAXIMUM_THREADS': str(threads)}
+    def invoke(target):
+        print(f'  Séparation Demucs ({target})…', flush=True)
+        run([sys.executable, '-m', 'demucs', '-n', 'htdemucs', '--two-stems', 'vocals',
+             '--float32', '--clip-mode', 'clamp', '-d', target, '-j', '1', '-o', str(output), str(source)], env=environment)
+    try:
+        invoke(device)
+    except subprocess.CalledProcessError:
+        if device != 'mps' or not allow_cpu_fallback:
+            raise
+        print('  MPS a échoué ; nouvelle tentative complète sur CPU…', flush=True)
+        # The output belongs to this song's temporary directory only.
+        shutil.rmtree(output, ignore_errors=True)
+        invoke('cpu')
+
+
 def duration(path):
     process = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', str(path)], check=True, capture_output=True, timeout=30)
@@ -120,10 +138,7 @@ def prepare(source, destination, args):
         device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     with tempfile.TemporaryDirectory(prefix='.iris-mac-', dir=destination) as temporary:
         work = Path(temporary)
-        print(f'  Séparation Demucs ({device})…', flush=True)
-        environment = {**os.environ, 'PYTORCH_ENABLE_MPS_FALLBACK': '1', 'OMP_NUM_THREADS': str(args.threads), 'VECLIB_MAXIMUM_THREADS': str(args.threads)}
-        run([sys.executable, '-m', 'demucs', '-n', 'htdemucs', '--two-stems', 'vocals',
-             '--float32', '--clip-mode', 'clamp', '-d', device, '-j', '1', '-o', str(work/'stems'), str(source)], env=environment)
+        separate(source, work/'stems', device, args.threads, allow_cpu_fallback=args.device == 'auto')
         vocals = work/'stems'/'htdemucs'/source.stem/'vocals.wav'
         instrumental = vocals.with_name('no_vocals.wav')
         if not vocals.is_file() or not instrumental.is_file():
