@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useKaraokeAudio, preparedEnergy, readEnergy } from './karaokeAudio';
 
 global.IS_REACT_ACT_ENVIRONMENT = true;
-let root, host, sources;
+let root, host, sources, scheduled;
 class Media extends EventTarget {
   constructor(){super();Object.assign(this,{readyState:3,currentTime:0,playbackRate:1,paused:false,ended:false,seeking:false,volume:1});}
   play=jest.fn(async()=>{this.paused=false;});
@@ -17,12 +17,15 @@ class Context {
   createGain(){const gain={value:1};gain.setTargetAtTime=jest.fn(value=>{gain.value=value;});return {gain,connect:jest.fn()};}
   resume=jest.fn(async()=>{});
   close=jest.fn(async()=>{this.state='closed';});
+  decodeAudioData=jest.fn(async()=>({duration:120}));
+  createBufferSource(){const source={connect:jest.fn(),disconnect:jest.fn(),stop:jest.fn(),start:jest.fn(),playbackRate:{value:1}};scheduled.push(source);return source;}
 }
 beforeEach(()=>{
-  jest.useFakeTimers();sources=0;window.AudioContext=Context;
+  jest.useFakeTimers();sources=0;scheduled=[];window.AudioContext=Context;
+  global.fetch=jest.fn(async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(8)}));
   host=document.createElement('div');document.body.append(host);root=createRoot(host);
 });
-afterEach(async()=>{await act(async()=>root.unmount());host.remove();jest.clearAllTimers();jest.useRealTimers();delete window.AudioContext;});
+afterEach(async()=>{await act(async()=>root.unmount());host.remove();jest.clearAllTimers();jest.useRealTimers();delete window.AudioContext;delete global.fetch;});
 
 test('mixe les pistes localement, synchronise un saut et revient à l’original sur erreur',async()=>{
   const master=new Media(),inst=new Media(),voice=new Media();
@@ -41,12 +44,14 @@ test('mixe les pistes localement, synchronise un saut et revient à l’original
   expect(graph.current.channels.map(channel=>channel.gain.gain.value)).toEqual([0,.8,0]);
   master.currentTime=34;
   await act(async()=>master.dispatchEvent(new Event('seeked')));
-  expect(inst.currentTime).toBe(34);expect(voice.currentTime).toBe(34);
+  expect(scheduled.slice(-2).map(source=>source.start.mock.calls[0])).toEqual([[.035,34.035],[.035,34.035]]);
   await act(async()=>master.dispatchEvent(new Event('waiting')));
-  expect(inst.paused).toBe(true);expect(voice.paused).toBe(true);
+  expect(scheduled.slice(-2).every(source=>source.stop.mock.calls.length===1)).toBe(true);
   await act(async()=>master.dispatchEvent(new Event('playing')));
-  expect(inst.paused).toBe(false);expect(voice.paused).toBe(false);
-  await act(async()=>voice.dispatchEvent(new Event('error')));
+  expect(scheduled.slice(-2).map(source=>source.start.mock.calls[0])).toEqual([[.035,34.035],[.035,34.035]]);
+  expect(inst.play).not.toHaveBeenCalled();expect(voice.play).not.toHaveBeenCalled();
+  global.fetch.mockResolvedValue({ok:false});
+  await act(async()=>root.render(<Player guide={.1} key="retry"/>));
   expect(host.textContent).toBe('fallback');
   expect(graph.current.channels.map(channel=>channel.gain.gain.value)).toEqual([.8,0,0]);
   expect(master.paused).toBe(false);
@@ -62,6 +67,23 @@ test('réutilise les sources Web Audio pendant un remontage React sans couper le
   await act(async()=>root.render(<Player/>));
   await act(async()=>audioRef.current.dispatchEvent(new Event('play')));
   expect(sources).toBe(3);
+});
+
+test('les deux pistes partagent une horloge même après une longue période sans timer JS',async()=>{
+  const audioRef={current:new Media()},instrumentalRef={current:new Media()},vocalRef={current:new Media()};
+  let graph;
+  function Player(){const value=useKaraokeAudio({audioRef,instrumentalRef,vocalRef,stems:true,audioUrl:'/audio?id=song',volume:1,guide:1});graph=value.graphRef;return null;}
+  await act(async()=>root.render(<Player/>));
+  expect(scheduled).toHaveLength(2);
+  expect(scheduled[0].start.mock.calls[0]).toEqual(scheduled[1].start.mock.calls[0]);
+  graph.current.context.currentTime=100;audioRef.current.currentTime=100;
+  await act(async()=>audioRef.current.dispatchEvent(new Event('timeupdate')));
+  expect(scheduled).toHaveLength(2); // No independent media clock or progressive correction.
+  audioRef.current.playbackRate=1.25;
+  await act(async()=>audioRef.current.dispatchEvent(new Event('ratechange')));
+  expect(scheduled).toHaveLength(4);
+  expect(scheduled[2].start.mock.calls[0]).toEqual(scheduled[3].start.mock.calls[0]);
+  expect(scheduled.slice(-2).map(source=>source.playbackRate.value)).toEqual([1.25,1.25]);
 });
 
 test('la carte préparée anticipe un drop et les mesures live restent bornées',()=>{

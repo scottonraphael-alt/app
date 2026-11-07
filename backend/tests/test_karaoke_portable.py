@@ -335,6 +335,11 @@ def test_short_real_notes_are_kept_and_pitch_aggregation_does_not_invent_silence
     values = cli.extract_pitch(np.ones(3200)*.1, 16000)
     assert values == [220, None]
     assert assets.notes_from_pitch(values) == [{'s': 0., 'e': .1, 'midi': 57}]
+    measured = [220]*5+[None]*5
+    lyrics = {'lines': [{'tokens': [{'s': 0, 'e': .2}, {'s': .2, 'e': .5}, {'s': .5, 'e': .8}]}]}
+    bricks = assets.notes_from_pitch(measured, lyrics=lyrics)
+    assert [(b['s'], b['e']) for b in bricks] == [(0., .2), (.2, .5)]
+    assert all(b['midi'] == 57 for b in bricks)
 
 
 @pytest.mark.parametrize('failure,explanation', [('connect', 'démarrer le service karaoke-voice'), ('timeout', 'pas répondu à temps')])

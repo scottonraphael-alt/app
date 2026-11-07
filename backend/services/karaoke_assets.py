@@ -3,6 +3,7 @@ import hashlib
 import json
 import math
 import threading
+from bisect import bisect_left, bisect_right
 from collections import OrderedDict
 from pathlib import Path
 
@@ -30,7 +31,7 @@ def finite(value, low=0, high=1200):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and low <= value <= high
 
 
-def notes_from_pitch(values, step=.1):
+def notes_from_pitch(values, step=.1, lyrics=None):
     """Median of adjacent MIDI samples suppresses short vibrato splits."""
     midi = [69 + 12 * math.log2(hz / 440) if hz and finite(hz, 40, 1600) else None for hz in values]
     smooth = []
@@ -44,7 +45,21 @@ def notes_from_pitch(values, step=.1):
         if current is not None and (index-start)*step >= .08:
             result.append({'s': round(start*step, 3), 'e': round(index*step, 3), 'midi': current})
         current, start = value, index
-    return result
+    if not lyrics:
+        return result
+    # Separate repeated syllables on a sustained pitch without inventing pitches
+    # in unvoiced gaps. Every resulting brick remains inside a measured note.
+    boundaries = sorted({round(token[key], 3) for line in lyrics.get('lines', [])
+                         for token in line.get('tokens', []) for key in ('s', 'e')})
+    bricks = []
+    for note in result:
+        cuts = [note['s']]
+        for boundary in boundaries[bisect_right(boundaries, note['s']+.04):bisect_left(boundaries, note['e']-.04)]:
+            if boundary-cuts[-1] >= .05:
+                cuts.append(boundary)
+        cuts.append(note['e'])
+        bricks.extend({'s': start, 'e': end, 'midi': note['midi']} for start, end in zip(cuts, cuts[1:]))
+    return bricks
 
 
 def validate_lyrics(lyrics, duration):
@@ -145,7 +160,7 @@ def _portable(track):
             if file.stat().st_size <= 0 or expected.get(file.name) != sha256(file):
                 raise ValueError('Fichier de préparation modifié ou incomplet.')
         result = {'duration': seconds, 'lyrics': lyrics, 'pitch_step': step, 'pitch': values,
-                  'notes': notes_from_pitch(values, step), 'energy': energy, 'isolated_vocals': True,
+                  'notes': notes_from_pitch(values, step, lyrics), 'energy': energy, 'isolated_vocals': True,
                   'lyrics_origin': data.get('lyrics_origin', 'provided'), 'portable': True, 'asset_version': sha256(manifest)[:16]}
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         result = None

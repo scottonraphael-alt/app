@@ -76,6 +76,8 @@ MongoDB doit déjà fonctionner. Le profil `karaoke` ne démarre plus Whisper/De
 
 Chaque joueur dispose d'un curseur **Voix guide**, mémorisé sur son appareil : 0 % = instrumental seul, 100 % = instrumental avec la voix guide. Cela ne modifie jamais la lecture ni le mix des autres joueurs. Le son original est conservé comme repli si une piste séparée n'est pas disponible.
 
+Les deux pistes séparées sont décodées dans le navigateur, puis démarrées ensemble sur une même horloge Web Audio, avec le même point de départ et la même vitesse. Les pauses, sauts et reprises les concernent toujours ensemble. Une seule paire de pistes est gardée pour le morceau courant ; le chargement initial peut prendre plus longtemps qu'une lecture en streaming. Sans Web Audio ou si une piste échoue, le lecteur revient au morceau original.
+
 Les battements et l'énergie préparés pilotent le fond, avec une montée avant les drops repérés. La voix isolée fait briller les paroles. Sans préparation, l'analyse Web Audio réagit au volume et aux basses du mix, y compris pour les extraits Deezer. Les effets sont désactivés par « réduire les animations » ; les éclats sont espacés d'au moins 3 secondes.
 
 Le **Guide de notes** est optionnel et fonctionne sans micro. Le réglage **Mon octave** transpose uniquement le guide de l'utilisateur. Avec OasisLink et son accord actif, le joueur voit son historique vocal sous forme de briques jaunes à la hauteur réellement chantée, ainsi que sa justesse ; les compteurs de vibratos et glissandos sont des estimations, pas une mesure certifiée. Ils nécessitent la nouvelle version du récepteur vocal (fenêtres de 100 ms décalées de 50 ms), et ne modifient pas le score. Aucun enregistrement de voix n'est conservé.
@@ -91,3 +93,5 @@ Configuration facultative du backend : `KARAOKE_LYRICS_AI_MODEL` (par défaut le
 L'IA peut encore se tromper. Sans écouter l'audio, elle ne peut pas garantir le mot exact ni corriger un vrai décalage temporel. Ces cas sont signalés ; une LRC ou un TXT correct reste la référence pour réaligner le morceau sur le Mac.
 
 Les notes sont extraites automatiquement de la voix isolée : chœurs, harmonies, vibratos et rap peuvent produire un guide imparfait. Les drops détectés sont des variations d'énergie, pas une annotation humaine des couplets et refrains. Évaluer les premières chansons et corriger les paroles à la source si nécessaire.
+
+La hauteur est bien calculée depuis `vocals.wav` produit par Demucs, ou depuis `.voix.mp3` en mode réutilisation. Les notes tenues sont découpées visuellement aux limites des paroles alignées. Cela ajoute des briques lisibles sur une même note ; les passages sans hauteur détectée restent vides.

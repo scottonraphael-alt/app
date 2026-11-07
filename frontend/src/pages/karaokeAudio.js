@@ -77,66 +77,96 @@ export function useKaraokeAudio({ audioRef, instrumentalRef, vocalRef, stems, au
   useEffect(() => {
     const master = audioRef.current, inst = instrumentalRef.current, voice = vocalRef.current;
     if (!master || !inst || !voice) return;
-    let closed = false, pending = false, failed = false, waiting = false;
+    let closed = false, failed = false, waiting = false, buffers = null, pair = null;
+    const controller = new AbortController();
     ready.current = false;
     setMix(stems ? 'loading' : 'original');
     applyGains.current();
     inst.pause(); voice.pause();
+    inst.removeAttribute('src'); voice.removeAttribute('src');
     if (!stems || !audioUrl) {
       inst.removeAttribute('src'); voice.removeAttribute('src');
       return;
     }
+    const stopPair = () => {
+      if (!pair) return;
+      for (const source of pair.sources) {
+        try { source.stop(); } catch { /* Already stopped. */ }
+        source.disconnect();
+      }
+      pair = null;
+    };
     const fail = () => {
       failed = true; ready.current = false;
-      inst.pause(); voice.pause();
+      controller.abort();
+      stopPair(); buffers = null;
       applyGains.current();
       if (!closed) setMix('fallback');
     };
     const sync = () => {
       if (closed || failed) return;
       if (waiting || master.paused || master.ended || master.seeking || master.readyState < 2) {
-        inst.pause(); voice.pause();
+        stopPair();
         return;
       }
-      if (inst.readyState < 2 || voice.readyState < 2 || pending) return;
+      const graph = graphRef.current;
+      if (!buffers || !graph || graph.context.state !== 'running') return;
       try {
-        for (const element of [inst, voice]) {
-          element.playbackRate = master.playbackRate;
-          if (Math.abs(element.currentTime-master.currentTime) > .06) element.currentTime = master.currentTime;
-        }
-        if (inst.paused || voice.paused) {
-          pending = true;
-          Promise.all([inst.play(), voice.play()]).then(() => {
-            if (closed) { inst.pause(); voice.pause(); return; }
-            ready.current = true; applyGains.current(); setMix('separated');
-          }).catch(() => { if (!closed) fail(); }).finally(() => { pending = false; });
+        const rate = master.playbackRate;
+        const expected = pair ? pair.offset+(graph.context.currentTime-pair.at)*pair.rate : -1;
+        if (!pair || pair.rate !== rate || Math.abs(expected-master.currentTime) > .08) {
+          stopPair();
+          // Both stems start at the exact same sample on one hardware clock.
+          // JS timers only follow the room clock; they never synchronize stems.
+          const at = graph.context.currentTime+.035, offset = master.currentTime+.035*rate;
+          if (offset >= Math.min(...buffers.map(buffer => buffer.duration))) return;
+          const sources = buffers.map((buffer, index) => {
+            const source = graph.context.createBufferSource();
+            source.buffer = buffer;
+            source.playbackRate.value = rate;
+            source.connect(graph.channels[index+1].analyser);
+            return source;
+          });
+          pair = { sources, at, offset, rate };
+          sources.forEach(source => source.start(at, offset));
+          ready.current = true; applyGains.current(); setMix('separated');
         }
       } catch { fail(); }
     };
-    for (const [element, part] of [[inst, 'instrumental'], [voice, 'vocals']]) {
-      element.src = audioUrl + '&part=' + part;
-      element.addEventListener('canplay', sync);
-      element.addEventListener('error', fail);
-    }
-    const stalled = () => { waiting = true; inst.pause(); voice.pause(); };
+    const load = async () => {
+      try {
+        const graph = graphFor([master, inst, voice]);
+        if (!graph) { fail(); return; }
+        graphRef.current = graph; applyGains.current();
+        const decoded = await Promise.all(['instrumental', 'vocals'].map(async part => {
+          const response = await fetch(audioUrl+'&part='+part, {signal: controller.signal});
+          if (!response.ok) throw new Error('Stem unavailable');
+          const encoded = await response.arrayBuffer();
+          if (closed) return null;
+          return graph.context.decodeAudioData(encoded);
+        }));
+        if (closed) return;
+        if (Math.abs(decoded[0].duration-decoded[1].duration) > .1) throw new Error('Stem duration mismatch');
+        buffers = decoded; sync();
+      } catch { if (!closed) fail(); }
+    };
+    const stalled = () => { waiting = true; stopPair(); };
     const resumed = () => { waiting = false; sync(); };
     master.addEventListener('waiting', stalled);
     master.addEventListener('playing', resumed);
     master.addEventListener('canplay', resumed);
-    const events = ['play', 'pause', 'seeking', 'seeked', 'ratechange', 'ended'];
+    const events = ['play', 'pause', 'seeking', 'seeked', 'ratechange', 'ended', 'timeupdate'];
     events.forEach(event => master.addEventListener(event, sync));
     const timer = setInterval(sync, 100);
-    sync();
+    load();
     return () => {
       closed = true; ready.current = false; applyGains.current();
+      controller.abort(); stopPair(); buffers = null;
       clearInterval(timer);
       events.forEach(event => master.removeEventListener(event, sync));
       master.removeEventListener('waiting', stalled);
       master.removeEventListener('playing', resumed);
       master.removeEventListener('canplay', resumed);
-      for (const element of [inst, voice]) {
-        element.removeEventListener('canplay', sync); element.removeEventListener('error', fail); element.pause();
-      }
     };
   }, [stems, audioUrl, retry, audioRef, instrumentalRef, vocalRef]);
   return { graphRef, mix };
