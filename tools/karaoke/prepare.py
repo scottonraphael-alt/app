@@ -28,13 +28,14 @@ def run(arguments, **options):
     subprocess.run(arguments, check=True, timeout=7200, **options)
 
 
-def separate(source, output, device, threads, allow_cpu_fallback=False):
+def separate(source, output, device, threads, allow_cpu_fallback=False, model='htdemucs_ft', shifts=2, overlap=.5):
     environment = {**os.environ, 'PYTORCH_ENABLE_MPS_FALLBACK': '1',
                    'OMP_NUM_THREADS': str(threads), 'VECLIB_MAXIMUM_THREADS': str(threads)}
     def invoke(target):
-        print(f'  Séparation Demucs ({target})…', flush=True)
-        run([sys.executable, '-m', 'demucs', '-n', 'htdemucs', '--two-stems', 'vocals',
-             '--float32', '--clip-mode', 'clamp', '-d', target, '-j', '1', '-o', str(output), str(source)], env=environment)
+        print(f'  Séparation Demucs {model} ({target}, {shifts} passes décalées)…', flush=True)
+        run([sys.executable, '-m', 'demucs', '-n', model, '--two-stems', 'vocals',
+             '--shifts', str(shifts), '--overlap', str(overlap), '--float32', '--clip-mode', 'clamp',
+             '-d', target, '-j', '1', '-o', str(output), str(source)], env=environment)
     try:
         invoke(device)
     except subprocess.CalledProcessError:
@@ -113,7 +114,12 @@ def source_lyrics(source, metadata, seconds, use_lrclib, language=None):
         from services.karaoke_text import fetch_lrclib, LRCLIB_USER_AGENT
         async def fetch():
             async with httpx.AsyncClient(timeout=10, headers={'User-Agent': LRCLIB_USER_AGENT}) as client:
-                return await fetch_lrclib(client, 'https://lrclib.net', metadata['title'], metadata['artist'], '', seconds, language=language)
+                for title, artist in lyric_queries(source, metadata):
+                    raw = await fetch_lrclib(client, 'https://lrclib.net', title, artist, '', seconds,
+                                             language=language, allow_plain=True)
+                    if raw:
+                        print(f'  Paroles trouvées : {title} · {artist or "recherche par titre"}', flush=True)
+                        return raw
         try:
             raw = asyncio.run(fetch())
             if raw:
@@ -123,19 +129,63 @@ def source_lyrics(source, metadata, seconds, use_lrclib, language=None):
     return None, 'transcribed'
 
 
-def extract_pitch(audio, sr):
+def lyric_queries(source, metadata):
+    """Search original-script audio tags as well as the filesystem's romanized name."""
+    titles = []
+    try:
+        result = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format_tags=title', '-of', 'json', str(source)],
+                                check=True, capture_output=True, text=True, timeout=15)
+        tagged = json.loads(result.stdout).get('format', {}).get('tags', {}).get('title', '')
+        quoted = re.search(r'[「『]([^」』]+)[」』]', tagged)
+        if quoted:
+            titles.append(quoted.group(1))
+        cleaned = re.sub(r'\b(?:official|music video|lyric video|audio)\b', '', tagged, flags=re.I)
+        cleaned = re.sub(r'[（(][^）)]*[）)]', '', cleaned).split('/')[0].strip(' -–—「」『』')
+        if cleaned:
+            titles.append(cleaned)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    titles.append(metadata['title'])
+    queries = []
+    # Always try the known artist first; title-only fallback is duration-filtered.
+    for artist in dict.fromkeys([metadata.get('artist', ''), '']):
+        for title in dict.fromkeys(titles):
+            if title:
+                queries.append((title, artist))
+    return queries[:6]
+
+
+def extract_pitch(audio, sr, engine='crepe'):
     """Overlapping 20 ms analysis; retain voiced pYIN frames, aggregate at 100 ms."""
     import librosa
     import numpy as np
     hop = round(sr*.02)
-    f0, voiced, probability = librosa.pyin(audio, sr=sr, fmin=65, fmax=1100,
-                                         frame_length=2048, hop_length=hop)
+    if engine == 'crepe':
+        import torch
+        import torchcrepe
+        print('  Mélodie : CREPE full sur la voix isolée…', flush=True)
+        tensor = torch.from_numpy(np.asarray(audio, dtype=np.float32)).unsqueeze(0)
+        with torch.inference_mode():
+            predicted, confidence = torchcrepe.predict(tensor, sr, hop, 50, 1500, 'full',
+                batch_size=256, device='cpu', return_periodicity=True)
+            confidence = torchcrepe.filter.median(confidence, 3)
+            predicted = torchcrepe.threshold.At(.3)(predicted, confidence)
+        f0 = predicted[0].cpu().numpy()
+        probability = confidence[0].cpu().numpy()
+        voiced = np.isfinite(f0)
+    elif engine == 'pyin':
+        f0, voiced, probability = librosa.pyin(audio, sr=sr, fmin=65, fmax=1100,
+                                             frame_length=2048, hop_length=hop)
+    else:
+        raise ValueError('Moteur de hauteur inconnu.')
     values, levels = [], []
     for index in range(math.ceil(len(audio)/(sr*.1))):
         start, stop = index*5, (index+1)*5
         candidates = [float(hz) for hz, active, confidence in zip(f0[start:stop], voiced[start:stop], probability[start:stop])
                       if active and confidence >= .1 and np.isfinite(hz)]
         chunk = audio[round(index*sr*.1):round((index+1)*sr*.1)]
+        # Absolute RMS rejects silence without penalizing a quiet, narrow-band
+        # sustained note as a spectral-average silence detector can do.
         rms = float(np.sqrt(np.mean(chunk**2))) if len(chunk) else 0
         levels.append(rms)
         values.append(round(float(np.median(candidates)), 2) if candidates and rms >= .002 else None)
@@ -167,6 +217,77 @@ def bridge_pitch_gaps(values, levels):
     return result
 
 
+def align_supplied(model, vocals, raw, provided, language, seconds):
+    """Use LRC line anchors to avoid drifting through long instrumental breaks."""
+    import librosa
+    import stable_whisper
+    from services.karaoke_text import parse_lrc
+    entries = [line for line in parse_lrc(raw) if line['text'].strip()]
+    anchored = len(entries) >= 2 and entries[-1]['t'] > seconds*.6 \
+        and all(0 <= line['t'] < seconds for line in entries) \
+        and all(left['t'] < right['t'] for left, right in zip(entries, entries[1:]))
+    if not anchored:
+        return model.align(str(vocals), provided, language=language), False
+    audio, sr = librosa.load(str(vocals), sr=16000, mono=True)
+    first = entries[0]
+    probe_start = max(0, first['t']-4)
+    probe_end = min(seconds, entries[1]['t']+6, first['t']+25)
+    probe = model.align(audio[round(probe_start*sr):round(probe_end*sr)], first['text'], language=language, verbose=None)
+    words = [word for segment in probe.to_dict()['segments'] for word in segment.get('words', []) if word['end'] > word['start']]
+    offset = words[0]['start']+probe_start-first['t'] if words else None
+    if offset is None or abs(offset) > 8:
+        print('  Repères LRC initiaux non confirmés ; alignement global du texte.', flush=True)
+        return model.align(str(vocals), provided, language=language), False
+    segments = []
+    print(f'  Alignement phrase par phrase : {len(entries)} repères LRC, décalage initial {offset:+.2f} s.', flush=True)
+    for index, entry in enumerate(entries):
+        expected = entry['t']+offset
+        following = entries[index+1]['t']+offset if index+1 < len(entries) else seconds
+        start = max(0, expected-3)
+        stop = min(seconds, following+3, expected+25)
+        if stop <= start:
+            raise ValueError('Les repères des paroles ne correspondent pas à cet enregistrement.')
+        result = model.align(audio[round(start*sr):round(stop*sr)], entry['text'], language=language, verbose=None).to_dict()
+        combined = ''.join(word['word'] for segment in result['segments'] for word in segment.get('words', []))
+        if ''.join(combined.split()) != ''.join(entry['text'].split()):
+            raise ValueError(f'Alignement incomplet de la phrase {index+1}.')
+        for segment in result['segments']:
+            for word in segment.get('words', []):
+                word['start'] = round(min(stop, max(start, word['start']+start)), 3)
+                word['end'] = round(min(stop, max(word['start'], word['end']+start)), 3)
+            segment['start'] = round(segment['start']+start, 3)
+            segment['end'] = round(segment['end']+start, 3)
+            segments.append(segment)
+        print(f'  Phrase alignée {index+1}/{len(entries)}', flush=True)
+    # Never push the following phrase later because an earlier word has an
+    # overlong end. Trim overlapping ends backwards, preserving later onsets.
+    # Collapsed words remain in the text and are reported as uncertain.
+    next_start = seconds
+    for segment in reversed(segments):
+        for word in reversed(segment.get('words', [])):
+            word['end'] = min(seconds, max(0, word['end']), next_start)
+            word['start'] = min(word['end'], max(0, word['start']))
+            next_start = word['start']
+        if segment.get('words'):
+            segment['start'] = segment['words'][0]['start']
+            segment['end'] = segment['words'][-1]['end']
+    return stable_whisper.WhisperResult({'language': language, 'segments': segments}), True
+
+
+def load_alignment_checkpoint(source, destination, args, seconds):
+    path = destination/(source.stem+'.alignment.json')
+    if path.is_symlink() or path.stat().st_size > 8_000_000:
+        raise ValueError('Diagnostic d’alignement invalide.')
+    checkpoint = json.loads(path.read_text(encoding='utf-8'))
+    if checkpoint.get('source_sha256') != sha256(source) or checkpoint.get('whisper_model') != args.model:
+        raise ValueError('Le diagnostic ne correspond pas au même original et au même modèle Whisper.')
+    if abs(checkpoint.get('duration', 0)-seconds) > .1 or not checkpoint.get('refined'):
+        raise ValueError('Le diagnostic d’alignement est incomplet.')
+    if args.language and args.language != checkpoint.get('language'):
+        raise ValueError('La langue demandée diffère du diagnostic enregistré.')
+    return checkpoint
+
+
 def prepare(source, destination, args):
     import librosa
     import numpy as np
@@ -175,6 +296,7 @@ def prepare(source, destination, args):
     from services.karaoke_alignment import align_payload, phrase_lines
     from services.karaoke_text import parse_lrc
     seconds = duration(source)
+    resume_checkpoint = load_alignment_checkpoint(source, destination, args, seconds) if getattr(args, 'resume_alignment', False) else None
     metadata = {}
     if source.with_suffix('.json').is_file():
         metadata = json.loads(source.with_suffix('.json').read_text(encoding='utf-8-sig'))
@@ -198,28 +320,73 @@ def prepare(source, destination, args):
             vocals = existing.with_suffix('.voix.mp3')
             instrumental = existing.with_suffix('.inst.mp3')
         else:
-            separate(source, work/'stems', device, args.threads, allow_cpu_fallback=args.device == 'auto')
-            vocals = work/'stems'/'htdemucs'/source.stem/'vocals.wav'
+            demucs_model = getattr(args, 'demucs_model', 'htdemucs_ft')
+            separate(source, work/'stems', device, args.threads, allow_cpu_fallback=args.device == 'auto',
+                     model=demucs_model, shifts=getattr(args, 'shifts', 2), overlap=getattr(args, 'overlap', .5))
+            vocals = work/'stems'/demucs_model/source.stem/'vocals.wav'
             instrumental = vocals.with_name('no_vocals.wav')
         if not vocals.is_file() or not instrumental.is_file():
             raise ValueError('Demucs n’a pas produit les deux pistes attendues.')
-        print('  Alignement des paroles avec Whisper sur la voix isolée…', flush=True)
-        model = stable_whisper.load_model(args.model, device='cpu')
-        transcript = model.transcribe(str(vocals), language=args.language, fp16=False)
-        result = transcript.to_dict()
-        language = args.language or result.get('language') or getattr(transcript, 'language', None)
-        if not language:
-            raise ValueError('Langue non détectée ; réessaie avec --language.')
-        raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language)
-        supplied_lines = None
-        if raw:
-            supplied_lines = [entry['text'] for entry in parse_lrc(raw) if entry['text'].strip()]
-            provided = '\n'.join(supplied_lines)
-            # Plain .txt lyrics are also accepted when no timestamps are present.
-            if not provided:
-                provided = re.sub(r'\[[^\]]*\]|<\d[^>]*>', '', raw).strip()
-                supplied_lines = [line.strip() for line in provided.splitlines() if line.strip()]
-            result = model.align(str(vocals), provided, language=language).to_dict()
+        model = transcript = None
+        refinement_used = not getattr(args, 'no_refine', False)
+        if resume_checkpoint:
+            checkpoint = resume_checkpoint
+            language = checkpoint['language']
+            result, origin = checkpoint['refined'], checkpoint['lyrics_origin']
+            supplied_lines = checkpoint.get('provided_lines')
+            anchored_alignment = checkpoint.get('lrc_anchored_alignment', False)
+            refinement_used = checkpoint.get('timestamp_refinement', False)
+            print('  Reprise de l’alignement enregistré et vérifié ; Whisper ignoré.', flush=True)
+        else:
+            print('  Alignement des paroles avec Whisper sur la voix isolée…', flush=True)
+            language = args.language
+            raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language) if language else (None, 'transcribed')
+            model = stable_whisper.load_model(args.model, device='cpu')
+            transcript = None
+            if not raw:
+                transcript = model.transcribe(str(vocals), language=language, task='transcribe', fp16=False,
+                                              temperature=0, beam_size=5, condition_on_previous_text=False)
+                result = transcript.to_dict()
+                language = language or result.get('language') or getattr(transcript, 'language', None)
+                if not args.language:
+                    raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language)
+            if not language:
+                raise ValueError('Langue non détectée ; réessaie avec --language.')
+            supplied_lines = None
+            anchored_alignment = False
+            if raw:
+                supplied_lines = [entry['text'] for entry in parse_lrc(raw) if entry['text'].strip()]
+                provided = '\n'.join(supplied_lines)
+                # Plain .txt lyrics are also accepted when no timestamps are present.
+                if not provided:
+                    provided = re.sub(r'\[[^\]]*\]|<\d[^>]*>', '', raw).strip()
+                    supplied_lines = [line.strip() for line in provided.splitlines() if line.strip()]
+                transcript, anchored_alignment = align_supplied(model, vocals, raw, provided, language, seconds)
+            alignment_path = destination/(source.stem+'.alignment.json')
+            checkpoint = {'source_sha256': sha256(source), 'duration': seconds, 'language': language,
+                          'lyrics_origin': origin, 'provided_lines': supplied_lines, 'whisper_model': args.model,
+                          'aligned': transcript.to_dict(), 'lrc_anchored_alignment': anchored_alignment,
+                          'timestamp_refinement': not getattr(args, 'no_refine', False)}
+            def save_alignment():
+                temporary = alignment_path.with_suffix('.json.tmp')
+                temporary.write_text(json.dumps(checkpoint, ensure_ascii=False), encoding='utf-8')
+                os.replace(temporary, alignment_path)
+            save_alignment()
+            if not getattr(args, 'no_refine', False):
+                print('  Affinage des limites des mots sur la voix isolée…', flush=True)
+                transcript = model.refine(str(vocals), transcript, precision=.05, inplace=False)
+            result = transcript.to_dict()
+            checkpoint['refined'] = result
+            save_alignment()
+        confidence_words = [word for segment in result.get('segments', []) for word in segment.get('words', [])
+                            if isinstance(word.get('probability'), (int, float))]
+        uncertain = int(sum(word['probability'] < .5 for word in confidence_words))
+        instant = int(sum(word.get('end', 0) <= word.get('start', 0) for segment in result.get('segments', [])
+                          for word in segment.get('words', []) if word.get('word', '').strip()))
+        if uncertain:
+            print(f'  À vérifier : {uncertain} blocs de texte ont une confiance de reconnaissance faible.', flush=True)
+        if instant:
+            print(f'  À vérifier : {instant} blocs sans durée fiable sont conservés dans le texte.', flush=True)
         lyrics = phrase_lines(align_payload(result, language, source='stable-ts-mac'), supplied_lines)
         from services.karaoke_text import has_native_script
         if not has_native_script(''.join(token['t'] for line in lyrics['lines'] for token in line['tokens']), language):
@@ -229,7 +396,8 @@ def prepare(source, destination, args):
         gc.collect()
         print('  Mélodie et carte d’énergie…', flush=True)
         y_voice, sr = librosa.load(str(vocals), sr=16000, mono=True)
-        values = extract_pitch(y_voice, sr)
+        pitch_engine = getattr(args, 'pitch_engine', 'crepe')
+        values = extract_pitch(y_voice, sr, pitch_engine)
         signals = [librosa.load(str(path), sr=22050, mono=True)[0] for path in (source, instrumental, vocals)]
         energy = energy_map(*signals, 22050, seconds)
         validate_energy(energy, seconds)
@@ -241,7 +409,7 @@ def prepare(source, destination, args):
                 shutil.copy2(original, output)  # Avoid another lossy encoding of verified MP3 stems.
             else:
                 run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(original), '-map_metadata', '-1',
-                     '-codec:a', 'libmp3lame', '-q:a', '2', str(output)])
+                     '-codec:a', 'libmp3lame', '-q:a', '0', str(output)])
             produced.append(output)
         pitch_path = work/(source.stem+'.pitch.json')
         pitch_path.write_text(json.dumps({'version': 1, 'step': .1, 'values': values}, allow_nan=False))
@@ -255,6 +423,13 @@ def prepare(source, destination, args):
         meta_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding='utf-8')
         manifest = {'version': 1, 'duration': seconds, 'source': {'size': source.stat().st_size, 'sha256': sha256(source)},
                     'lyrics': lyrics, 'lyrics_origin': origin, 'generated_at': datetime.now(timezone.utc).isoformat(),
+                    'processing': {'whisper_model': args.model, 'demucs_model': 'reused' if reuse else demucs_model,
+                        'demucs_shifts': None if reuse else getattr(args, 'shifts', 2),
+                        'demucs_overlap': None if reuse else getattr(args, 'overlap', .5),
+                        'timestamp_refinement': refinement_used, 'low_confidence_words': uncertain,
+                        'zero_duration_words': instant,
+                        'lrc_anchored_alignment': anchored_alignment,
+                        'pitch_engine': 'crepe-full' if pitch_engine == 'crepe' else 'pyin'},
                     'files': {path.name: sha256(path) for path in [*produced, lrc_path]}}
         manifest_path = work/(source.stem+'.karaoke.json')
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, separators=(',', ':'), allow_nan=False), encoding='utf-8')
@@ -272,7 +447,13 @@ def main(argv=None):
     parser.add_argument('--recursive', action='store_true')
     parser.add_argument('--overwrite', action='store_true', help='Régénérer les préparations existantes')
     parser.add_argument('--device', choices=('auto', 'cpu', 'mps'), default='auto', help='Périphérique Demucs')
-    parser.add_argument('--model', choices=('tiny', 'base', 'small', 'medium', 'large-v3'), default='small')
+    parser.add_argument('--model', choices=('tiny', 'base', 'small', 'medium', 'large-v3'), default='large-v3')
+    parser.add_argument('--demucs-model', choices=('htdemucs_ft', 'htdemucs'), default='htdemucs_ft')
+    parser.add_argument('--shifts', type=int, default=2, help='Prédictions décalées moyennées par Demucs (1 à 8)')
+    parser.add_argument('--overlap', type=float, default=.5, help='Recouvrement Demucs (0.1 à 0.75)')
+    parser.add_argument('--resume-alignment', action='store_true', help='Réutiliser le diagnostic d’alignement du même original et modèle')
+    parser.add_argument('--no-refine', action='store_true', help='Désactiver la passe finale d’affinage des timestamps')
+    parser.add_argument('--pitch-engine', choices=('crepe', 'pyin'), default='crepe', help='CREPE full par défaut ; pYIN pour un calcul plus léger')
     parser.add_argument('--language', default=None, help='Code langue facultatif ; détection automatique sinon')
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--no-lrclib', action='store_true')
@@ -284,6 +465,8 @@ def main(argv=None):
         parser.error('Le dossier de sortie doit être séparé du dossier source, en dehors de celui-ci.')
     if not 1 <= args.threads <= 16:
         parser.error('--threads doit être compris entre 1 et 16.')
+    if not 1 <= args.shifts <= 8 or not .1 <= args.overlap <= .75:
+        parser.error('--shifts doit être compris entre 1 et 8 et --overlap entre 0.1 et 0.75.')
     for program in ('ffmpeg', 'ffprobe'):
         if not shutil.which(program):
             parser.error('FFmpeg est requis : brew install ffmpeg')

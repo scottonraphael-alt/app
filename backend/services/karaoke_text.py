@@ -432,16 +432,23 @@ def has_native_script(text: str, lang: str | None) -> bool:
     return not pattern or bool(re.search(pattern, content))
 
 
-def _pick_synced(items: list, duration: float | None, language: str | None = None) -> str | None:
+def _pick_synced(items: list, duration: float | None, language: str | None = None, allow_plain: bool = False) -> str | None:
+    def text(item):
+        return item.get('syncedLyrics') or (item.get('plainLyrics') if allow_plain else '') or ''
     candidates = [
-        item for item in items if isinstance(item, dict) and (item.get("syncedLyrics") or "").strip()
-        and has_native_script(item['syncedLyrics'], language)
+        item for item in items if isinstance(item, dict) and isinstance(text(item), str) and text(item).strip()
+        and has_native_script(text(item), language)
     ]
+    if allow_plain and duration:
+        candidates = [item for item in candidates if isinstance(item.get('duration'), (int, float))
+                      and abs(item['duration']-duration) <= max(8, duration*.05)
+                      and not any(word in (str(item.get('trackName', ''))+' '+str(item.get('albumName', ''))).lower()
+                                  for word in ('karaoke', 'instrumental', 'カラオケ'))]
     if not candidates:
         return None
     if duration:
         candidates.sort(key=lambda item: abs(float(item.get("duration") or 0) - duration))
-    return candidates[0]["syncedLyrics"]
+    return text(candidates[0])
 
 
 async def fetch_lrclib(
@@ -452,6 +459,7 @@ async def fetch_lrclib(
     album: str = "",
     duration: float | None = None,
     language: str | None = None,
+    allow_plain: bool = False,
 ) -> str | None:
     """Paroles synchronisées (texte LRC) ou None. Les erreurs réseau sont avalées et journalisées."""
     base = base_url.rstrip("/")
@@ -467,7 +475,8 @@ async def fetch_lrclib(
                 },
             )
             if response.status_code == 200:
-                synced = (response.json() or {}).get("syncedLyrics")
+                record = response.json() or {}
+                synced = record.get('syncedLyrics') or (record.get('plainLyrics') if allow_plain else None)
                 if synced and synced.strip() and has_native_script(synced, language):
                     return synced
         params = {"track_name": title}
@@ -477,7 +486,7 @@ async def fetch_lrclib(
         if response.status_code != 200:
             return None
         payload = response.json()
-        return _pick_synced(payload if isinstance(payload, list) else [], duration, language)
+        return _pick_synced(payload if isinstance(payload, list) else [], duration, language, allow_plain)
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("LRCLIB indisponible pour « %s » : %s", title, exc)
         return None

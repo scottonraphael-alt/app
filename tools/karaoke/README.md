@@ -17,7 +17,7 @@ Ces paquets ne font partie d'aucun build Docker du site.
 
 ## Traiter un dossier
 
-Nommer les morceaux `Artiste - Titre.mp3` (ou WAV, FLAC, M4A, OGG…). Un fichier `Artiste - Titre.json` facultatif peut préciser `title`, `artist`, `album`, `source` et les alias. Une LRC existante est utilisée avant LRCLIB ; à défaut, Whisper transcrit le chant. La langue est détectée automatiquement.
+Nommer les morceaux `Artiste - Titre.mp3` (ou WAV, FLAC, M4A, OGG…). Un fichier `Artiste - Titre.json` facultatif peut préciser `title`, `artist`, `album`, `source` et les alias. Une LRC ou un TXT existant est utilisé avant LRCLIB ; à défaut, Whisper transcrit le chant. La recherche utilise aussi le titre dans les métadonnées audio, notamment son écriture originale. Les paroles LRCLIB non synchronisées peuvent être alignées si aucune LRC compatible n'est disponible. La langue est détectée automatiquement.
 
 ```sh
 .venv-karaoke-mac/bin/python tools/karaoke/prepare.py \
@@ -29,13 +29,20 @@ Le dossier de sortie doit être séparé du dossier source. Les originaux ne son
 Options utiles :
 
 - `--device auto` utilise MPS pour Demucs sur un Mac compatible, CPU sinon. Si Demucs échoue sur MPS, ce mode relance automatiquement la séparation complète sur CPU. `--device cpu` permet de contourner directement un problème MPS. Whisper reste sur CPU pour la compatibilité de son alignement.
-- `--model base` est plus léger ; `small` est le choix par défaut. La qualité n'est pas garantie sur le chant, en particulier avec chœurs, rap ou cris.
+- Le réglage par défaut privilégie la qualité pour **tous les nouveaux morceaux** : Whisper `large-v3`, Demucs `htdemucs_ft`, deux prédictions décalées moyennées, recouvrement de 50 %, puis affinage des timestamps à 50 ms sur la voix isolée. La hauteur utilise le modèle `CREPE full`, avec filtrage des silences et de la confiance, et reste calculée sur la voix isolée. Le temps dépend du Mac et du morceau et peut dépasser dix minutes. Les modèles sont téléchargés automatiquement la première fois.
+- `--model medium` ou `--model small` réduit le coût de reconnaissance si nécessaire. `--demucs-model htdemucs --shifts 1 --overlap 0.25 --no-refine --pitch-engine pyin` propose un traitement plus léger. Ces options ne changent pas les modèles installés sur le VPS.
 - `--language ja` impose une langue si la détection est mauvaise.
 - `--recursive` parcourt les sous-dossiers.
 - `--no-lrclib` évite la recherche de paroles en ligne.
 - Pour les langues japonaise, chinoise et coréenne, les résultats LRCLIB uniquement romanisés sont écartés : les paroles doivent rester dans leur écriture originale et la lecture latine se place au-dessus. Si aucune version compatible n'est trouvée, la transcription locale sert de source. Fournir une LRC correcte dans le dossier source reste préférable pour corriger une erreur de transcription.
 - `--reuse-stems "$HOME/Music/Karaoke-prepare"` réutilise une préparation existante vérifiée du même fichier audio pour recalculer paroles et mélodie sans relancer Demucs. On peut écrire dans un autre dossier pour comparer les résultats ; pour remplacer le dossier existant, ajouter `--overwrite`.
 - Un fichier `Artiste - Titre.txt` placé avec l'original permet de fournir les paroles exactes, une phrase par ligne. La LRC reste prioritaire si les deux fichiers existent. Le script conserve ces lignes lors de l'alignement ; sans texte fourni, il regroupe les fragments de transcription en phrases chantées.
+
+Pour refaire les anciens morceaux avec une séparation de meilleure qualité, utiliser un nouveau dossier de sortie ou `--overwrite`, **sans `--reuse-stems`** : cette dernière option conserverait les anciennes pistes. Le manifeste garde les modèles et réglages utilisés, ainsi que le nombre de mots à faible confiance. Un modèle plus grand réduit certaines erreurs mais ne garantit pas le texte chanté exact.
+
+Après une mise à jour du script, réexécuter `.venv-karaoke-mac/bin/python -m pip install -r tools/karaoke/requirements.txt` pour installer également le moteur de hauteur. La nouvelle préparation Mac peut affiner les timestamps ; la relecture Anthropic sur le VPS les conserve ensuite exactement tels qu'importés.
+
+Si l'alignement a terminé mais que l'export a échoué, `--resume-alignment` reprend le diagnostic `.alignment.json` du dossier de sortie. Le script vérifie l'empreinte de l'original, sa durée, sa langue et le modèle avant de l'utiliser ; Whisper et l'affinage ne sont pas relancés. Cette option ne réutilise pas automatiquement la séparation : `--reuse-stems` reste nécessaire si l'on dispose déjà d'un paquet complet valide dont reprendre les pistes. Ajouter `--overwrite` si des fichiers de sortie existent.
 
 ## Fichiers produits
 
@@ -49,6 +56,7 @@ Pour `Artiste - Titre.mp3` :
 - `Artiste - Titre.energy.json` : courbes d'énergie des pistes, battements et drops possibles.
 - `Artiste - Titre.karaoke.json` : manifeste portable, paroles et romaji alignés, langue, empreintes d'intégrité.
 - `Artiste - Titre.json` : métadonnées du morceau.
+- `Artiste - Titre.alignment.json` : diagnostic texte/timestamps sur le Mac, conservé pour comprendre une erreur sans perdre le résultat brut du modèle. Ce fichier n'est pas nécessaire à la lecture sur le VPS.
 
 **Copier l'ensemble**, en conservant les noms et leur voisinage, dans le dossier monté en `KARAOKE_DIR` sur le VPS (par défaut `/data/karaoke` dans le conteneur backend). Il ne suffit pas de copier seulement l'instrumental. Le dossier utilise actuellement le volume Docker `karaoke-music` : on peut y copier les fichiers via un conteneur ou le remplacer par un montage du dossier musical de l'hôte, selon l'installation.
 
@@ -95,5 +103,7 @@ Configuration facultative du backend : `KARAOKE_LYRICS_AI_MODEL` (par défaut le
 L'IA peut encore se tromper. Sans écouter l'audio, elle ne peut pas garantir le mot exact ni corriger un vrai décalage temporel. Ces cas sont signalés ; une LRC ou un TXT correct reste la référence pour réaligner le morceau sur le Mac.
 
 Les notes sont extraites automatiquement de la voix isolée : chœurs, harmonies, vibratos et rap peuvent produire un guide imparfait. Les drops détectés sont des variations d'énergie, pas une annotation humaine des couplets et refrains. Évaluer les premières chansons et corriger les paroles à la source si nécessaire.
+
+Lorsqu'une LRC compatible est disponible, ses repères servent de fenêtres de recherche pour aligner chaque phrase sur la voix. Les limites des mots sont recalculées à partir du son, puis affinées. Cela évite de traverser librement un long passage instrumental en décalant les phrases suivantes. Si les premiers repères ne sont pas confirmés, le script revient à l'alignement global. Les mots auxquels le modèle attribue une durée nulle restent dans le texte et sont signalés comme incertains ; ils ne sont plus supprimés silencieusement.
 
 La hauteur est bien calculée depuis `vocals.wav` produit par Demucs, ou depuis `.voix.mp3` en mode réutilisation. Les notes tenues sont découpées visuellement aux limites des paroles alignées. Cela ajoute des briques lisibles sur une même note ; les passages sans hauteur détectée restent vides.

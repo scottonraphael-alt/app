@@ -1,6 +1,7 @@
 # Mac only, Python 3.11 recommended. Never included in Docker/backend requirements.
 torch>=2.3,<2.6
 torchaudio>=2.3,<2.6
+torchcrepe>=0.0.23,<0.1
 demucs==4.0.1
 stable-ts>=2.19,<3
 librosa>=0.11,<0.12

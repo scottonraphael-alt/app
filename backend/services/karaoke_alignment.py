@@ -69,7 +69,7 @@ def align_payload(result, lang, source='whisperx'):
             for unit in units:
                 start, end = unit.get('start'), unit.get('end')
                 chunk = unit.get('char', unit.get('word', ''))
-                if start is None or end is None or not chunk or end <= start:
+                if start is None or end is None or not chunk or end < start:
                     continue
                 text += chunk
                 timing.extend((start+(end-start)*i/len(chunk), start+(end-start)*(i+1)/len(chunk)) for i in range(len(chunk)))
@@ -89,7 +89,7 @@ def align_payload(result, lang, source='whisperx'):
         for unit in units:
             start, end = unit.get('start'), unit.get('end')
             text = unit.get('char', unit.get('word', ''))
-            if start is None or end is None or not text.strip() or end <= start:
+            if start is None or end is None or not text.strip() or end < start:
                 continue
             pieces = tokenize(text, lang)
             length = sum(max(1, len(p['t'])) for p in pieces)

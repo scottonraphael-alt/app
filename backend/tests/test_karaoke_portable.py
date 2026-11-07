@@ -197,10 +197,12 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
     source.write_bytes(b'source-original')
     source.with_suffix('.lrc').write_text('[00:00.00]Hello world')
     aligned = {'language': 'en', 'segments': [{'words': [
-        {'word': 'Hello', 'start': 0., 'end': .5}, {'word': 'world', 'start': .5, 'end': 1.}]}]}
+        {'word': 'Hello', 'start': np.float64(0.), 'end': np.float64(.5), 'probability': np.float64(.1)},
+        {'word': 'world', 'start': .5, 'end': 1., 'probability': .9}]}]}
     from unittest.mock import Mock
     model = NS(transcribe=Mock(return_value=NS(to_dict=lambda: aligned)),
-               align=Mock(return_value=NS(to_dict=lambda: aligned)))
+               align=Mock(return_value=NS(to_dict=lambda: aligned)),
+               refine=Mock(side_effect=lambda audio, result, **kwargs: result))
     monkeypatch.setitem(sys.modules, 'stable_whisper', NS(load_model=lambda *args, **kwargs: model))
     monkeypatch.setitem(sys.modules, 'torch', NS(set_num_threads=lambda value: None,
         backends=NS(mps=NS(is_available=lambda: False))))
@@ -211,10 +213,10 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
         beat=NS(beat_track=lambda **kwargs: (120, np.array([1, 2]))),
         frames_to_time=lambda *args, **kwargs: np.array([.2, .7])))
     monkeypatch.setattr(cli, 'duration', lambda _: 2)
-    monkeypatch.setattr(cli, 'extract_pitch', lambda audio, sr: [220]*20)
+    monkeypatch.setattr(cli, 'extract_pitch', lambda audio, sr, engine: [220]*20)
     def process(arguments, **kwargs):
         if '-m' in arguments:
-            base = Path(arguments[arguments.index('-o')+1])/'htdemucs'/source.stem
+            base = Path(arguments[arguments.index('-o')+1])/arguments[arguments.index('-n')+1]/source.stem
             base.mkdir(parents=True)
             (base/'vocals.wav').write_bytes(b'voice')
             (base/'no_vocals.wav').write_bytes(b'music')
@@ -234,16 +236,28 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
     assert replacements[-1] == 'Artist - Song.karaoke.json'
     assert source.read_bytes() == b'source-original'
     model.align.assert_called_once()
+    model.refine.assert_called_once()
+    assert model.transcribe.call_args.kwargs['beam_size'] == 5
+    assert model.transcribe.call_args.kwargs['condition_on_previous_text'] is False
     assert song.path.with_suffix('.lrc').read_text().count('<00:00.50>') == 2
     reused = tmp_path/'repaired'
     reused.mkdir()
     def no_separation(*args, **kwargs):
         raise AssertionError('Demucs must not run when reusing verified stems')
     monkeypatch.setattr(cli, 'separate', no_separation)
-    cli.prepare(source, reused, NS(threads=2, device='cpu', no_lrclib=True, model='base', language=None, reuse_stems=destination))
+    cli.prepare(source, reused, NS(threads=2, device='cpu', no_lrclib=True, model='base', language='en', reuse_stems=destination))
+    assert model.transcribe.call_count == 1  # Known-language supplied lyrics go straight to forced alignment.
     assert assets.portable(NS(path=reused/source.name, remote=''))
     for suffix in ('.inst.mp3', '.voix.mp3'):
         assert (reused/(source.stem+suffix)).read_bytes() == (destination/(source.stem+suffix)).read_bytes()
+    def no_model(*args, **kwargs):
+        raise AssertionError('Whisper must not load when resuming a verified alignment')
+    monkeypatch.setitem(sys.modules, 'stable_whisper', NS(load_model=no_model))
+    cli.prepare(source, destination, NS(threads=2, device='cpu', no_lrclib=True, model='base', language='en',
+                                       reuse_stems=destination, resume_alignment=True))
+    assert assets.portable(NS(path=destination/source.name, remote=''))
+    with pytest.raises(ValueError):
+        cli.load_alignment_checkpoint(source, destination, NS(model='large-v3', language='en'), 2)
 
 
 def test_demucs_auto_retries_cpu_but_explicit_device_and_cpu_failures_propagate(monkeypatch, tmp_path):
@@ -255,6 +269,9 @@ def test_demucs_auto_retries_cpu_but_explicit_device_and_cpu_failures_propagate(
     (output/'partial.wav').write_bytes(b'incomplete')
     def process(arguments, **kwargs):
         device = arguments[arguments.index('-d')+1]
+        assert arguments[arguments.index('-n')+1] == 'htdemucs_ft'
+        assert arguments[arguments.index('--shifts')+1] == '2'
+        assert arguments[arguments.index('--overlap')+1] == '0.5'
         calls.append(device)
         if device == 'mps':
             raise subprocess.CalledProcessError(1, arguments)
@@ -332,7 +349,7 @@ def test_short_real_notes_are_kept_and_pitch_aggregation_does_not_invent_silence
         assert options['hop_length'] == 320 and options['frame_length'] == 2048
         return np.array([220]*5+[np.nan]*5), np.array([True]*5+[False]*5), np.array([.3]*5+[0]*5)
     monkeypatch.setitem(sys.modules, 'librosa', NS(pyin=pyin))
-    values = cli.extract_pitch(np.ones(3200)*.1, 16000)
+    values = cli.extract_pitch(np.ones(3200)*.1, 16000, 'pyin')
     assert values == [220, None]
     assert assets.notes_from_pitch(values) == [{'s': 0., 'e': .1, 'midi': 57}]
     measured = [220]*5+[None]*5
@@ -371,6 +388,10 @@ def test_phrase_grouping_preserves_words_timings_and_author_supplied_lines():
     assert cli.bridge_pitch_gaps([220, None, 220], [.1]*3) == [220, 220, 220]
     assert cli.bridge_pitch_gaps([220, None, 220], [.1, 0, .1]) == [220, None, 220]
     assert cli.bridge_pitch_gaps([220, None, 440], [.1]*3) == [220, None, 440]
+    from services.karaoke_alignment import align_payload
+    instant = align_payload({'segments': [{'words': [{'word': 'Hello', 'start': 1., 'end': 1.}]}]}, 'en')
+    assert instant['lines'][0]['tokens'][0]['t'] == 'Hello'
+    assert instant['lines'][0]['tokens'][0]['s'] == instant['lines'][0]['tokens'][0]['e'] == 1.
 
 
 def test_plain_text_lyrics_can_supply_correct_words_and_line_breaks(tmp_path):
@@ -378,3 +399,62 @@ def test_plain_text_lyrics_can_supply_correct_words_and_line_breaks(tmp_path):
     song = tmp_path/'song.mp3'
     song.with_suffix('.txt').write_text('夜空\n光', encoding='utf-8')
     assert cli.source_lyrics(song, {}, 2, False, 'ja') == ('夜空\n光', 'provided')
+
+
+def test_original_script_tags_and_plain_lyrics_work_for_future_tracks(monkeypatch, tmp_path):
+    from services.karaoke_text import _pick_synced
+    cli = load_cli()
+    monkeypatch.setattr(cli.subprocess, 'run', lambda *args, **kwargs: NS(stdout=json.dumps(
+        {'format': {'tags': {'title': '「夜空の歌」 MUSIC VIDEO (HD) / Yozora no uta'}}})))
+    queries = cli.lyric_queries(tmp_path/'Artist - Yozora.mp3', {'title': 'Yozora', 'artist': 'Artist'})
+    assert queries[0] == ('夜空の歌', 'Artist')
+    assert ('Yozora', 'Artist') in queries and ('夜空の歌', '') in queries
+    rows = [{'trackName': '夜空の歌', 'duration': 240, 'plainLyrics': '夜空\n光'},
+            {'trackName': '夜空の歌 カラオケ', 'duration': 239, 'syncedLyrics': '[00:00]違う'},
+            {'trackName': '夜空の歌', 'duration': 30, 'syncedLyrics': '[00:00]抜粋'}]
+    assert _pick_synced(rows, 239, 'ja', allow_plain=True) == '夜空\n光'
+    assert _pick_synced(rows[:1], 239, 'ja') is None
+
+
+def test_default_quality_models_apply_to_every_new_song(monkeypatch, tmp_path):
+    cli = load_cli()
+    folder = tmp_path/'songs'
+    folder.mkdir()
+    (folder/'Artist - New Song.mp3').write_bytes(b'audio')
+    captured = []
+    monkeypatch.setattr(cli.shutil, 'which', lambda _: '/test/ffmpeg')
+    monkeypatch.setattr(cli, 'prepare', lambda source, output, args: captured.append(args))
+    assert cli.main([str(folder), '--output', str(tmp_path/'out')]) == 0
+    args = captured[0]
+    assert args.model == 'large-v3' and args.demucs_model == 'htdemucs_ft'
+    assert args.shifts == 2 and args.overlap == .5 and not args.no_refine
+    assert args.pitch_engine == 'crepe'
+
+
+def test_lrc_anchors_keep_alignment_after_a_long_instrumental_break(monkeypatch):
+    import numpy as np
+    import sys
+    cli = load_cli()
+    monkeypatch.setitem(sys.modules, 'librosa', NS(load=lambda *a, **k: (np.zeros(16000*100), 16000)))
+    monkeypatch.setitem(sys.modules, 'stable_whisper', NS(WhisperResult=lambda data, **kwargs: NS(to_dict=lambda: data)))
+    from unittest.mock import Mock
+    def align(audio, text, **kwargs):
+        assert isinstance(audio, np.ndarray)
+        return NS(to_dict=lambda: {'segments': [{'start': .5, 'end': 1.5,
+            'words': [{'word': text, 'start': .5, 'end': 1.5}]}]})
+    model = NS(align=Mock(side_effect=align))
+    result, anchored = cli.align_supplied(model, Path('voice.wav'),
+        '[00:00]Hello\n[00:45]World\n[01:30]Again', 'Hello\nWorld\nAgain', 'en', 100)
+    assert anchored
+    segments = result.to_dict()['segments']
+    assert len(segments) == 3 and segments[1]['start'] > 40 and segments[2]['start'] > 85
+    assert [s['words'][0]['word'] for s in segments] == ['Hello', 'World', 'Again']
+    # Overlong ends from one phrase must not push later onsets progressively.
+    def overlap(audio, text, **kwargs):
+        return NS(to_dict=lambda: {'segments': [{'start': .5, 'end': 12.,
+            'words': [{'word': text, 'start': .5, 'end': 12.}]}]})
+    overlapping, _ = cli.align_supplied(NS(align=overlap), Path('voice.wav'),
+        '[00:00]Hello\n[00:10]World\n[00:20]Again', 'Hello\nWorld\nAgain', 'en', 30)
+    parts = overlapping.to_dict()['segments']
+    assert parts[1]['start'] == 8 and parts[2]['start'] == 18
+    assert parts[0]['end'] <= parts[1]['start'] and parts[1]['end'] <= parts[2]['start']
