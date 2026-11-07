@@ -44,9 +44,15 @@ export default function KaraokeNotes({notes,audioRef,octave,session,consented,sc
    }
    context.strokeStyle='#fff';context.beginPath();context.moveTo(anchor,8);context.lineTo(anchor,height-8);context.stroke();
    const live=own.current;
-   if(live?.available&&performance.now()-live.at<1400&&Math.abs(live.position-now)<2){
-    const midi=69+12*Math.log2(live.pitch/440);
-    context.fillStyle='#ffae57';context.beginPath();context.arc(Math.max(39,anchor+(live.position-now)*scale),Math.max(9,Math.min(height-9,y(midi))),5,0,Math.PI*2);context.fill();
+   if(live&&performance.now()-live.at<1800){
+    context.fillStyle='#ffd75e';
+    for(const brick of live.history||[]){
+     if(brick.e<now-3||brick.s>now+.2||!(brick.pitch>0))continue;
+     const left=Math.max(39,anchor+(brick.s-now)*scale),right=Math.min(width,anchor+(brick.e-now)*scale);
+     if(right<=left)continue;
+     const midi=69+12*Math.log2(brick.pitch/440);
+     context.fillRect(left,Math.max(9,Math.min(height-9,y(midi)))-3,Math.max(2,right-left-.5),6);
+    }
    }
   };
   frame=requestAnimationFrame(paint);return()=>cancelAnimationFrame(frame);
@@ -54,9 +60,9 @@ export default function KaraokeNotes({notes,audioRef,octave,session,consented,sc
  return <section className="kn-root" aria-label="Guide de mélodie" style={{position:"relative",zIndex:1,flexShrink:0,padding:'8px 16px',border:'1px solid #ffffff25',borderRadius:12,background:'#100e25aa'}}>
   <div style={{display:'flex',justifyContent:'space-between',gap:12,fontSize:12}}>
    <span>Guide mélodique · extraction automatique</span>
-   {score?.pitch!=null?<span style={{display:"flex",alignItems:"center",gap:8}}><progress aria-label="Justesse vocale indicative" max="100" value={score.pitch} style={{width:70,height:8,accentColor:"#ffae57"}}/><strong>Justesse : {score.pitch} % · score indicatif</strong></span>:<span>{consented?'Ta voix : repère orange':'Guide de référence · sans micro'}</span>}
+   {score?.pitch!=null?<span style={{display:"flex",alignItems:"center",gap:8}}><progress aria-label="Justesse vocale indicative" max="100" value={score.pitch} style={{width:70,height:8,accentColor:"#ffae57"}}/><strong>Justesse : {score.pitch} % · score indicatif</strong></span>:<span>{consented?'Ta voix : briques jaunes':'Guide de référence · sans micro'}</span>}
   </div>
   {score?.techniques && <p style={{fontSize:11,opacity:.75,margin:'4px 0'}}>Techniques indicatives · vibratos : {score.techniques.vibrato} · glissandos : {score.techniques.glissando}</p>}
-  <canvas className="kn-canvas" ref={canvas} style={{display:'block',width:'100%',height:130}} role="img" aria-label="Notes de référence défilantes ; le repère blanc marque le présent"/>
+  <canvas className="kn-canvas" ref={canvas} style={{display:'block',width:'100%',height:130}} role="img" aria-label="Notes de référence et historique vocal jaune ; le repère blanc marque le présent"/>
  </section>;
 }

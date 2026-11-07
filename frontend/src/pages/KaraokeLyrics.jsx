@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 // Polices CJK en tête : l'Activity tourne dans le client Discord, qui utilise les polices du système.
 export const LYRICS_FONT =
@@ -21,15 +21,14 @@ const CSS = `
 .kl-blob.a { background: #6a3cff; left: -15%; top: -25%; }
 .kl-blob.b { background: #ff4f9a; right: -20%; bottom: -30%; animation-delay: -8s; opacity: 0.26; }
 .kl-blob.c { background: #1fb6ff; left: 30%; top: 35%; animation-delay: -15s; opacity: 0.16; }
-.kl-rows { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; justify-content: center;
-  gap: clamp(28px, 9vh, 110px); padding: 0 5%; box-sizing: border-box; font-size: clamp(24px, 4.4vw, 56px); font-weight: 800; }
-.kl-slot { display: flex; width: 100%; min-height: 1.5em; }
+.kl-rows { position: absolute; inset: 0; z-index: 1; display: grid; grid-template-rows: minmax(0,1fr) minmax(0,1fr);
+  gap: 12px; padding: 24px 5%; box-sizing: border-box; font-size: clamp(24px, 4.4vw, 52px); font-weight: 800; }
+.kl-slot { display: flex; align-items: center; width: 100%; min-height: 0; }
 .kl-slot.top { justify-content: flex-start; }
 .kl-slot.bottom { justify-content: flex-end; }
-.kl-slot.rom { min-height: 2.5em; }
-.kl-line { position: relative; display: inline-block; max-width: 92%; line-height: 1.3; animation: klIn 260ms ease-out; }
+.kl-line { position: relative; display: inline-block; width: max-content; flex-shrink: 0; line-height: 1.3; animation: klIn 260ms ease-out; }
 .kl-slot.rom .kl-line { line-height: 2.05; }
-.kl-text { white-space: pre-wrap; }
+.kl-text { white-space: nowrap; }
 .kl-tok { position: relative; display: inline-block; white-space: pre; }
 .kl-base, .kl-fill { -webkit-text-stroke-width: 0.13em; paint-order: stroke fill; stroke-linejoin: round; }
 .kl-base { color: #fff; -webkit-text-stroke-color: #2b1d78; }
@@ -41,7 +40,7 @@ const CSS = `
   opacity: 0; transform: scale(0.4); transition: opacity 140ms ease, transform 140ms ease; }
 .kl-dots i.on { opacity: 1; transform: scale(1); }
 .kl-empty { opacity: 0.75; font-size: 18px; text-align: center; padding: 24px; font-weight: 500; }
-@keyframes klIn { from { opacity: 0; transform: translateY(14px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes klIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes klDrift { 0%, 100% { transform: translate3d(-4%, -3%, 0) scale(1); } 50% { transform: translate3d(5%, 4%, 0) scale(1.14); } }
 @media (prefers-reduced-motion: reduce) { .kl-blob, .kl-line { animation: none; } }
 `;
@@ -100,8 +99,26 @@ function Content({ token, showRomaji }) {
 }
 
 function Line({ line, showRomaji }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const element = ref.current, slot = element?.parentElement;
+    if (!element || !slot) return;
+    const fit = () => {
+      element.style.fontSize = '52px';
+      const naturalWidth = element.scrollWidth;
+      const naturalHeight = element.getBoundingClientRect().height;
+      if (!slot.clientWidth || !slot.clientHeight || !naturalWidth || !naturalHeight) return;
+      const scale = Math.min(1, (slot.clientWidth-24)/naturalWidth, (slot.clientHeight-24)/naturalHeight);
+      element.style.fontSize = `${Math.max(1, 52*scale)}px`;
+    };
+    fit();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
+    observer?.observe(slot);
+    document.fonts?.ready.then(fit);
+    return () => observer?.disconnect();
+  }, [line, showRomaji]);
   return (
-    <div className="kl-line" data-start={line.t} data-gap={line.gap}>
+    <div ref={ref} className="kl-line" data-start={line.t} data-gap={line.gap}>
       <div className="kl-dots" data-dots="">
         <i />
         <i />

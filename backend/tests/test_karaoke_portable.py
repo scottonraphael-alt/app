@@ -140,15 +140,18 @@ def test_external_mode_does_not_queue_heavy_vps_jobs(tmp_path):
 def test_own_live_pitch_is_consent_scoped_and_expires():
     room = karaoke.KRoom()
     room.clock.set_playing(True)
+    room.clock.seek(1)
     room.track_id = 'song'
     karaoke.ROOMS['room'] = room
     tools.SESSIONS['test'] = {'instance_id': 'room', 'song_key': ('song', 0), 'consents': {'123': {}}, 'receiver_at': time.time(),
         'samples': {'123': {10: {'voiced': True, 'pitch': 440., 'at': time.time()}}}}
     response = client.get('/activity/karaoke/voice/pitch', params={'t': token(), 'instance_id': 'room'}).json()
-    assert response == {'available': True, 'pitch': 440., 'position': 1.}
+    assert response == {'available': True, 'pitch': 440., 'position': 1., 'history': [{'s': 1., 'e': 1.1, 'pitch': 440.}]}
     assert client.get('/activity/karaoke/voice/pitch', params={'t': token('456'), 'instance_id': 'room'}).json() == {'available': False}
     tools.SESSIONS['test']['samples']['123'][10]['at'] = time.time()-10
-    assert client.get('/activity/karaoke/voice/pitch', params={'t': token(), 'instance_id': 'room'}).json() == {'available': False}
+    expired = client.get('/activity/karaoke/voice/pitch', params={'t': token(), 'instance_id': 'room'}).json()
+    assert expired['available'] is False
+    assert expired['history'] == response['history']  # Past bricks remain until playback passes them.
 
 
 def load_cli():
@@ -346,3 +349,27 @@ def test_voice_connection_errors_explain_missing_service_or_timeout(monkeypatch,
     with pytest.raises(HTTPException) as raised:
         asyncio.run(tools.receiver('/start', {}))
     assert raised.value.status_code == 503 and explanation in raised.value.detail
+
+
+def test_phrase_grouping_preserves_words_timings_and_author_supplied_lines():
+    from services.karaoke_alignment import phrase_lines
+    lyrics = {'lang': 'en', 'lines': [{'tokens': [{'t': word, 'r': '', 'sp': True, 's': i*.5, 'e': (i+1)*.5}]} for i, word in enumerate(['Hello', 'beautiful', 'world'])]}
+    grouped = phrase_lines(lyrics)
+    assert len(grouped['lines']) == 1
+    supplied = phrase_lines(lyrics, ['Hello beautiful', 'world'])
+    assert len(supplied['lines']) == 2
+    assert [t['t'] for line in supplied['lines'] for t in line['tokens']] == ['Hello', 'beautiful', 'world']
+    assert supplied['lines'][1]['t'] == 1
+    with pytest.raises(ValueError):
+        phrase_lines(lyrics, ['Different words'])
+    cli = load_cli()
+    assert cli.bridge_pitch_gaps([220, None, 220], [.1]*3) == [220, 220, 220]
+    assert cli.bridge_pitch_gaps([220, None, 220], [.1, 0, .1]) == [220, None, 220]
+    assert cli.bridge_pitch_gaps([220, None, 440], [.1]*3) == [220, None, 440]
+
+
+def test_plain_text_lyrics_can_supply_correct_words_and_line_breaks(tmp_path):
+    cli = load_cli()
+    song = tmp_path/'song.mp3'
+    song.with_suffix('.txt').write_text('夜空\n光', encoding='utf-8')
+    assert cli.source_lyrics(song, {}, 2, False, 'ja') == ('夜空\n光', 'provided')

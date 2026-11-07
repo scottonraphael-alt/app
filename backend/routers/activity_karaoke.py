@@ -375,7 +375,9 @@ async def load_lyrics(track: Track, duration: float | None = None) -> dict:
     from services.karaoke_preparation import prepared
     aligned = await asyncio.to_thread(prepared, track)
     if aligned:
-        return aligned['lyrics']
+        from services.karaoke_lyric_review import ensure
+        review = await ensure(track, aligned)
+        return {**review.get('lyrics', aligned['lyrics']), 'ai_review': review['status']}
     key = f"{track.id}:{track.mtime}:{track.lrc_mtime}:{track.lang}"
     if key in _LYRICS:
         return _LYRICS[key]

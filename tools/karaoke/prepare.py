@@ -100,8 +100,9 @@ def energy_map(mix, instrumental, vocals, sample_rate, seconds):
 
 def source_lyrics(source, metadata, seconds, use_lrclib, language=None):
     from services.karaoke_text import has_native_script
-    local = source.with_suffix('.lrc')
-    if local.is_file():
+    for local in (source.with_suffix('.lrc'), source.with_suffix('.txt')):
+        if not local.is_file():
+            continue
         raw = local.read_text(encoding='utf-8-sig')
         if has_native_script(raw, language):
             return raw, 'provided'
@@ -129,14 +130,16 @@ def extract_pitch(audio, sr):
     hop = round(sr*.02)
     f0, voiced, probability = librosa.pyin(audio, sr=sr, fmin=65, fmax=1100,
                                          frame_length=2048, hop_length=hop)
-    values = []
+    values, levels = [], []
     for index in range(math.ceil(len(audio)/(sr*.1))):
         start, stop = index*5, (index+1)*5
         candidates = [float(hz) for hz, active, confidence in zip(f0[start:stop], voiced[start:stop], probability[start:stop])
                       if active and confidence >= .1 and np.isfinite(hz)]
         chunk = audio[round(index*sr*.1):round((index+1)*sr*.1)]
         rms = float(np.sqrt(np.mean(chunk**2))) if len(chunk) else 0
+        levels.append(rms)
         values.append(round(float(np.median(candidates)), 2) if candidates and rms >= .002 else None)
+    values = bridge_pitch_gaps(values, levels)
     coverage = sum(value is not None for value in values)/max(1, len(values))
     print(f'  Hauteur détectée sur {coverage:.0%} du morceau (silences compris).', flush=True)
     if coverage < .15:
@@ -144,12 +147,32 @@ def extract_pitch(audio, sr):
     return values
 
 
+def bridge_pitch_gaps(values, levels):
+    """Bridge <=200 ms only with audible vocals and close stable endpoints."""
+    result = list(values)
+    start = 0
+    while start < len(values):
+        if values[start] is not None:
+            start += 1
+            continue
+        end = start
+        while end < len(values) and values[end] is None:
+            end += 1
+        if start > 0 and end < len(values) and end-start <= 2 and all(level >= .002 for level in levels[start:end]):
+            left, right = values[start-1], values[end]
+            if abs(12*math.log2(right/left)) <= 2:
+                for index in range(start, end):
+                    result[index] = round(left*(right/left)**((index-start+1)/(end-start+1)), 2)
+        start = end
+    return result
+
+
 def prepare(source, destination, args):
     import librosa
     import numpy as np
     import stable_whisper
     import torch
-    from services.karaoke_alignment import align_payload
+    from services.karaoke_alignment import align_payload, phrase_lines
     from services.karaoke_text import parse_lrc
     seconds = duration(source)
     metadata = {}
@@ -188,13 +211,16 @@ def prepare(source, destination, args):
         if not language:
             raise ValueError('Langue non détectée ; réessaie avec --language.')
         raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language)
+        supplied_lines = None
         if raw:
-            provided = '\n'.join(entry['text'] for entry in parse_lrc(raw) if entry['text'].strip())
+            supplied_lines = [entry['text'] for entry in parse_lrc(raw) if entry['text'].strip()]
+            provided = '\n'.join(supplied_lines)
             # Plain .txt lyrics are also accepted when no timestamps are present.
             if not provided:
                 provided = re.sub(r'\[[^\]]*\]|<\d[^>]*>', '', raw).strip()
+                supplied_lines = [line.strip() for line in provided.splitlines() if line.strip()]
             result = model.align(str(vocals), provided, language=language).to_dict()
-        lyrics = align_payload(result, language, source='stable-ts-mac')
+        lyrics = phrase_lines(align_payload(result, language, source='stable-ts-mac'), supplied_lines)
         from services.karaoke_text import has_native_script
         if not has_native_script(''.join(token['t'] for line in lyrics['lines'] for token in line['tokens']), language):
             raise ValueError('Transcription sans écriture originale ; fournir une LRC en kana/kanji (ou dans la langue du morceau).')

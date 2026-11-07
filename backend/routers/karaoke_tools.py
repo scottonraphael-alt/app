@@ -93,11 +93,14 @@ async def preparation(t: str, id: str):
     from services.karaoke_preparation import fingerprint
     row = await db.karaoke_preparation.find_one({'_id': fingerprint(track)})
     ready = await asyncio.to_thread(prepared, track)
+    from services.karaoke_lyric_review import ensure
+    review = await ensure(track, ready)
     if not ready and os.getenv('KARAOKE_PREPARATION_MODE', 'external') != 'server':
         return {'status': 'external_required', 'error': None, 'language': None, 'pitch_available': False, 'stems': False}
     return {'status': 'ready' if ready else 'not_prepared' if (row or {}).get('status') == 'ready' else (row or {}).get('status', 'external_required' if os.getenv('KARAOKE_PREPARATION_MODE', 'external') != 'server' else 'not_prepared'),
             'error': (row or {}).get('error'), 'language': ready['lyrics']['lang'] if ready else None,
-            'pitch_available': bool(ready and any(ready.get('pitch', []))), 'stems': bool(ready and ready.get('portable'))}
+            'pitch_available': bool(ready and any(ready.get('pitch', []))), 'stems': bool(ready and ready.get('portable')),
+            'lyrics_review': {k: v for k, v in review.items() if k != 'lyrics'}}
 
 
 @router.post('/prepare')
@@ -394,6 +397,10 @@ async def voice_pitch(t: str, instance_id: str):
         return {'available': False}
     index = max(samples)
     frame = samples[index]
+    position = room.clock.current()
+    history = [{'s': round(i*.1, 3), 'e': round((i+1)*.1, 3), 'pitch': item['pitch']}
+               for i, item in sorted(samples.items()) if position-6 <= i*.1 <= position+.2
+               and item.get('voiced') and item.get('pitch')]
     if not frame.get('voiced') or not frame.get('pitch') or frame.get('at', 0) < time.time()-1.5:
-        return {'available': False}
-    return {'available': True, 'pitch': frame['pitch'], 'position': index*.1}
+        return {'available': False, 'history': history}
+    return {'available': True, 'pitch': frame['pitch'], 'position': index*.1, 'history': history}

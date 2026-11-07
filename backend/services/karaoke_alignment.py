@@ -1,5 +1,60 @@
 """Portable word alignment conversion; no database or model imports."""
 
+def phrase_lines(lyrics, source_lines=None):
+    """Restore supplied lyric lines, or group transcription fragments by sung phrases."""
+    from services.karaoke_text import tokenize
+    tokens = [dict(token) for line in lyrics['lines'] for token in line['tokens']]
+    groups = []
+    if source_lines:
+        text, timing = '', []
+        for token in tokens:
+            for index, char in enumerate(token['t']):
+                if char.isspace():
+                    continue
+                text += char
+                timing.append((token['s']+(token['e']-token['s'])*index/len(token['t']),
+                               token['s']+(token['e']-token['s'])*(index+1)/len(token['t'])))
+        expected = ''.join(''.join(line.split()) for line in source_lines)
+        if expected != text:
+            raise ValueError('L’alignement a modifié le texte fourni ; vérifier les paroles et la langue.')
+        cursor = 0
+        for line in source_lines:
+            group = []
+            for piece in tokenize(line, lyrics['lang']):
+                length = len(''.join(piece['t'].split()))
+                if not length:
+                    continue
+                group.append({**piece, 's': round(timing[cursor][0], 3), 'e': round(timing[cursor+length-1][1], 3)})
+                cursor += length
+            if group:
+                groups.append(group)
+    else:
+        limit = 24 if lyrics['lang'] in ('ja', 'zh') else 52
+        group = []
+        for token in tokens:
+            if group and (token['s']-group[-1]['e'] > .65 or token['e']-group[0]['s'] > 6.5
+                          or sum(len(t['t']) for t in group)+len(token['t']) > limit
+                          or group[-1]['t'].endswith(('。','！','？','!','?'))):
+                groups.append(group)
+                group = []
+            group.append(token)
+        if group:
+            groups.append(group)
+        # Do not strand a very short suffix at the end of a continuous phrase.
+        balanced = []
+        for group in groups:
+            previous = balanced[-1] if balanced else None
+            if previous and sum(len(t['t']) for t in group) < 5 and group[0]['s']-previous[-1]['e'] < .35 \
+                    and group[-1]['e']-previous[0]['s'] <= 8.5 and sum(len(t['t']) for t in previous+group) <= limit+4:
+                previous.extend(group)
+            else:
+                balanced.append(group)
+        groups = balanced
+        if lyrics['lang'] in ('ja', 'zh') and groups:
+            regrouped = {**lyrics, 'lines': [{'tokens': group} for group in groups]}
+            return phrase_lines(regrouped, [''.join(token['t']+(' ' if token.get('sp') else '') for token in group) for group in groups])
+    return {**lyrics, 'lines': [{'t': group[0]['s'], 'e': group[-1]['e'], 'tokens': group} for group in groups]}
+
 def align_payload(result, lang, source='whisperx'):
     from services.karaoke_text import tokenize
     lines = []
