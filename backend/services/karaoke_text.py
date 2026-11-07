@@ -424,9 +424,18 @@ def _clean(tokens: list[dict]) -> list[dict]:
 # --------------------------------------------------------------------------------------
 # LRCLIB (https://lrclib.net) — API gratuite, sans clé ; appelée uniquement depuis le backend
 # --------------------------------------------------------------------------------------
-def _pick_synced(items: list, duration: float | None) -> str | None:
+def has_native_script(text: str, lang: str | None) -> bool:
+    """Do not mistake romanized CJK lyrics for original-language lyrics."""
+    pattern = {'ja': r'[\u3040-\u30ff\u3400-\u9fff]', 'zh': r'[\u3400-\u9fff]',
+               'ko': r'[\uac00-\ud7af\u1100-\u11ff]'}.get(lang)
+    content = re.sub(r'\[[^\]]*\]|<[^>]*>', '', text)
+    return not pattern or bool(re.search(pattern, content))
+
+
+def _pick_synced(items: list, duration: float | None, language: str | None = None) -> str | None:
     candidates = [
         item for item in items if isinstance(item, dict) and (item.get("syncedLyrics") or "").strip()
+        and has_native_script(item['syncedLyrics'], language)
     ]
     if not candidates:
         return None
@@ -442,6 +451,7 @@ async def fetch_lrclib(
     artist: str = "",
     album: str = "",
     duration: float | None = None,
+    language: str | None = None,
 ) -> str | None:
     """Paroles synchronisées (texte LRC) ou None. Les erreurs réseau sont avalées et journalisées."""
     base = base_url.rstrip("/")
@@ -458,7 +468,7 @@ async def fetch_lrclib(
             )
             if response.status_code == 200:
                 synced = (response.json() or {}).get("syncedLyrics")
-                if synced and synced.strip():
+                if synced and synced.strip() and has_native_script(synced, language):
                     return synced
         params = {"track_name": title}
         if artist:
@@ -467,7 +477,7 @@ async def fetch_lrclib(
         if response.status_code != 200:
             return None
         payload = response.json()
-        return _pick_synced(payload if isinstance(payload, list) else [], duration)
+        return _pick_synced(payload if isinstance(payload, list) else [], duration, language)
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("LRCLIB indisponible pour « %s » : %s", title, exc)
         return None

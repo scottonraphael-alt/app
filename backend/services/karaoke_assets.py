@@ -41,7 +41,7 @@ def notes_from_pitch(values, step=.1):
     for index, value in enumerate([*smooth, None]):
         if value == current:
             continue
-        if current is not None and (index-start)*step >= .12:
+        if current is not None and (index-start)*step >= .08:
             result.append({'s': round(start*step, 3), 'e': round(index*step, 3), 'midi': current})
         current, start = value, index
     return result

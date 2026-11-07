@@ -208,6 +208,7 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
         beat=NS(beat_track=lambda **kwargs: (120, np.array([1, 2]))),
         frames_to_time=lambda *args, **kwargs: np.array([.2, .7])))
     monkeypatch.setattr(cli, 'duration', lambda _: 2)
+    monkeypatch.setattr(cli, 'extract_pitch', lambda audio, sr: [220]*20)
     def process(arguments, **kwargs):
         if '-m' in arguments:
             base = Path(arguments[arguments.index('-o')+1])/'htdemucs'/source.stem
@@ -231,6 +232,15 @@ def test_mac_processor_contract_publishes_all_assets_and_manifest_last(monkeypat
     assert source.read_bytes() == b'source-original'
     model.align.assert_called_once()
     assert song.path.with_suffix('.lrc').read_text().count('<00:00.50>') == 2
+    reused = tmp_path/'repaired'
+    reused.mkdir()
+    def no_separation(*args, **kwargs):
+        raise AssertionError('Demucs must not run when reusing verified stems')
+    monkeypatch.setattr(cli, 'separate', no_separation)
+    cli.prepare(source, reused, NS(threads=2, device='cpu', no_lrclib=True, model='base', language=None, reuse_stems=destination))
+    assert assets.portable(NS(path=reused/source.name, remote=''))
+    for suffix in ('.inst.mp3', '.voix.mp3'):
+        assert (reused/(source.stem+suffix)).read_bytes() == (destination/(source.stem+suffix)).read_bytes()
 
 
 def test_demucs_auto_retries_cpu_but_explicit_device_and_cpu_failures_propagate(monkeypatch, tmp_path):
@@ -294,3 +304,45 @@ def test_browsing_unverified_library_does_not_hash_audio_on_the_api_thread(tmp_p
     monkeypatch.setattr(assets, 'sha256', forbidden_hash)
     assert track.public()['title'] == 'Titre'
     assert track.public()['stems'] is False
+
+
+def test_native_lyrics_are_preferred_to_romanized_japanese_and_latin_spaces_survive():
+    from services.karaoke_text import _pick_synced, has_native_script
+    from services.karaoke_alignment import align_payload
+    rows = [{'duration': 240, 'syncedLyrics': '[00:00]Zankoku na tenshi'},
+            {'duration': 241, 'syncedLyrics': '[00:00]残酷な天使'}]
+    assert _pick_synced(rows, 240, 'ja') == rows[1]['syncedLyrics']
+    assert _pick_synced(rows[:1], 240, 'ja') is None
+    assert has_native_script('안녕하세요', 'ko')
+    assert not has_native_script('annyeong', 'ko')
+    assert not has_native_script('[ar:高橋洋子]\n[00:01]Zankoku na tenshi', 'ja')
+    result = align_payload({'segments': [{'words': [{'word': 'Hello', 'start': 0, 'end': .5},
+        {'word': ' world', 'start': .5, 'end': 1}]}]}, 'ja')
+    assert result['lines'][0]['tokens'][0]['sp'] is True
+
+
+def test_short_real_notes_are_kept_and_pitch_aggregation_does_not_invent_silence(monkeypatch):
+    import numpy as np
+    import sys
+    cli = load_cli()
+    def pyin(audio, **options):
+        assert options['hop_length'] == 320 and options['frame_length'] == 2048
+        return np.array([220]*5+[np.nan]*5), np.array([True]*5+[False]*5), np.array([.3]*5+[0]*5)
+    monkeypatch.setitem(sys.modules, 'librosa', NS(pyin=pyin))
+    values = cli.extract_pitch(np.ones(3200)*.1, 16000)
+    assert values == [220, None]
+    assert assets.notes_from_pitch(values) == [{'s': 0., 'e': .1, 'midi': 57}]
+
+
+@pytest.mark.parametrize('failure,explanation', [('connect', 'démarrer le service karaoke-voice'), ('timeout', 'pas répondu à temps')])
+def test_voice_connection_errors_explain_missing_service_or_timeout(monkeypatch, failure, explanation):
+    import httpx
+    from fastapi import HTTPException
+    original_client = httpx.AsyncClient
+    def fail(request):
+        error = httpx.ConnectError if failure == 'connect' else httpx.ReadTimeout
+        raise error('test connection failure', request=request)
+    monkeypatch.setattr(tools.httpx, 'AsyncClient', lambda **kwargs: original_client(transport=httpx.MockTransport(fail), **kwargs))
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(tools.receiver('/start', {}))
+    assert raised.value.status_code == 503 and explanation in raised.value.detail

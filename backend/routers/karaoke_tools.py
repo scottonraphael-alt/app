@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 from uuid import uuid4
@@ -23,6 +24,7 @@ from services.karaoke_techniques import observe as observe_technique, summary as
 
 router = APIRouter(prefix='/activity/karaoke', tags=['karaoke-tools'])
 SESSIONS = {}  # One bot voice connection per guild. Like Activity rooms: one API process.
+logger = logging.getLogger(__name__)
 
 
 def claims(token):
@@ -58,6 +60,12 @@ async def receiver(path, payload):
             if not response.is_success:
                 raise HTTPException(503, response.json().get('error', 'Le service vocal refuse cette connexion.'))
             return response.json()
+    except httpx.ConnectError:
+        logger.warning('Récepteur karaoke-voice injoignable : vérifier le conteneur et son réseau Docker.')
+        raise HTTPException(503, 'Le récepteur vocal OasisLink est injoignable. Un administrateur doit démarrer le service karaoke-voice sur le serveur.')
+    except httpx.TimeoutException:
+        logger.warning('Délai dépassé pour la connexion au récepteur karaoke-voice.')
+        raise HTTPException(503, 'OasisLink n’a pas répondu à temps. Vérifie le service vocal et ses permissions Discord avant de réessayer.')
     except httpx.HTTPError:
         raise HTTPException(503, 'Service vocal indisponible. Le karaoké reste utilisable sans score vocal.')
 

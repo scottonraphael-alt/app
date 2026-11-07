@@ -98,17 +98,21 @@ def energy_map(mix, instrumental, vocals, sample_rate, seconds):
             'vocals': np.rint(voice*100).astype(int).tolist(), 'beats': beats, 'drops': drops}
 
 
-def source_lyrics(source, metadata, seconds, use_lrclib):
+def source_lyrics(source, metadata, seconds, use_lrclib, language=None):
+    from services.karaoke_text import has_native_script
     local = source.with_suffix('.lrc')
     if local.is_file():
-        return local.read_text(encoding='utf-8-sig'), 'provided'
+        raw = local.read_text(encoding='utf-8-sig')
+        if has_native_script(raw, language):
+            return raw, 'provided'
+        print('  LRC romanisée ignorée : recherche des paroles en écriture originale.', flush=True)
     if use_lrclib:
         import asyncio
         import httpx
         from services.karaoke_text import fetch_lrclib, LRCLIB_USER_AGENT
         async def fetch():
             async with httpx.AsyncClient(timeout=10, headers={'User-Agent': LRCLIB_USER_AGENT}) as client:
-                return await fetch_lrclib(client, 'https://lrclib.net', metadata['title'], metadata['artist'], '', seconds)
+                return await fetch_lrclib(client, 'https://lrclib.net', metadata['title'], metadata['artist'], '', seconds, language=language)
         try:
             raw = asyncio.run(fetch())
             if raw:
@@ -116,6 +120,28 @@ def source_lyrics(source, metadata, seconds, use_lrclib):
         except Exception as exc:
             print(f'  LRCLIB indisponible, transcription locale utilisée : {exc}', file=sys.stderr)
     return None, 'transcribed'
+
+
+def extract_pitch(audio, sr):
+    """Overlapping 20 ms analysis; retain voiced pYIN frames, aggregate at 100 ms."""
+    import librosa
+    import numpy as np
+    hop = round(sr*.02)
+    f0, voiced, probability = librosa.pyin(audio, sr=sr, fmin=65, fmax=1100,
+                                         frame_length=2048, hop_length=hop)
+    values = []
+    for index in range(math.ceil(len(audio)/(sr*.1))):
+        start, stop = index*5, (index+1)*5
+        candidates = [float(hz) for hz, active, confidence in zip(f0[start:stop], voiced[start:stop], probability[start:stop])
+                      if active and confidence >= .1 and np.isfinite(hz)]
+        chunk = audio[round(index*sr*.1):round((index+1)*sr*.1)]
+        rms = float(np.sqrt(np.mean(chunk**2))) if len(chunk) else 0
+        values.append(round(float(np.median(candidates)), 2) if candidates and rms >= .002 else None)
+    coverage = sum(value is not None for value in values)/max(1, len(values))
+    print(f'  Hauteur détectée sur {coverage:.0%} du morceau (silences compris).', flush=True)
+    if coverage < .15:
+        print('  Attention : mélodie peu exploitable ; vérifier la piste voix et le morceau.', flush=True)
+    return values
 
 
 def prepare(source, destination, args):
@@ -138,12 +164,22 @@ def prepare(source, destination, args):
         device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     with tempfile.TemporaryDirectory(prefix='.iris-mac-', dir=destination) as temporary:
         work = Path(temporary)
-        separate(source, work/'stems', device, args.threads, allow_cpu_fallback=args.device == 'auto')
-        vocals = work/'stems'/'htdemucs'/source.stem/'vocals.wav'
-        instrumental = vocals.with_name('no_vocals.wav')
+        reuse = getattr(args, 'reuse_stems', None)
+        if reuse:
+            from types import SimpleNamespace
+            from services.karaoke_assets import portable
+            existing = reuse/source.name
+            if not portable(SimpleNamespace(path=existing, remote='')) or sha256(existing) != sha256(source):
+                raise ValueError('Les pistes à réutiliser doivent appartenir à une préparation valide du même original.')
+            print('  Réutilisation des pistes séparées existantes ; Demucs ignoré.', flush=True)
+            vocals = existing.with_suffix('.voix.mp3')
+            instrumental = existing.with_suffix('.inst.mp3')
+        else:
+            separate(source, work/'stems', device, args.threads, allow_cpu_fallback=args.device == 'auto')
+            vocals = work/'stems'/'htdemucs'/source.stem/'vocals.wav'
+            instrumental = vocals.with_name('no_vocals.wav')
         if not vocals.is_file() or not instrumental.is_file():
             raise ValueError('Demucs n’a pas produit les deux pistes attendues.')
-        raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib)
         print('  Alignement des paroles avec Whisper sur la voix isolée…', flush=True)
         model = stable_whisper.load_model(args.model, device='cpu')
         transcript = model.transcribe(str(vocals), language=args.language, fp16=False)
@@ -151,6 +187,7 @@ def prepare(source, destination, args):
         language = args.language or result.get('language') or getattr(transcript, 'language', None)
         if not language:
             raise ValueError('Langue non détectée ; réessaie avec --language.')
+        raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language)
         if raw:
             provided = '\n'.join(entry['text'] for entry in parse_lrc(raw) if entry['text'].strip())
             # Plain .txt lyrics are also accepted when no timestamps are present.
@@ -158,14 +195,15 @@ def prepare(source, destination, args):
                 provided = re.sub(r'\[[^\]]*\]|<\d[^>]*>', '', raw).strip()
             result = model.align(str(vocals), provided, language=language).to_dict()
         lyrics = align_payload(result, language, source='stable-ts-mac')
+        from services.karaoke_text import has_native_script
+        if not has_native_script(''.join(token['t'] for line in lyrics['lines'] for token in line['tokens']), language):
+            raise ValueError('Transcription sans écriture originale ; fournir une LRC en kana/kanji (ou dans la langue du morceau).')
         validate_lyrics(lyrics, seconds)
         del model, transcript
         gc.collect()
         print('  Mélodie et carte d’énergie…', flush=True)
         y_voice, sr = librosa.load(str(vocals), sr=16000, mono=True)
-        f0, voiced, probability = librosa.pyin(y_voice, sr=sr, fmin=65, fmax=1100, frame_length=1024, hop_length=1600)
-        values = [round(float(hz), 2) if active and confidence >= .6 and np.isfinite(hz) else None
-                  for hz, active, confidence in zip(f0, voiced, probability)]
+        values = extract_pitch(y_voice, sr)
         signals = [librosa.load(str(path), sr=22050, mono=True)[0] for path in (source, instrumental, vocals)]
         energy = energy_map(*signals, 22050, seconds)
         validate_energy(energy, seconds)
@@ -173,8 +211,11 @@ def prepare(source, destination, args):
         for original, suffix in ((instrumental, '.inst.mp3'), (vocals, '.voix.mp3')):
             # Keep dots in an original title intact.
             output = work/(source.stem+suffix)
-            run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(original), '-map_metadata', '-1',
-                 '-codec:a', 'libmp3lame', '-q:a', '2', str(output)])
+            if reuse:
+                shutil.copy2(original, output)  # Avoid another lossy encoding of verified MP3 stems.
+            else:
+                run(['ffmpeg', '-nostdin', '-v', 'error', '-i', str(original), '-map_metadata', '-1',
+                     '-codec:a', 'libmp3lame', '-q:a', '2', str(output)])
             produced.append(output)
         pitch_path = work/(source.stem+'.pitch.json')
         pitch_path.write_text(json.dumps({'version': 1, 'step': .1, 'values': values}, allow_nan=False))
@@ -209,6 +250,7 @@ def main(argv=None):
     parser.add_argument('--language', default=None, help='Code langue facultatif ; détection automatique sinon')
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--no-lrclib', action='store_true')
+    parser.add_argument('--reuse-stems', type=Path, help='Dossier préparé valide dont réutiliser les pistes sans relancer Demucs')
     args = parser.parse_args(argv)
     if not args.folder.is_dir():
         parser.error('Le dossier source est introuvable.')

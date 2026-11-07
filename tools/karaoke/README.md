@@ -33,6 +33,8 @@ Options utiles :
 - `--language ja` impose une langue si la détection est mauvaise.
 - `--recursive` parcourt les sous-dossiers.
 - `--no-lrclib` évite la recherche de paroles en ligne.
+- Pour les langues japonaise, chinoise et coréenne, les résultats LRCLIB uniquement romanisés sont écartés : les paroles doivent rester dans leur écriture originale et la lecture latine se place au-dessus. Si aucune version compatible n'est trouvée, la transcription locale sert de source. Fournir une LRC correcte dans le dossier source reste préférable pour corriger une erreur de transcription.
+- `--reuse-stems "$HOME/Music/Karaoke-prepare"` réutilise une préparation existante vérifiée du même fichier audio pour recalculer paroles et mélodie sans relancer Demucs. On peut écrire dans un autre dossier pour comparer les résultats ; pour remplacer le dossier existant, ajouter `--overwrite`.
 
 ## Fichiers produits
 

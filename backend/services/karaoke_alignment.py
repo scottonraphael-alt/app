@@ -7,6 +7,30 @@ def align_payload(result, lang, source='whisperx'):
         units = segment.get('chars') if lang in ('ja', 'zh') else segment.get('words')
         units = units or segment.get('words', [])
         tokens = []
+        if lang in ('ja', 'zh'):
+            # Romanize complete lexical units, not separate model subword pieces.
+            # Keep each character's alignment so grouping never loses timing.
+            text, timing = '', []
+            for unit in units:
+                start, end = unit.get('start'), unit.get('end')
+                chunk = unit.get('char', unit.get('word', ''))
+                if start is None or end is None or not chunk or end <= start:
+                    continue
+                text += chunk
+                timing.extend((start+(end-start)*i/len(chunk), start+(end-start)*(i+1)/len(chunk)) for i in range(len(chunk)))
+            cursor = 0
+            for piece in tokenize(text, lang):
+                offset = text.find(piece['t'], cursor)
+                if offset < 0:
+                    raise ValueError('Le découpage des paroles ne correspond pas au texte aligné.')
+                stop = offset+len(piece['t'])
+                if tokens and text[cursor:offset].isspace():
+                    tokens[-1]['sp'] = True
+                tokens.append({**piece, 's': round(timing[offset][0], 3), 'e': round(timing[stop-1][1], 3)})
+                cursor = stop
+            if tokens:
+                lines.append({'t': tokens[0]['s'], 'e': tokens[-1]['e'], 'tokens': tokens})
+            continue
         for unit in units:
             start, end = unit.get('start'), unit.get('end')
             text = unit.get('char', unit.get('word', ''))
