@@ -167,7 +167,7 @@ function AuthenticatedApp({
 <Route path="/staff/dossiers/contact_staff/:caseId" element={canSeeCasework ? <ContactsStaffPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/dossiers/bubble" element={canSeeCasework ? <BullesPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/dossiers/bubble/:caseId" element={canSeeCasework ? <BullesPage canReassign={isResponsable || isServerAdmin} canSeeMember360={canSeeOperateur} /> : <Navigate to={defaultRoute} replace />} />
-<Route path="/staff/verifications" element={canSeeCasework ? <VerificationListPage responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
+<Route path="/staff/verifications" element={canSeeCasework ? <VerificationListPage responsable={isResponsable} canReassign={isResponsable||isServerAdmin} /> : <Navigate to={defaultRoute} replace />} />
 <Route path="/staff/verifications/:memberId" element={canSeeCasework ? <VerificationDetailPage canReassign={isResponsable||isServerAdmin} responsable={isResponsable} /> : <Navigate to={defaultRoute} replace />} />
           <Route
   path="/"
@@ -206,7 +206,7 @@ function AuthenticatedApp({
   path="/suivis"
   element={
     canSeeHelper ? (
-      <DashboardPage stats={stats} tickets={tickets} />
+      <DashboardPage stats={stats} tickets={tickets} helper={helper} isAdmin={isAdmin} onTicketUpdate={updateTicket} onTicketDeleted={deleteTicket} />
     ) : (
       <Navigate to={defaultRoute} replace />
     )
@@ -233,6 +233,9 @@ function AuthenticatedApp({
   element={
     canSeeHelper ? (
       <TicketArchivesPage
+        onTicketDeleted={deleteTicket}
+        isAdmin={isAdmin}
+        onTicketUpdate={updateTicket}
         tickets={tickets}
         helper={helper}
       />

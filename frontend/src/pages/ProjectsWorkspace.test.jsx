@@ -137,6 +137,7 @@ it('ouvre une création accessible et restaure le focus', async () => {
   await click('Nouveau projet');
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   await act(async () => document.querySelector('[aria-label="Fermer"]').click());
+  await act(async () => new Promise(resolve => setTimeout(resolve, 180)));
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(button);
 });

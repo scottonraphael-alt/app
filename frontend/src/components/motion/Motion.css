@@ -1,0 +1,80 @@
+.iris-motion-nav { position: relative; isolation: isolate; }
+.iris-nav-marker {
+  position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none;
+  border-radius: 10px; background: var(--iris-accent-soft, #e8efea);
+  opacity: 0; transition: transform 240ms cubic-bezier(.2,.8,.2,1), width 240ms ease, height 240ms ease, opacity 140ms ease;
+}
+.iris-motion-nav a[aria-current="page"] { background: transparent; }
+[data-motion-key][data-exiting="true"] { pointer-events: none; animation: iris-row-exit 180ms ease-in forwards; }
+@keyframes iris-row-exit { to { opacity: 0; transform: translateX(14px); } }
+@keyframes iris-feedback-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes iris-field-error { 0%,100% { transform:translateX(0); } 25% { transform:translateX(-3px); } 75% { transform:translateX(3px); } }
+:where(.app-shell,.cz-dialog-root) [role="alert"] { animation: iris-feedback-enter 180ms ease-out; }
+:where(.app-shell,.cz-dialog-root) :is(input,textarea,select):is([aria-invalid="true"],[data-motion-invalid="true"]) {
+  border-color: var(--iris-danger, #b45d67);
+  box-shadow: 0 2px 0 var(--iris-danger, #b45d67);
+  animation: iris-field-error 180ms ease-out;
+}
+:where(.app-shell,.cz-dialog-root) :is(input,textarea,select):user-invalid {
+  border-color: var(--iris-danger, #b45d67);
+}
+:where(.app-shell,.cz-dialog-root) :is(.vf-status,.cw-state,.tw-sync-status) { transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
+
+.pj-overlay.iris-modal-overlay { animation: iris-overlay-enter 160ms ease-out; }
+.pj-overlay.iris-modal-overlay .pj-modal { transform-origin: var(--iris-origin-x,50%) var(--iris-origin-y,50%); animation: iris-modal-enter 220ms cubic-bezier(.2,.8,.2,1); }
+.pj-overlay.iris-modal-overlay[data-closing="true"] { animation: iris-overlay-exit 160ms ease-in forwards; }
+.pj-overlay.iris-modal-overlay[data-closing="true"] .pj-modal { animation: iris-modal-exit 160ms ease-in forwards; }
+@keyframes iris-overlay-enter { from { opacity:0; } to { opacity:1; } }
+@keyframes iris-overlay-exit { to { opacity:0; } }
+@keyframes iris-modal-enter { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+@keyframes iris-modal-exit { to { opacity:0; transform:scale(.97); } }
+
+.pj-overlay.iris-drawer-overlay { justify-content:flex-end; padding:0; }
+.iris-drawer-overlay .pj-modal {
+  width:min(1060px,92vw); height:100dvh; max-height:100dvh; margin:0; border-radius:20px 0 0 20px;
+  animation:iris-drawer-enter 280ms cubic-bezier(.2,.8,.2,1)!important;
+}
+.iris-drawer-overlay[data-closing="true"] .pj-modal { animation:iris-drawer-exit 160ms ease-in forwards!important; }
+.iris-drawer-overlay .pj-modal > header { position:sticky; top:0; z-index:2; background:var(--iris-surface,#fff); padding:16px 24px; }
+.iris-drawer-overlay :is(.cw-layout,.vf-layout) { grid-template-columns: minmax(0,1fr); }
+.iris-drawer-overlay :is(.cw-page,.vf-page) { padding:0; }
+.iris-drawer-overlay .cz-header { margin-block:16px; }
+.iris-drawer-overlay .cz-header h1 { font-size:28px; }
+.iris-drawer-overlay .cw-families { display:none; }
+.iris-preview-actions { display:flex; justify-content:flex-end; padding-bottom:16px; }
+.iris-preview-trigger { display:inline-grid; place-items:center; margin-inline-start:8px; padding:5px; border:0; border-radius:6px; background:transparent; color:inherit; cursor:pointer; vertical-align:middle; }
+.iris-preview-trigger:hover { background:var(--iris-accent-soft,#e8efea); }
+.iris-preview-trigger:focus-visible { outline:2px solid var(--iris-accent,#486b5b); outline-offset:2px; }
+@keyframes iris-drawer-enter { from { transform:translateX(100%); } to { transform:translateX(0); } }
+@keyframes iris-drawer-exit { to { transform:translateX(100%); } }
+@media(max-width:600px) { .iris-drawer-overlay .pj-modal { width:100%; border-radius:0; } }
+@media(prefers-reduced-motion:reduce) {
+  .iris-nav-marker, :where(.app-shell,.cz-dialog-root) :is(.vf-status,.cw-state,.tw-sync-status) { transition:none; }
+  [data-motion-key][data-exiting="true"], :where(.app-shell,.cz-dialog-root) [role="alert"],
+  :where(.app-shell,.cz-dialog-root) :is(input,textarea,select):is([aria-invalid="true"],[data-motion-invalid="true"]),
+  .pj-overlay.iris-modal-overlay, .pj-overlay.iris-modal-overlay .pj-modal,
+  .pj-overlay.iris-modal-overlay[data-closing="true"], .pj-overlay.iris-modal-overlay[data-closing="true"] .pj-modal { animation:none!important; }
+}
+
+.iris-ticket-row { position:relative; }
+.iris-ticket-row + .iris-ticket-row { border-top:1px solid var(--iris-border,#e1e7e1); }
+.iris-ticket-row > :is(.tl-ticket,.tar-ticket) { padding-inline-end:58px; }
+.iris-ticket-row > .iris-preview-trigger { position:absolute; inset-inline-end:15px; top:50%; transform:translateY(-50%); min-width:32px; min-height:32px; }
+.iris-drawer-overlay .tw-desk { padding:0; min-height:0; }
+.iris-drawer-overlay .tw-topbar { padding:0; flex-direction:column; align-items:stretch; }
+.iris-drawer-overlay .tw-top-actions { max-width:100%; justify-content:flex-start; }
+.iris-drawer-overlay .tw-layout { grid-template-columns:minmax(0,1fr); }
+.iris-drawer-overlay .tw-dossier { position:relative; top:auto; }
+.iris-drawer-overlay .tw-home { display:none; }
+.iris-drawer-overlay .tw-identity h1 { font-size:28px; }
+:where(.app-shell,.cz-dialog-root) .tl-status { transition:background-color 180ms ease,color 180ms ease; animation:case-status-arrive 240ms ease-out; }
+@media(prefers-reduced-motion:reduce) { :where(.app-shell,.cz-dialog-root) .tl-status { transition:none; animation:none; } }
+
+.iris-drawer-overlay .pj-modal > :is(.iris-preview-actions,.cz-page,.tw-desk) { margin-inline:24px; }
+.iris-drawer-overlay .pj-modal > .iris-preview-actions { padding-block:16px; }
+.iris-motion-nav.tb-favorites .tb-chip.active { background:transparent; }
+.iris-motion-nav.cw-families a[aria-current="page"] { background:transparent; }
+@media(prefers-reduced-motion:reduce) {
+  [data-radix-portal] [data-state], [role="dialog"][data-state], [data-state].fixed.inset-0 { animation:none!important; transition:none!important; }
+}
+.iris-drawer-overlay .pj-modal > .cz-page { width:auto; min-height:0; }

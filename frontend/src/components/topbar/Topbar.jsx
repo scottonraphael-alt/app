@@ -8,6 +8,7 @@ import useTheme from "../../hooks/useTheme";
 import { OPEN_EVENT } from "../command/CommandPalette";
 import StatusPicker from "../team/StatusPicker";
 import "./Topbar.css";
+import { MotionNav } from "../motion/Motion";
 
 const FAVORITES_KEY = ["profile", "favorites"];
 const NOTIFICATIONS_KEY = ["notifications"];
@@ -58,7 +59,7 @@ function FavoritesBar() {
   };
 
   return (
-    <nav className="tb-favorites" aria-label="Favoris" data-testid="favorites-bar">
+    <MotionNav className="tb-favorites" aria-label="Favoris" data-testid="favorites-bar">
       <Star size={15} className="tb-star" aria-hidden="true" />
       {favorites.length === 0 && !editing && <span className="tb-hint">Aucun favori</span>}
       {favorites.map((key, index) => (
@@ -98,7 +99,7 @@ function FavoritesBar() {
       >
         {editing ? <Check size={15} /> : <Pencil size={14} />}
       </button>
-    </nav>
+    </MotionNav>
   );
 }
 

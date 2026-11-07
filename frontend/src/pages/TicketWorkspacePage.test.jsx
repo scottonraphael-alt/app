@@ -164,3 +164,25 @@ it("enregistre la confirmation du résumé même si le message arrive en plusieu
     expect(toast.error).not.toHaveBeenCalled();
   } finally { global.fetch = originalFetch; global.TextDecoder = originalDecoder; }
 });
+
+it("conserve les messages pendant une actualisation au lieu de démonter la conversation", async () => {
+  const existing = container.querySelector('[data-testid="transcript-message-message-1"]');
+  let deliver;
+  api.get.mockImplementationOnce(() => new Promise(resolve => { deliver = resolve; }));
+  await click('[data-testid="sync-ticket-button"]');
+  expect(container.querySelector('.tw-messages').getAttribute('aria-busy')).toBe('true');
+  expect(container.querySelector('[data-testid="transcript-message-message-1"]')).toBe(existing);
+  await act(async () => deliver({ data: { total: 1, messages: [{
+    id: "message-1", content: "Actualisé", timestamp: "2026-10-01",
+    author: { id: "member", username: "Membre" },
+  }] } }));
+  expect(container.querySelector('[data-testid="transcript-message-message-1"]')).toBe(existing);
+  expect(existing.textContent).toContain('Actualisé');
+});
+
+it("charge le dossier choisi dans l’aperçu indépendamment du paramètre de la route", async () => {
+  await act(async () => root.render(<TicketWorkspacePage ticketId="preview-ticket" embedded />));
+  expect(api.post).toHaveBeenCalledWith('/tickets/preview-ticket/view');
+  expect(api.get).toHaveBeenCalledWith('/tickets/preview-ticket/messages', expect.anything());
+  expect(document.body.classList.contains('ticket-workspace-no-nav')).toBe(false);
+});

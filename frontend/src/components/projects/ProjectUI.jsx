@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useProjectAudit } from './projectAudit';
 import { personName, PRIORITY } from './projectUtils';
+import { motionAllowed } from '../motion/Motion';
 import '../../Casier.css';
 import '../../Projects.css';
 export function ProjectPage({
@@ -28,30 +29,53 @@ export function Modal({
   onClose,
   busy = false,
   eyebrow = 'ATELIER DES PROJETS',
-  className = ''
+  className = '',
+  variant = 'modal'
 }) {
   const root = useRef(null);
+  const titleId = useId();
+  const [closing, setClosing] = useState(false);
+  useLayoutEffect(() => {
+    const trigger = document.activeElement?.getBoundingClientRect?.();
+    const rect = root.current?.getBoundingClientRect();
+    if (trigger && rect && trigger.width && trigger.height) {
+      root.current.style.setProperty('--iris-origin-x', `${trigger.left + trigger.width / 2 - rect.left}px`);
+      root.current.style.setProperty('--iris-origin-y', `${trigger.top + trigger.height / 2 - rect.top}px`);
+    }
+  }, []);
+  useEffect(() => {
+    if (!closing) return;
+    const timer = window.setTimeout(() => close.current(), 160);
+    return () => window.clearTimeout(timer);
+  }, [closing]);
+  const dismiss = () => {
+    if (busy || closing) return;
+    if (!motionAllowed()) close.current();
+    else setClosing(true);
+  };
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
     const previous = document.activeElement;
+    const previousScope = previous?.closest?.('.cz-page,.tl-page,.tar-page');
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     root.current?.querySelector('input,textarea,select,button')?.focus();
     return () => {
       document.body.style.overflow = oldOverflow;
-      previous?.focus?.();
+      if (previous?.isConnected && !previous.closest?.('[inert]')) previous.focus?.();
+      else if (previousScope?.isConnected) previousScope.querySelector('button:not(:disabled),a[href]')?.focus();
     };
   }, []);
-  return createPortal(<div className="pj-overlay cz-dialog-root" onMouseDown={e => {
-    if (e.target === e.currentTarget && !busy) close.current();
+  return createPortal(<div className={`pj-overlay cz-dialog-root iris-modal-overlay ${variant === 'drawer' ? 'iris-drawer-overlay' : ''}`} data-closing={closing || undefined} onMouseDown={e => {
+    if (e.target === e.currentTarget) dismiss();
   }} onKeyDown={e => {
     if (e.key === 'Escape' && !busy) {
       e.stopPropagation();
-      close.current();
+      dismiss();
     }
     if (e.key === 'Tab') {
-      const items = [...root.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"],[contenteditable="true"]')];
+      const items = [...root.current.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"],[contenteditable="true"]')].filter(item => !item.closest('[inert],[hidden]'));
       const first = items[0],
         last = items[items.length - 1];
       if (e.shiftKey && document.activeElement === first) {
@@ -62,7 +86,7 @@ export function Modal({
         first?.focus();
       }
     }
-  }}><div className={`pj-modal ${className}`} role="dialog" aria-modal="true" aria-labelledby="pj-modal-title" ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id="pj-modal-title">{title}</h2></div><button className="pj-icon" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
+  }}><div className={`pj-modal ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2></div><button className="pj-icon" onClick={dismiss} disabled={busy || closing} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
 }
 export function Avatar({
   member

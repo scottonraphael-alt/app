@@ -26,6 +26,8 @@ it("limite la vue À traiter aux dossiers ouverts concernés et affiche leur mot
     expect(filter.textContent).toContain("1");
     await act(async () => filter.click());
     expect(container.querySelector('[data-testid="ticket-row-late"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ticket-row-current"]').closest('[inert]')).not.toBeNull();
+    await act(async () => new Promise(resolve => setTimeout(resolve, 200)));
     expect(container.querySelector('[data-testid="ticket-row-current"]')).toBeNull();
     expect(container.querySelector('[data-testid="ticket-row-archive"]')).toBeNull();
     expect(container.textContent).toContain("Sans suivi depuis 7 jours");

@@ -3,10 +3,12 @@ import "../WorkflowSettings.css";
 // Prepared routes: mount each page behind the existing Staff access guard at integration.
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, RefreshCw, Search, FileText, LockKeyhole } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RefreshCw, Search, FileText, LockKeyhole, PanelRightOpen, Check } from 'lucide-react';
 import { api, getErrorMessage } from '../api/client';
 import { Modal } from '../components/projects/ProjectUI';
 import { ActionProgressButton, CasePanelLoading, SlidingPanels } from '../components/casework/CaseMotion';
+import { MotionNav, MotionRows } from '../components/motion/Motion';
+import CasePreview from '../components/casework/CasePreview';
 import '../Casier.css';
 import '../Casework.css';
 
@@ -30,32 +32,35 @@ const mediaUrl = path => {
   return (api.defaults?.baseURL?.replace(/\/api\/?$/, '') || '') + path;
 };
 
-function Frame({ kind, title, children, back, refresh }) {
+function Frame({ kind, title, children, back, refresh, embedded = false }) {
   const family = FAMILIES[kind];
   useEffect(() => {
+    if (embedded) return;
     document.body.classList.add('casier-no-nav');
     return () => document.body.classList.remove('casier-no-nav');
-  }, []);
-  return <main className={`cz-page cw-page cw-${family.tone}`}>
+  }, [embedded]);
+  const Container = embedded ? 'section' : 'main';
+  return <Container className={`cz-page cw-page cw-${family.tone}`}>
     <header className="cz-header">
       <div><p className="cz-eyebrow">ESPACE STAFF · DOSSIERS</p><h1>{title || family.title}</h1><p className="cz-intro">{family.intro}</p></div>
       <nav className="cz-header-actions" aria-label="Navigation du dossier">
-        {back && <Link className="cw-button" to={pathFor(kind)}><ArrowLeft size={16} /> {family.short}</Link>}
+        {back && !embedded && <Link className="cw-button" to={pathFor(kind)}><ArrowLeft size={16} /> {family.short}</Link>}
         <button className="cw-button" onClick={refresh}><RefreshCw size={16} /> Actualiser la vue</button>
         <Link className="cw-button" to="/">Accueil <ArrowRight size={16} /></Link>
       </nav>
     </header>
-    <nav className="cw-families" aria-label="Familles de dossiers">{Object.entries(FAMILIES).filter(([value])=>value!=='support').map(([value, item]) =>
-      <Link key={value} to={pathFor(value)} aria-current={kind === value ? 'page' : undefined}>{item.short}</Link>)}</nav>
+    <MotionNav className="cw-families" aria-label="Familles de dossiers">{Object.entries(FAMILIES).filter(([value])=>value!=='support').map(([value, item]) =>
+      <Link key={value} to={pathFor(value)} aria-current={kind === value ? 'page' : undefined}>{item.short}</Link>)}</MotionNav>
     {children}
-  </main>;
+  </Container>;
 }
 
 function State({ row }) {
-  return <span key={row.status} className={`cw-state cw-state-${row.status} case-status-feedback`}>{STATES[row.status] || row.status}</span>;
+  return <span key={row.status} className={`cw-state cw-state-${row.status} case-status-feedback`}>{row.status === 'archived' && <Check size={13} aria-hidden="true" />}{STATES[row.status] || row.status}</span>;
 }
 
-function CaseList({ kind }) {
+function CaseList({ kind, canReassign, canSeeMember360 }) {
+  const [preview, setPreview] = useState(null);
   const [archived, setArchived] = useState(false), [attention, setAttention] = useState(false), [offset, setOffset] = useState(0);
   const [views, setViews] = useState({}), [error, setError] = useState(''), [refresh, setRefresh] = useState(0);
   const [importing, setImporting] = useState(false), [channelId, setChannelId] = useState(''), [busy, setBusy] = useState(false);
@@ -89,9 +94,9 @@ function CaseList({ kind }) {
         const panelOffset = view === archived ? offset : views[view]?.offset ?? 0;
         if (!panelData) return !error || view !== archived ? <section key={String(view)} className="cw-card"><CasePanelLoading /></section> : null;
         return <section key={String(view)} className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
-      <tbody>{panelData.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link>
+      <MotionRows>{panelData.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${row.member?.display_name || row.member?.username || row.member?.id}`} onClick={() => setPreview(row)}><PanelRightOpen size={16} aria-hidden="true" /></button>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>
-        <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</tbody></table></div>
+        <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</MotionRows></table></div>
       {!panelData.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
       <footer className="cw-toolbar"><button className="cw-button" disabled={!panelOffset} onClick={() => setOffset(n => Math.max(0, n - 25))}>Précédent</button>
         <span>Page {Math.floor(panelOffset / 25) + 1} sur {Math.max(1, Math.ceil(panelData.total / 25))} · {panelData.total} dossiers</span>
@@ -99,6 +104,9 @@ function CaseList({ kind }) {
     </section>;
       })}
     </SlidingPanels>
+    {preview && <CasePreview title={preview.member?.display_name || preview.member?.username || 'Dossier du membre'} href={`${pathFor(kind)}/${preview.id}`} onClose={() => { setPreview(null); setRefresh(n => n + 1); }}>
+      <CaseDetail key={preview.id} kind={kind} caseId={preview.id} embedded canReassign={canReassign} canSeeMember360={canSeeMember360} />
+    </CasePreview>}
     {importing && <Modal title="Ajouter un salon existant" eyebrow="DOSSIERS IRIS" onClose={() => setImporting(false)} busy={busy}>
       <form className="cw-modal" onSubmit={importChannel}><p>Le salon doit appartenir aux catégories autorisées et posséder un panneau d’ouverture reconnu. Cette opération ne crée aucun salon Discord.</p>
         {error && <p role="alert">{error}</p>}<label>Identifiant du salon<input required pattern="[0-9]{17,20}" value={channelId} onChange={e => setChannelId(e.target.value)} /></label>
@@ -107,7 +115,7 @@ function CaseList({ kind }) {
   </Frame>;
 }
 
-function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false }) {
+function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false, embedded = false }) {
   const [row, setRow] = useState(null), [error, setError] = useState(''), [refresh, setRefresh] = useState(0);
   const [messages, setMessages] = useState(null), [messageError, setMessageError] = useState(''), [offset, setOffset] = useState(0), [query, setQuery] = useState(''), [search, setSearch] = useState('');
   const [tab, setTab] = useState('notes'), [draftNote, setDraftNote] = useState(''), [assignee, setAssignee] = useState(''), [reason, setReason] = useState('');
@@ -148,7 +156,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
   const action = (name, extra = {}) => setConfirm({ action: name, revision: row.revision, ...extra });
-  return <Frame kind={kind} title={row?.member?.display_name || row?.member?.username || 'Dossier du membre'} back refresh={() => setRefresh(n => n + 1)}>
+  return <Frame embedded={embedded} kind={kind} title={row?.member?.display_name || row?.member?.username || 'Dossier du membre'} back refresh={() => setRefresh(n => n + 1)}>
     {error && <p role="alert" className="cw-alert">{error}</p>}{!row && !error && <p role="status">Chargement du dossier…</p>}
     {row && <><section className="cw-strip"><State row={row} /><span>Intervenant : {row.assigned?((row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible'))+' · '+row.assigned.id):'À attribuer'}</span><span>Ouvert le {date(row.created_at)}</span>
       {row.visibility !== 'staff' && <strong><LockKeyhole size={14} /> Accès confidentiel</strong>}</section>
@@ -195,7 +203,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
 
 function FamilyPage({ kind, canReassign = false, canSeeMember360 = false }) {
   const { caseId } = useParams();
-  return caseId ? <CaseDetail key={`${kind}:${caseId}`} kind={kind} caseId={caseId} canReassign={canReassign} canSeeMember360={canSeeMember360} /> : <CaseList key={kind} kind={kind} />;
+  return caseId ? <CaseDetail key={`${kind}:${caseId}`} kind={kind} caseId={caseId} canReassign={canReassign} canSeeMember360={canSeeMember360} /> : <CaseList key={kind} kind={kind} canReassign={canReassign} canSeeMember360={canSeeMember360} />;
 }
 export const VerificationTicketsPage = props => <FamilyPage kind="verification" {...props} />;
 export const ConvocationsPage = props => <FamilyPage kind="summons" {...props} />;

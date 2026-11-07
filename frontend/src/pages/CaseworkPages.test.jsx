@@ -83,3 +83,15 @@ test('rejected permission action displays its reason instead of remaining in pro
   expect(container.textContent).toContain('Non appliquée');
   expect(container.textContent).toContain('Le bénéficiaire ne peut pas être retiré.');
 });
+
+test('ouvre un aperçu sans quitter la liste et actualise celle-ci à la fermeture', async () => {
+  await render(<ContactsStaffPage />);
+  await click(container.querySelector('[aria-label="Aperçu du dossier de Alex"]'));
+  expect(container.querySelector('table')).not.toBeNull();
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(api.get).toHaveBeenCalledWith('/casework/case-1');
+  expect(container.querySelector('a[href="/staff/dossiers/contact_staff/case-1"]').textContent).toBe('Alex');
+  await click([...container.querySelectorAll('[role="dialog"] button')].find(el => el.textContent === 'Fermer'));
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.classList.contains('casier-no-nav')).toBe(true);
+});

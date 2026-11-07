@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
   ArrowRight,
+  PanelRightOpen,
   Search,
   Users,
   X,
 } from "lucide-react";
+import { MotionRows } from "../components/motion/Motion";
+import TicketPreview from "../components/casework/TicketPreview";
 import { Link } from "react-router-dom";
 
 import "../TicketArchives.css";
@@ -75,7 +78,11 @@ function MemberAvatar({ member }) {
 export default function TicketArchivesPage({
   tickets = [],
   helper,
+  isAdmin = false,
+  onTicketUpdate,
+  onTicketDeleted,
 }) {
+  const [preview, setPreview] = useState(null);
   const [search, setSearch] = useState("");
   const [onlyMine, setOnlyMine] = useState(false);
 
@@ -159,6 +166,7 @@ export default function TicketArchivesPage({
         </Link>
       </header>
 
+      {preview && <TicketPreview ticket={preview} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
       <section
         className="tar-panel"
         aria-labelledby="tar-list-title"
@@ -230,6 +238,7 @@ export default function TicketArchivesPage({
           </div>
         </div>
 
+        <MotionRows as="div" className="tar-list">
         {visibleTickets.length === 0 ? (
           <div className="tar-empty">
             <Archive size={32} aria-hidden="true" />
@@ -256,11 +265,8 @@ export default function TicketArchivesPage({
               </button>
             )}
           </div>
-        ) : (
-          <div className="tar-list">
-            {visibleTickets.map((ticket) => (
-              <Link
-                key={ticket.id}
+        ) : visibleTickets.map((ticket) => (
+              <div className="iris-ticket-row" key={ticket.id}><Link
                 to={`/tickets/${ticket.id}`}
                 className="tar-ticket"
               >
@@ -290,10 +296,9 @@ export default function TicketArchivesPage({
                   size={19}
                   aria-hidden="true"
                 />
-              </Link>
+              </Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${displayName(ticket.member)}`} onClick={() => setPreview(ticket)}><PanelRightOpen size={17} aria-hidden="true" /></button></div>
             ))}
-          </div>
-        )}
+        </MotionRows>
 
         <footer className="tar-panel-footer">
           La recherche porte sur les tickets déjà chargés dans Iris.

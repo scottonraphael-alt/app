@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   HeartHandshake,
+  PanelRightOpen,
   Plus,
   Search,
   Users,
@@ -22,6 +23,8 @@ import TagFilter from "../components/tickets/extras/TagFilter";
 import useTicketTags from "../components/tickets/extras/useTicketTags";
 
 import "../TicketList.css";
+import { MotionRows } from "../components/motion/Motion";
+import TicketPreview from "../components/casework/TicketPreview";
 
 function displayName(member) {
   return (
@@ -103,7 +106,11 @@ export default function DashboardPage({
   loading = false,
   error = "",
   onRetry,
+  isAdmin = false,
+  onTicketUpdate,
+  onTicketDeleted,
 }) {
+  const [preview, setPreview] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [assignmentFilter, setAssignmentFilter] = useState("all");
@@ -247,6 +254,7 @@ export default function DashboardPage({
       </header>
       <div className="cz-dialog-root"><WorkflowRequests kind="support"/></div>
 
+      {preview && <TicketPreview ticket={preview} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
       <section className="tl-panel" aria-labelledby="tl-list-title">
         <header className="tl-panel-header">
           <span className="tl-panel-icon">
@@ -362,6 +370,7 @@ export default function DashboardPage({
           </div>
         </div>
 
+        <MotionRows as="div" className="tl-list">
         {loading ? (
           <div className="tl-empty" role="status">
             <p>Chargement des suivis…</p>
@@ -415,15 +424,12 @@ export default function DashboardPage({
               </Link>
             )}
           </div>
-        ) : (
-          <div className="tl-list">
-            {visibleTickets.map((ticket) => {
+        ) : visibleTickets.map((ticket) => {
               const followUpStatus =
                 ticket.follow_up_status || "en attente de réponse";
 
               return (
-                <Link
-                  key={ticket.id}
+                <div className="iris-ticket-row" key={ticket.id}><Link
                   to={`/tickets/${ticket.id}`}
                   className="tl-ticket"
                   title={(ticket.attention_reasons || []).map((reason) => ATTENTION_LABELS[reason]).join(" · ")}
@@ -459,7 +465,7 @@ export default function DashboardPage({
                   </span>
 
                   <span
-                    className={`tl-status ${statusClass(
+                    key={followUpStatus} className={`tl-status ${statusClass(
                       followUpStatus
                     )}`}
                   >
@@ -471,11 +477,10 @@ export default function DashboardPage({
                     size={19}
                     aria-hidden="true"
                   />
-                </Link>
+                </Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${displayName(ticket.member)}`} onClick={() => setPreview(ticket)}><PanelRightOpen size={17} aria-hidden="true" /></button></div>
               );
             })}
-          </div>
-        )}
+        </MotionRows>
 
         <footer className="tl-panel-footer">
           <span>

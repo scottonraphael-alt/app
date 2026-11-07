@@ -74,3 +74,12 @@ test('displays automatically generated advice without a manual request',async()=
  expect(container.textContent).toContain('Préavis automatique disponible.');
  expect(api.post).not.toHaveBeenCalled();
 });
+
+test('ouvre le formulaire dans un aperçu en conservant la liste derrière',async()=>{
+ api.get.mockImplementation(async url=>({data:url==='/staff/verifications'?{items:[row],total:1}:row}));
+ await render(<VerificationListPage/>);
+ await click(container.querySelector('[aria-label="Aperçu du formulaire de Alex"]'));
+ expect(container.querySelector('table')).not.toBeNull();
+ expect(container.querySelector('[role="dialog"]').textContent).toContain('Présentation personnelle');
+ expect(api.get).toHaveBeenCalledWith('/staff/verifications/500000000000000001');
+});

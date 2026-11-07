@@ -11,6 +11,7 @@ import CrisisBanner from "../components/tickets/ai/CrisisBanner";
 import TicketSignals from "../components/tickets/ai/TicketSignals";
 import ReplyComposer from "../components/tickets/ai/ReplyComposer";
 import TicketExtrasPanel from "../components/tickets/extras/TicketExtrasPanel";
+import { useNewMessageMotion } from "../components/motion/Motion";
 import { ActionProgressButton, SlidingPanels } from "../components/casework/CaseMotion";
 import usePresence from "../components/tickets/ai/usePresence";
 import "../TicketWorkspace.css";
@@ -29,22 +30,25 @@ function MessageAvatar({ author }) {
 }
 
 
-export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, isAdmin, helper }) {
-  const { ticketId } = useParams();
+export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, isAdmin, helper, ticketId: previewTicketId, embedded = false }) {
+  const { ticketId: routeTicketId } = useParams();
+  const ticketId = previewTicketId || routeTicketId;
   const [dossierTab, setDossierTab] = useState(null);
   const currentDossierTab = dossierTab?.ticketId === ticketId ? dossierTab : null;
   const selectedDossierTab = currentDossierTab?.value ?? "resume";
 
   useEffect(() => {
+    if (embedded) return;
     document.body.classList.add("ticket-workspace-no-nav");
     return () => document.body.classList.remove("ticket-workspace-no-nav");
-  }, []);
+  }, [embedded]);
   const navigate = useNavigate();
   const [ticket, setTicket] = useState(null);
   const [page, setPage] = useState(1);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [messagesError, setMessagesError] = useState("");
+  const [loadedMessageContext, setLoadedMessageContext] = useState(null);
   const [messagesVersion, setMessagesVersion] = useState(0);
   const transcriptRef = useRef(null);
   const lastSyncRef = useRef(null);
@@ -80,6 +84,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [mobileView, setMobileView] = useState("messages");
   const { viewers, notifyTyping } = usePresence(ticketId);
+  useNewMessageMotion(transcriptRef, `${ticketId}:${page}`, messages, !loading && !searchOpen);
 
   useEffect(() => {
     let active = true;
@@ -127,6 +132,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         const lastPage = Math.max(1, Math.ceil(data.total / pageSize));
         if (page > lastPage) { setPage(lastPage); return; }
         setMessages(data.messages);
+        setLoadedMessageContext(`${ticketId}:${page}`);
         setTicket((current) => current ? { ...current, message_count: data.total } : current);
       })
       .catch((requestError) => { if (!controller.signal.aborted) setMessagesError(getErrorMessage(requestError)); })
@@ -242,7 +248,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       await api.delete(`/admin/tickets/${ticketId}`);
       onTicketDeleted?.(ticketId);
       toast.success("Dossier supprimé.");
-      navigate("/");
+      if (!embedded) navigate("/");
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
     }
@@ -334,6 +340,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
 
   // Le message d’ouverture du bot reste dans le dossier pour l’import et l’IA,
   // mais son contenu V2 n’est pas présenté dans la conversation.
+  const hasCurrentMessages = loadedMessageContext === `${ticketId}:${page}`;
   const visibleMessages = page === 1 && messages[0]?.author?.is_bot ? messages.slice(1) : messages;
   const pageCount = Math.max(1, Math.ceil(ticket.message_count / pageSize));
   const dirty = vocalSummary !== (ticket.vocal_summary || "") || personTriggers !== (ticket.person_triggers || "") || followUpStatus !== (ticket.follow_up_status || "en attente de réponse");
@@ -400,15 +407,15 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           <div className="tw-messages" ref={transcriptRef} aria-busy={messagesLoading}>
             {searchOpen && <div className="tw-search-results">{searchError && <p role="alert">{searchError}</p>}{searchResults && <><p className="tw-caption">{searchResults.total} résultat(s) dans tout le dossier</p>{searchResults.items.map((item) => <button type="button" className="tw-search-result" key={item.message_id} onClick={() => openSearchResult(item)}><strong>{item.author_name}</strong><time>{formatTime(item.timestamp)}</time><p>{item.excerpt}</p><span>Ouvrir à la page {item.message_page} →</span></button>)}<div className="tw-search-pages"><button className="tw-button" type="button" disabled={searchLoading || searchResults.page <= 1} onClick={() => searchMessages(null, searchResults.page - 1)}>Résultats précédents</button><button className="tw-button" type="button" disabled={searchLoading || searchResults.page * 20 >= searchResults.total} onClick={() => searchMessages(null, searchResults.page + 1)}>Résultats suivants</button></div></>}</div>}
             {!searchOpen && !messagesLoading && !messagesError && visibleMessages.length === 0 && <div className="tw-empty" data-testid="empty-transcript"><HeartHandshake size={26} /><h3>La conversation commence ici</h3><p>Les échanges de l’accompagnement apparaîtront ici.</p></div>}
-            {!searchOpen && messagesLoading && <div className="tw-empty" role="status"><LoaderCircle className="tw-spin" size={24} /><p>Chargement des messages…</p></div>}
+            {!searchOpen && messagesLoading && !hasCurrentMessages && <div className="tw-empty" role="status"><LoaderCircle className="tw-spin" size={24} /><p>Chargement des messages…</p></div>}
             {!searchOpen && messagesError && <div className="tw-empty tw-error" role="alert"><p>{messagesError}</p><button className="tw-button" type="button" onClick={() => setMessagesVersion((value) => value + 1)}>Réessayer</button></div>}
-            {!searchOpen && !messagesLoading && !messagesError && visibleMessages.map((message, index) => {
+            {!searchOpen && hasCurrentMessages && !messagesError && visibleMessages.map((message, index) => {
               const day = new Date(message.timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
               const previousDay = index ? new Date(visibleMessages[index - 1].timestamp).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : null;
               const body = <><p className="tw-message-text">{message.content}</p>{(message.attachments || []).map((attachment) => <a className="tw-attachment" href={attachment.url} key={attachment.id} target="_blank" rel="noreferrer" onClick={() => ticketEvent("attachment.opened", ticketId, attachment.id)} data-testid={`attachment-${attachment.id}`}><FileText size={14} />{attachment.filename}</a>)}</>;
               return <div key={message.id}>
                 {day !== previousDay && <div className="tw-day"><span>{day}</span></div>}
-                <article id={`tw-message-${message.id}`} className={`tw-message${highlightedMessage === message.id ? " is-search-hit" : ""}${message.author.is_bot ? " is-bot" : ""}${message.author.id === ticket.member.id ? " is-member" : ""}`} data-testid={`transcript-message-${message.id}`}>
+                <article id={`tw-message-${message.id}`} className={`tw-message${highlightedMessage === message.id ? " is-search-hit" : ""}${message.author.is_bot ? " is-bot" : ""}${message.author.id === ticket.member.id ? " is-member" : ""}`} data-message-key={message.id} data-testid={`transcript-message-${message.id}`}>
                   <MessageAvatar author={message.author} />
                   <div className="tw-message-body"><header><strong>{message.author.display_name || message.author.username}</strong>{message.author.is_bot && <span className="tw-bot-tag">BOT</span>}<time dateTime={message.timestamp}>{new Date(message.timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</time></header>
                   {message.author.is_bot && message.content.length > 400 ? <details className="tw-system-message" open={highlightedMessage === message.id || undefined}><summary>Message automatique · {message.content.slice(0, 85).replace(/\s+/g, " ")}…</summary>{body}</details> : body}
