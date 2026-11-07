@@ -273,7 +273,7 @@ def _require_token(token: str) -> dict:
 # Flux audio
 # --------------------------------------------------------------------------------------
 @router.get("/audio")
-async def karaoke_audio(request: Request, t: str, id: str) -> Response:
+async def karaoke_audio(request: Request, t: str, id: str, part: str = "original") -> Response:
     _require_token(t)
     track = library().get(id)
     if track is None:
@@ -281,7 +281,18 @@ async def karaoke_audio(request: Request, t: str, id: str) -> Response:
     if not await ensure_preview(track):
         raise HTTPException(status_code=404, detail="Morceau introuvable.")
 
-    size = track.path.stat().st_size
+    path, media_type = track.path, track.media_type
+    if part != 'original':
+        if part not in ('instrumental', 'vocals'):
+            raise HTTPException(422, 'Piste audio inconnue.')
+        if track.remote or _hidden_by_blind_test(track.id):
+            raise HTTPException(403, 'Les pistes séparées sont réservées au karaoké.')
+        from services.karaoke_assets import stem_path
+        path = await asyncio.to_thread(stem_path, track, part)
+        if path is None:
+            raise HTTPException(404, 'Pistes séparées indisponibles pour ce morceau.')
+        media_type = 'audio/mpeg'
+    size = path.stat().st_size
     headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
     try:
         byte_range = activity.parse_range(request.headers.get("range"), size)
@@ -291,16 +302,16 @@ async def karaoke_audio(request: Request, t: str, id: str) -> Response:
     if byte_range is None:
         headers["Content-Length"] = str(size)
         return StreamingResponse(
-            activity.iter_file(track.path, 0, size), media_type=track.media_type, headers=headers
+            activity.iter_file(path, 0, size), media_type=media_type, headers=headers
         )
     start, end = byte_range
     length = end - start + 1
     headers["Content-Length"] = str(length)
     headers["Content-Range"] = f"bytes {start}-{end}/{size}"
     return StreamingResponse(
-        activity.iter_file(track.path, start, length),
+        activity.iter_file(path, start, length),
         status_code=206,
-        media_type=track.media_type,
+        media_type=media_type,
         headers=headers,
     )
 
@@ -362,7 +373,7 @@ async def _raw_lrc(track: Track, duration: float | None) -> tuple[str | None, st
 
 async def load_lyrics(track: Track, duration: float | None = None) -> dict:
     from services.karaoke_preparation import prepared
-    aligned = prepared(track)
+    aligned = await asyncio.to_thread(prepared, track)
     if aligned:
         return aligned['lyrics']
     key = f"{track.id}:{track.mtime}:{track.lrc_mtime}:{track.lang}"
@@ -718,3 +729,22 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     finally:
         room.clients.pop(websocket, None)
         room.touched = time.monotonic()
+
+
+@router.get("/analysis")
+async def karaoke_analysis(t: str, id: str):
+    _require_token(t)
+    track = local_library().get(id)
+    if not track:
+        raise HTTPException(404, 'Morceau local introuvable.')
+    if _hidden_by_blind_test(id):
+        raise HTTPException(403, 'Le guide de notes est masqué pendant la manche.')
+    from services.karaoke_preparation import prepared
+    from services.karaoke_assets import notes_from_pitch
+    ready = await asyncio.to_thread(prepared, track)
+    if not ready:
+        return {'available': False}
+    values = ready.get('pitch', [])
+    return {'available': True, 'duration': ready['duration'], 'pitch_step': ready.get('pitch_step', .1),
+            'pitch': values, 'notes': ready['notes'] if 'notes' in ready else await asyncio.to_thread(notes_from_pitch, values),
+            'energy': ready.get('energy'), 'stems': bool(ready.get('portable')), 'version': ready.get('asset_version', '')}

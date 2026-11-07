@@ -1,4 +1,5 @@
 """Authenticated site entry, preparation and optional OasisLink voice receiver bridge."""
+import asyncio
 import hashlib
 import hmac
 import json
@@ -18,6 +19,7 @@ from services.auth_service import current_helper
 from services.casework.policy import fresh_roles
 from services.karaoke_preparation import enqueue, prepared
 from services.karaoke_scoring import result
+from services.karaoke_techniques import observe as observe_technique, summary as technique_summary
 
 router = APIRouter(prefix='/activity/karaoke', tags=['karaoke-tools'])
 SESSIONS = {}  # One bot voice connection per guild. Like Activity rooms: one API process.
@@ -82,10 +84,12 @@ async def preparation(t: str, id: str):
         raise HTTPException(404, 'Morceau local introuvable.')
     from services.karaoke_preparation import fingerprint
     row = await db.karaoke_preparation.find_one({'_id': fingerprint(track)})
-    ready = prepared(track)
-    return {'status': 'ready' if ready else 'not_prepared' if (row or {}).get('status') == 'ready' else (row or {}).get('status', 'not_prepared'),
+    ready = await asyncio.to_thread(prepared, track)
+    if not ready and os.getenv('KARAOKE_PREPARATION_MODE', 'external') != 'server':
+        return {'status': 'external_required', 'error': None, 'language': None, 'pitch_available': False, 'stems': False}
+    return {'status': 'ready' if ready else 'not_prepared' if (row or {}).get('status') == 'ready' else (row or {}).get('status', 'external_required' if os.getenv('KARAOKE_PREPARATION_MODE', 'external') != 'server' else 'not_prepared'),
             'error': (row or {}).get('error'), 'language': ready['lyrics']['lang'] if ready else None,
-            'pitch_available': bool(ready and ready.get('pitch'))}
+            'pitch_available': bool(ready and any(ready.get('pitch', []))), 'stems': bool(ready and ready.get('portable'))}
 
 
 @router.post('/prepare')
@@ -116,7 +120,8 @@ async def save_scores(session):
 
 
 def scores(session):
-    return [{'id': uid, 'name': session['names'].get(uid, 'Joueur'), **result(session['reference'], samples, session.get('until', 0), since=session['consents'][uid].get('start_position', 0))}
+    return [{'id': uid, 'name': session['names'].get(uid, 'Joueur'), **result(session['reference'], samples, session.get('until', 0), since=session['consents'][uid].get('start_position', 0)),
+             'techniques': technique_summary(session.get('techniques', {}).get(uid))}
             for uid in session['consents'] for samples in [session['samples'].get(uid, {})]] if session.get('reference') else []
 
 
@@ -128,14 +133,14 @@ async def synchronize(session):
     if session.get('song_key') != ident:
         await save_scores(session)
         track = karaoke.local_library().get(room.track_id)
-        session.update(song_key=ident, track_id=room.track_id, reference=prepared(track) if track else None,
-                       run_id=uuid4().hex, samples={}, until=0, seen={})
+        session.update(song_key=ident, track_id=room.track_id, reference=await asyncio.to_thread(prepared, track) if track else None,
+                       run_id=uuid4().hex, samples={}, techniques={}, until=0, seen={})
         for consent in session['consents'].values():
             consent['start_position'] = room.clock.current()
     if not session.get('reference') and session.get('reference_checked', 0) < time.time()-3:
         session['reference_checked'] = time.time()
         track = karaoke.local_library().get(room.track_id)
-        session['reference'] = prepared(track) if track else None
+        session['reference'] = await asyncio.to_thread(prepared, track) if track else None
         if session.get('reference'):
             for consent in session['consents'].values():
                 consent['start_position'] = room.clock.current()
@@ -199,6 +204,7 @@ async def consent(payload: Consent, t: str, instance_id: str):
     else:
         session['consents'].pop(uid, None)
         session['samples'].pop(uid, None)
+        session.get('techniques', {}).pop(uid, None)
     return {'enabled': payload.enabled, 'latency_ms': payload.latency_ms}
 
 
@@ -280,7 +286,10 @@ async def frames(request: Request):
             continue
         hz = frame.get('pitch')
         samples = session['samples'].setdefault(uid, {})
-        samples[index] = {'voiced': frame.get('voiced') is True, 'pitch': float(hz) if hz and 50 <= float(hz) <= 1500 else None}
+        samples[index] = {'voiced': frame.get('voiced') is True, 'pitch': float(hz) if hz and 50 <= float(hz) <= 1500 else None, 'at': captured}
+        if payload.get('sample_step') == .05:
+            state = session.setdefault('techniques', {}).setdefault(uid, {})
+            observe_technique(state, position, samples[index]['pitch'], samples[index]['voiced'])
         accepted += 1
     return {'accepted': accepted}
 
@@ -360,3 +369,23 @@ async def catalog_category(t: str, style: str = '', decade: str = ''):
     except asyncio.TimeoutError:
         raise HTTPException(503, 'Le chargement Deezer a pris trop de temps. Réessaie.')
     return {'count': len(tracks), 'style': style, 'decade': decade}
+
+
+@router.get('/voice/pitch')
+async def voice_pitch(t: str, instance_id: str):
+    actor = claims(t)
+    uid = str(actor['sub'])
+    session = next((value for value in SESSIONS.values() if value['instance_id'] == instance_id), None)
+    if not session or uid not in session['consents'] or session.get('receiver_at', 0) < time.time()-10:
+        return {'available': False}
+    room = karaoke.ROOMS.get(instance_id)
+    if not room or room.mode != 'karaoke' or not room.clock.playing or session.get('song_key') != (room.track_id, getattr(room, 'song_generation', 0)):
+        return {'available': False}
+    samples = session.get('samples', {}).get(uid, {})
+    if not samples:
+        return {'available': False}
+    index = max(samples)
+    frame = samples[index]
+    if not frame.get('voiced') or not frame.get('pitch') or frame.get('at', 0) < time.time()-1.5:
+        return {'available': False}
+    return {'available': True, 'pitch': frame['pitch'], 'position': index*.1}

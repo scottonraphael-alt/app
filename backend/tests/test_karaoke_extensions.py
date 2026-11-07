@@ -22,6 +22,7 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def reset(monkeypatch,tmp_path):
     h.reset_db()
+    monkeypatch.setenv('KARAOKE_PREPARATION_MODE', 'server')
     tools.SESSIONS.clear()
     karaoke.ROOMS.clear()
     monkeypatch.setenv('KARAOKE_VOICE_SECRET', KEY)

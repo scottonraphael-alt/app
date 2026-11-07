@@ -86,3 +86,6 @@ android-sdk/
 # Local music inputs and isolated voice receiver dependencies
 /karaoke-voice/node_modules/
 /karaoke-music/
+
+# Local Mac-only karaoke preparation environment
+/.venv-karaoke-mac/

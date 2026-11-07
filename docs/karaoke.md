@@ -19,12 +19,20 @@ Le code de l'archive `karaoke-complet-v1-v2-v3.zip` a été repris par modules. 
 - Fonds originaux Néon, Océan, Aurore, avec particules et réaction à la musique lorsque Web Audio est disponible. Aucun visuel Joysound sous licence n'a été copié.
 - Import audio via le site/Activity par un animateur, avec titre, artiste et source. Formats MP3/OGG/OPUS/M4A/AAC/FLAC/WAV/WEBM. 200 Mo et 20 minutes maximum ; aucun téléchargement audio depuis une URL fournie par un joueur.
 
-## Installation serveur CPU
+## Préparation recommandée sur Mac
+
+Le traitement lourd peut désormais être réalisé hors du VPS. Le [guide du script Mac](../tools/karaoke/README.md) décrit l’installation, la préparation d’un dossier et la copie du lot de fichiers.
+
+Le mode par défaut de l’API est `KARAOKE_PREPARATION_MODE=external` : un import non préparé ne lance ni ne met en file de modèle sur le VPS. Les morceaux originaux restent lisibles. Les lots Mac valides fournissent directement les paroles, le score de référence, le mix personnel et les effets, sans base de préparation à reconstruire.
+
+Pour conserver explicitement l’ancien worker CPU optionnel, configurer `KARAOKE_PREPARATION_MODE=server` pour le backend et lancer le profil Compose `karaoke-cpu`. Ce worker reste facultatif ; sa configuration et les anciens diagnostics CPU ci-dessous concernent uniquement ce mode.
+
+## Installation serveur CPU facultative
 
 Le backend continue à fonctionner sans les services facultatifs : karaoké, paroles LRC et blind test restent disponibles. Pour la préparation Whisper et le score vocal :
 
 ```sh
-docker compose --profile karaoke up -d --build
+docker compose --profile karaoke --profile karaoke-cpu up -d --build
 ```
 
 Deux services sont ajoutés :
@@ -109,9 +117,9 @@ Après récupération du commit correctif, construire les images séparément po
 
 ```sh
 docker compose build backend
-docker compose --profile karaoke build karaoke-preparation
+docker compose --profile karaoke-cpu build karaoke-preparation
 docker compose --profile karaoke build karaoke-voice
-docker compose --profile karaoke up -d --no-deps backend karaoke-preparation karaoke-voice
+docker compose --profile karaoke --profile karaoke-cpu up -d --no-deps backend karaoke-preparation karaoke-voice
 ```
 
 Cette séquence suppose que MongoDB est déjà en fonctionnement et ne reconstruit pas le frontend. Whisper/PyTorch et les modèles nécessitent toujours de l'espace disque ; la correction ne peut pas rendre exploitable un disque encore saturé.

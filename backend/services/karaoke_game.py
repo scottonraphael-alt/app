@@ -79,13 +79,17 @@ class Track:
 
     def public(self) -> dict:
         from services.karaoke_preparation import prepared
-        aligned = prepared(self) if not self.remote else None
+        aligned = prepared(self, verify_portable=False) if not self.remote else None
         return {
             "id": self.id,
             "title": self.title,
             "artist": self.artist,
             "source": self.source,
             "lang": aligned["lyrics"]["lang"] if aligned else self.lang,
+            "prepared": bool(aligned),
+            "stems": bool(aligned and aligned.get('portable')),
+            "pitch_available": bool(aligned and any(aligned.get('pitch', []))),
+            "energy_available": bool(aligned and aligned.get('energy')),
             "preview": bool(self.remote),  # extrait de 30 s : blind test seulement, pas de karaoké
         }
 
@@ -135,7 +139,7 @@ def scan_library(directory: Path, key: str) -> dict[str, Track]:
     tracks: dict[str, Track] = {}
     for entry in entries:
         media_type = AUDIO_TYPES.get(entry.suffix.lower())
-        if media_type is None or entry.name.startswith(".") or not entry.is_file():
+        if media_type is None or entry.name.startswith(".") or entry.stem.endswith((".inst", ".voix")) or not entry.is_file():
             continue
         meta = _read_sidecar(entry.with_suffix(".json"))
         artist_part, sep, title_part = entry.stem.partition(" - ")

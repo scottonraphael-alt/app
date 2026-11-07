@@ -60,14 +60,15 @@ services:
     networks:
       - npm_default
 
-  # Optional CPU services: docker compose --profile karaoke up -d --build
+  # Voice uses profile karaoke; the legacy heavy CPU worker needs explicit karaoke-cpu.
   karaoke-preparation:
-    profiles: [karaoke]
+    profiles: [karaoke-cpu]
     build:
       context: ./backend
       dockerfile: Dockerfile.karaoke
     env_file: [.env]
     environment:
+      KARAOKE_PREPARATION_MODE: server
       KARAOKE_CPU_THREADS: "2"
       KARAOKE_WHISPER_MODEL: base
       KARAOKE_DEMUCS_ENABLED: "true"

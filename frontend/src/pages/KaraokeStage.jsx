@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
 import BlindTestCategories from "./BlindTestCategories";
+import KaraokeNotes from "./KaraokeNotes";
+import { useKaraokeAudio } from "./karaokeAudio";
 import KaraokeBackdrop from "./KaraokeBackdrop";
 
 // Même principe que CinéStream : tout passe par /.proxy (URL Mappings du portail Discord).
@@ -340,6 +342,12 @@ function BlindTestView({ state, send, canControl, userId, feedback, plays, setPl
 export default function KaraokeStage({ session, onExit }) {
   const { videoToken, instanceId, canControl, userName, userId } = session;
   const PROXY = session.apiRoot || DEFAULT_PROXY;
+  const [mixRetry, setMixRetry] = useState(0);
+  const [analysis, setAnalysis] = useState(null);
+  const [voiceStatus, setVoiceStatus] = useState(null);
+  const [guide, setGuide] = useState(() => Math.max(0, Math.min(1, Number(loadPref("karaoke.guide", 1)) || 0)));
+  const [showNotes, setShowNotes] = useState(() => loadPref("karaoke.notes", false));
+  const [octave, setOctave] = useState(() => Math.max(-2, Math.min(2, Number(loadPref("karaoke.octave", 0)) || 0)));
   const [favorites, setFavorites] = useState([]);
   const [preparationRevision, setPreparationRevision] = useState(0);
   const onPrepared = useCallback(() => setPreparationRevision(v => v + 1), []);
@@ -365,6 +373,7 @@ export default function KaraokeStage({ session, onExit }) {
   const [settings, setSettings] = useState({ rounds: 10, seconds: 20, pool: "all", style: "", decade: "" });
 
   const audioRef = useRef(null);
+  const instrumentalRef = useRef(null), vocalRef = useRef(null), visualRef = useRef(null);
   const socketRef = useRef(null);
   const stateRef = useRef(null);
   const inputRef = useRef(null);
@@ -373,6 +382,20 @@ export default function KaraokeStage({ session, onExit }) {
   const track = state && state.karaoke ? state.karaoke.track : null;
   const playing = state && state.karaoke ? state.karaoke.playing : false;
   const trackId = mode === "karaoke" && track ? track.id : null;
+
+  const audioUrl = trackId ? `${PROXY}/activity/karaoke/audio?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}&v=${encodeURIComponent(analysis?.version || "")}` : '';
+  const { graphRef, mix } = useKaraokeAudio({ audioRef, instrumentalRef, vocalRef, stems: Boolean(analysis?.stems && mode === 'karaoke'),
+    audioUrl, volume, guide, retry: mixRetry });
+  useEffect(() => {
+    const controller = new AbortController();
+    setAnalysis(null);
+    if (!trackId) return () => controller.abort();
+    fetch(`${PROXY}/activity/karaoke/analysis?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}`, { signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (!controller.signal.aborted) setAnalysis(data?.available ? data : null); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [trackId, PROXY, videoToken, preparationRevision]);
 
   const send = useCallback((payload) => {
     const socket = socketRef.current;
@@ -505,10 +528,6 @@ export default function KaraokeStage({ session, onExit }) {
     return () => window.clearInterval(timer);
   }, [applyAudio]);
 
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = volume;
-  }, [volume]);
-
   // --- Paroles : récupérées par le serveur (fichier .lrc, cache ou LRCLIB), jamais par le navigateur ---
   useEffect(() => {
     setLyrics({ status: trackId ? "loading" : "idle", lines: [] });
@@ -562,8 +581,9 @@ export default function KaraokeStage({ session, onExit }) {
   };
 
   const audioElement = (
-    <audio
+    <div key="karaoke-audio-engine" hidden><audio
       ref={audioRef}
+      crossOrigin="anonymous"
       preload="auto"
       onLoadedMetadata={(event) => {
         setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
@@ -579,7 +599,7 @@ export default function KaraokeStage({ session, onExit }) {
           send({ type: "ended", id: event.currentTarget.dataset.id });
         }
       }}
-    />
+    /><audio ref={instrumentalRef} crossOrigin="anonymous" preload="auto" /><audio ref={vocalRef} crossOrigin="anonymous" preload="auto" /></div>
   );
 
   if (!state) {
@@ -599,8 +619,9 @@ export default function KaraokeStage({ session, onExit }) {
   }[lyrics.status];
 
   return (
-    <div style={S.page}>
-      <KaraokeBackdrop audioRef={audioRef} theme={state.theme} playing={playing}/>
+    <div className="karaoke-stage" ref={visualRef} style={S.page}>
+      <KaraokeBackdrop audioRef={audioRef} graphRef={graphRef} energyMap={mode === 'karaoke' ? analysis?.energy : null}
+        visualRef={visualRef} theme={state.theme} playing={playing || (mode === 'blindtest' && state.bt?.phase !== 'final')}/>
       <style>{KEYFRAMES}</style>
       {audioElement}
 
@@ -630,8 +651,26 @@ export default function KaraokeStage({ session, onExit }) {
         </label>
       </div>
 
-      <KaraokeTools session={session} state={state} library={library} favorites={favorites} onPrepared={onPrepared} send={send} setLibrary={setLibrary} track={track} plays={plays} setPlays={setPlays}/>
-      <div style={S.main}>
+      {mode === 'karaoke' && track && <div style={{display:'flex',gap:16,alignItems:'center',flexWrap:'wrap',padding:'4px 16px',position:'relative',zIndex:2}}>
+        <label style={{display:'flex',gap:8,alignItems:'center',fontSize:13}}>Voix guide
+          <input aria-label="Présence de la voix guide" type="range" min="0" max="1" step=".05" value={guide}
+            disabled={!analysis?.stems || mix === 'fallback'} onChange={event => { const value=Number(event.target.value);setGuide(value);savePref("karaoke.guide",value); }} />
+          {analysis?.stems ? `${Math.round(guide*100)} %` : 'Morceau à préparer sur Mac'}
+        </label>
+        {mix === 'loading' && <small role="status">Chargement des pistes séparées…</small>}
+        {mix === 'fallback' && <><small role="status">Pistes séparées indisponibles : lecture du morceau original.</small><button type="button" style={S.ghost} onClick={()=>setMixRetry(value=>value+1)}>Réessayer les pistes séparées</button></>}
+        <small>Réglage personnel, mémorisé sur cet appareil.</small>
+        <button type="button" style={S.ghost} disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes)}
+          onClick={() => {setShowNotes(value=>{savePref("karaoke.notes",!value);return !value;});}}>Guide de notes : {showNotes?'oui':'non'}</button>
+        {showNotes && Boolean(analysis?.notes?.length) && <label>Mon octave <select aria-label="Mon octave" value={octave}
+          onChange={event=>{const value=Number(event.target.value);setOctave(value);savePref("karaoke.octave",value);}}>
+          {[-2,-1,0,1,2].map(value=><option key={value} value={value}>{value>0?'+':''}{value}</option>)}</select></label>}
+      </div>}
+      {mode === 'karaoke' && showNotes && Boolean(analysis?.notes?.length) && <KaraokeNotes notes={analysis.notes}
+        audioRef={audioRef} octave={octave} session={session} consented={Boolean(voiceStatus?.consented)}
+        score={voiceStatus?.consented ? voiceStatus.scores?.find(item=>String(item.id)===String(userId)) : undefined} />}
+      <KaraokeTools onVoiceChange={setVoiceStatus} session={session} state={state} library={library} favorites={favorites} onPrepared={onPrepared} send={send} setLibrary={setLibrary} track={track} plays={plays} setPlays={setPlays}/>
+      <div className="karaoke-scene" style={S.main}>
         {mode === "blindtest" && state.bt ? (
           <BlindTestView
             state={state}

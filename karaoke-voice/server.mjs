@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import {Client,GatewayIntentBits,ChannelType} from 'discord.js';
 import {joinVoiceChannel,entersState,VoiceConnectionStatus,EndBehaviorType} from '@discordjs/voice';
 import prism from 'prism-media';
-import {features} from './dsp.mjs';
+import {features,FRAME_BYTES,HOP_BYTES} from './dsp.mjs';
 
 const secret=process.env.KARAOKE_VOICE_SECRET||(process.env.APP_SESSION_SECRET?crypto.createHmac('sha256',process.env.APP_SESSION_SECRET).update('iris-karaoke-voice-v1').digest('hex'):'');
 if(secret.length<32)throw new Error('KARAOKE_VOICE_SECRET doit contenir au moins 32 caractères.');
@@ -42,8 +42,8 @@ function subscribe(uid){
   opus.pipe(decoder).on('data',chunk=>{
     if(active!==session||!session.allowed.has(uid))return;
     buffer=Buffer.concat([buffer,chunk]);
-    while(buffer.length>=19200){ // 100 ms at 48k stereo signed PCM16
-      const frame=buffer.subarray(0,19200);buffer=buffer.subarray(19200);
+    while(buffer.length>=FRAME_BYTES){ // Overlapping 100 ms windows, one pitch frame every 50 ms
+      const frame=buffer.subarray(0,FRAME_BYTES);buffer=buffer.subarray(HOP_BYTES);
       const seq=(session.sequence.get(uid)||0)+1;session.sequence.set(uid,seq);
       session.frames.push({uid,seq,at:Date.now()/1000,...features(frame)});
       if(session.frames.length>1000)session.frames.shift();
@@ -61,7 +61,7 @@ async function cycle(){
     active.allowed=new Set(config.active?config.consents:[]);
     for(const [uid,stream] of active.streams){if(!active.allowed.has(uid)||!active.channel.members.has(uid)){stream.opus.destroy();stream.decoder.destroy();active.streams.delete(uid);}}
     for(const uid of active.allowed)subscribe(uid);
-    if(active.frames.length){const frames=active.frames.splice(0,1000);await api('/internal/voice/frames',{method:'POST',body:{id:active.id,generation:active.generation,frames}});}
+    if(active.frames.length){const frames=active.frames.splice(0,1000);await api('/internal/voice/frames',{method:'POST',body:{id:active.id,generation:active.generation,sample_step:.05,frames}});}
   }catch(error){stopStreams();console.error(error.message);}
 }
 async function loop(){await cycle();setTimeout(loop,300);}

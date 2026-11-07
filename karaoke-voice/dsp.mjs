@@ -1,3 +1,6 @@
+export const FRAME_BYTES = 19200;
+export const HOP_BYTES = 9600; // 50 ms hop, 100 ms analysis window
+
 // PCM 48 kHz stereo -> activity and fundamental frequency. Frames never reach disk.
 export function features(pcm) {
   const n=Math.floor(pcm.length/24), mono=new Float64Array(n);
