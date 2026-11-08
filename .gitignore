@@ -89,3 +89,8 @@ android-sdk/
 
 # Local Mac-only karaoke preparation environment
 /.venv-karaoke-mac/
+
+# Optional isolated karaoke preparation tools
+/.karaoke-tools/
+/.venv-karaoke-tifa/
+/.venv-karaoke-roformer/

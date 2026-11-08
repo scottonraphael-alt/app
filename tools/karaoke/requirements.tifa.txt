@@ -1,0 +1,4 @@
+# Install together with the pinned upstream TIFA requirements.
+torch==2.5.1
+torchaudio==2.5.1
+g2pflow[ja,lstm]>=0.3.0,<0.4.0

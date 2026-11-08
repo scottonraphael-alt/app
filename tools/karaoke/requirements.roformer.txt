@@ -1,0 +1,4 @@
+# Isolated Mac environment; deliberately independent of Whisper/MMS.
+torch==2.5.1
+torchaudio==2.5.1
+audio-separator[cpu]==0.40.0

@@ -49,6 +49,64 @@ Après une mise à jour du script, réexécuter `.venv-karaoke-mac/bin/python -m
 
 Si l'alignement a terminé mais que l'export a échoué, `--resume-alignment` reprend le diagnostic `.alignment.json` du dossier de sortie. Le script vérifie l'empreinte de l'original, sa durée, sa langue et le modèle avant de l'utiliser ; Whisper et l'affinage ne sont pas relancés. Cette option ne réutilise pas automatiquement la séparation : `--reuse-stems` reste nécessaire si l'on dispose déjà d'un paquet complet valide dont reprendre les pistes. Ajouter `--overwrite` si des fichiers de sortie existent.
 
+## Pipeline hybride : Demucs + RoFormer, IA et TIFA
+
+Aucun traitement audio n’est lancé par l’installation. Les calculs lourds restent sur le Mac. Le backend n’ajoute que le relais d’arbitrage textuel, avec la clé Anthropic déjà configurée sur IRIS.
+
+1. Demucs `htdemucs_ft` et BS-RoFormer Viperx 1297 séparent indépendamment le même original. Les pistes ne sont pas superposées ni mélangées pour « purifier » la voix. La lecture et la mélodie gardent la paire Demucs ; RoFormer apporte un échantillon indépendant de contrôle.
+2. Whisper `large-v3` transcrit chaque voix. Les résultats sont sauvegardés indépendamment, avec empreinte audio et paramètres, pour éviter les recalculs lors d’une reprise.
+3. Les phrases de référence, Demucs et RoFormer sont rapprochées dans l’ordre. IRIS arbitre par lots de douze phrases, sans recevoir les fichiers audio. Les lectures confirmées restent verrouillées. Une phrase ne peut être supprimée ni déplacée ; les fusions nouvelles restent signalées pour contrôle. L’IA n’est pas une preuve acoustique.
+4. MMS calcule un premier alignement sur la voix Demucs. TIFA vérifie des fenêtres courtes autour de chaque phrase, sur les deux voix. Une correction TIFA est appliquée uniquement si le texte est conservé, aucun phonème n’a été sauté, les deux résultats concordent à 250 ms près et ne s’écartent pas de MMS de plus de 400 ms. Sinon, le timing MMS est conservé et la phrase est signalée. Ces seuils sont des garde-fous, pas une mesure validée de précision.
+5. Le modèle TIFA-1.0 fourni prend en charge notamment le japonais et l’anglais, pas le français : le français utilise explicitement MMS. Un modèle TIFA spécialisé différent nécessiterait une autre intégration.
+
+L’installation isole RoFormer et TIFA dans deux environnements dédiés pour préserver les dépendances Whisper/MMS. Le checkout TIFA est figé à `7b210ca36ff5a2b79187fb1727af58fc977cc301`, son modèle 1.0 est vérifié par SHA-256. Le séparateur est figé à `audio-separator==0.40.0` et tourne sur CPU. Les temps et l’espace disque nécessaires augmentent. Les modèles/dictionnaires peuvent se télécharger au premier usage ; TIFA japonais peut notamment télécharger UniDic.
+
+### Installation sur le Mac
+
+Depuis la racine du projet :
+
+```sh
+.venv-karaoke-mac/bin/python tools/karaoke/setup_hybrid.py
+```
+
+Cela crée `.env.karaoke-hybrid` avec un secret de relais propre à cette fonction. Le fichier est privé, ignoré par Git et conservé lors des installations suivantes. Il ne contient pas la clé Anthropic. Son URL par défaut est `https://api.loasis.app` ; utiliser `--api-url https://autre-api.exemple` lors de la première création pour une autre installation.
+
+### Relais sur le VPS — une seule fois
+
+Récupérer le commit du backend sur le VPS, puis transférer uniquement le fichier de configuration depuis le Mac (remplacer `TON_VPS`) :
+
+```sh
+scp .env.karaoke-hybrid root@TON_VPS:/home/iris/app/.env.karaoke-hybrid
+```
+
+Sur le VPS :
+
+```sh
+cd /home/iris/app
+cat .env.karaoke-hybrid >> .env
+docker compose up -d --build --no-deps backend
+```
+
+La clé `ANTHROPIC_API_KEY` existante reste sur le serveur. Le modèle d’arbitrage réutilise `TICKET_SUMMARY_MODEL` ; le paramètre facultatif `KARAOKE_ARBITRATION_MODEL` dans `.env` permet d’en choisir un autre. Les candidats, les décisions et le modèle sont journalisés dans MongoDB, collection `karaoke_preparation_arbitrations`. L’API est protégée par le secret dédié ; elle n’expose pas une fonction d’IA publique.
+
+### Génération — à lancer manuellement sur le Mac
+
+```sh
+set -a
+source .env.karaoke-hybrid
+set +a
+caffeinate -i .venv-karaoke-mac/bin/python tools/karaoke/prepare.py \
+  "$HOME/Music/Chansons" \
+  --output "$HOME/Music/Karaoke-haute-qualite" \
+  --device cpu --hybrid --overwrite
+```
+
+Le script contrôle l’accès au relais avant de commencer Demucs. Les modes précédents restent utilisables sans `--hybrid`. Le mode hybride choisit automatiquement MMS + TIFA ; ne pas ajouter `--allow-estimated` pour contourner un désaccord. Pour réutiliser des pistes Demucs d’un autre dossier, `--reuse-stems` exige un paquet complet valide pour chaque morceau. Une préparation japonaise échouée ne constitue pas un paquet réutilisable ; son cache WAV vérifié est repris automatiquement dans le même dossier de sortie.
+
+Diagnostics conservés : `.demucs.transcript.json`, `.roformer.transcript.json`, `.candidates.json`, `.arbitration.json`, `.hybrid.json`, `.ctc-baseline.json`, `.tifa.json` et `.quality.json`. Le dernier agrège les incertitudes acoustiques, textuelles et les désaccords TIFA. Les caches se fondent sur les entrées et modèles ; `--refresh-arbitration` demande au serveur sa décision actuelle. Les pistes RoFormer restent dans `.iris-roformer-cache` pour les reprises : ne pas copier les dossiers cachés `.iris-*` sur le VPS. Seuls les fichiers finaux nécessaires à la lecture doivent y être transférés.
+
+Ce pipeline n’a pas une précision de 99 % mesurée. Une évaluation à l’écoute reste nécessaire, particulièrement sur les chœurs, ad-libs, mélismes et lectures japonaises particulières.
+
 ## Comparer MMS CTC
 
 `--aligner mms` place les paroles sur la voix isolée avec MMS sur CPU, indépendamment des timings Whisper. Whisper reste utilisé pour détecter la langue et transcrire quand le texte manque. Le moteur habituel reste `--aligner whisper` tant que la comparaison à l’écoute n’est pas validée. TorchAudio compatible est déjà dans les requirements Mac ; aucun paquet supplémentaire n’est ajouté au VPS. Le modèle MMS se télécharge une fois (environ 1,2 Go), puis reste dans le cache PyTorch ; sa licence est CC-BY-NC 4.0.

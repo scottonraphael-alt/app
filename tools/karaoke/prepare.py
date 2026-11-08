@@ -481,6 +481,8 @@ def load_alignment_checkpoint(source, destination, args, seconds):
         raise ValueError('Le diagnostic d’alignement est incomplet.')
     if args.language and args.language != checkpoint.get('language'):
         raise ValueError('La langue demandée diffère du diagnostic enregistré.')
+    if checkpoint.get('hybrid', False) != getattr(args, 'hybrid', False):
+        raise ValueError('Le diagnostic provient d’un autre pipeline.')
     if checkpoint.get('alignment_engine', 'whisper') != getattr(args, 'aligner', 'whisper'):
         raise ValueError('Le diagnostic utilise un autre moteur d’alignement.')
     hints_path = source.with_suffix('.readings.json')
@@ -533,6 +535,7 @@ def prepare(source, destination, args):
         model = transcript = None
         refinement_used = not getattr(args, 'no_refine', False)
         phonetic_plan = None
+        other_vocals = None
         if resume_checkpoint:
             checkpoint = resume_checkpoint
             language = checkpoint['language']
@@ -557,6 +560,11 @@ def prepare(source, destination, args):
                     raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language)
             if not language:
                 raise ValueError('Langue non détectée ; réessaie avec --language.')
+            if getattr(args, 'hybrid', False):
+                from hybrid import hybrid_text
+                raw, other_vocals, hybrid_anchors = hybrid_text(model, vocals, source, destination, args,
+                    metadata, seconds, raw, language, result if transcript is not None else None, hints)
+                origin = 'hybrid-ai'
             supplied_lines = None
             anchored_alignment = False
             if raw and origin == 'lrclib' and not getattr(args, 'no_reconcile', False):
@@ -592,7 +600,7 @@ def prepare(source, destination, args):
                     transcript, anchored_alignment = align_supplied(model, vocals, spoken_raw, spoken, language, seconds)
             elif raw and getattr(args, 'aligner', 'whisper') == 'whisper':
                 transcript, anchored_alignment = align_supplied(model, vocals, raw, provided, language, seconds)
-            if getattr(args, 'aligner', 'whisper') == 'mms':
+            if getattr(args, 'aligner', 'whisper') in ('mms', 'tifa'):
                 from mms_alignment import align_mms
                 ctc_lines = [line['spoken'] for line in phonetic_plan] if phonetic_plan else supplied_lines
                 if not ctc_lines:
@@ -600,7 +608,12 @@ def prepare(source, destination, args):
                 # Release large-v3 before loading MMS on memory-limited Macs.
                 del model
                 gc.collect()
-                transcript = stable_whisper.WhisperResult(align_mms(vocals, ctc_lines, language))
+                if getattr(args, 'aligner', 'whisper') == 'tifa':
+                    from tifa_alignment import align_tifa
+                    aligned = align_tifa(vocals, other_vocals, ctc_lines, language, source, destination, args)
+                else:
+                    aligned = align_mms(vocals, ctc_lines, language)
+                transcript = stable_whisper.WhisperResult(aligned)
                 model = None
                 refinement_used = False
             alignment_path = destination/(source.stem+'.alignment.json')
@@ -608,7 +621,7 @@ def prepare(source, destination, args):
                           'lyrics_origin': origin, 'provided_lines': supplied_lines, 'whisper_model': args.model,
                           'aligned': transcript.to_dict(), 'lrc_anchored_alignment': anchored_alignment,
                           'timestamp_refinement': refinement_used,
-                          'alignment_engine': getattr(args, 'aligner', 'whisper'),
+                          'alignment_engine': getattr(args, 'aligner', 'whisper'), 'hybrid': getattr(args, 'hybrid', False),
                           'phonetic_plan': phonetic_plan, 'reading_hints_sha256': sha256(hints_path) if hints_path.is_file() else None}
             def save_alignment():
                 temporary = alignment_path.with_suffix('.json.tmp')
@@ -631,13 +644,21 @@ def prepare(source, destination, args):
         if instant:
             print(f'  À vérifier : {instant} blocs sans durée fiable sont conservés dans le texte.', flush=True)
         quality = alignment_quality(result, getattr(args, 'aligner', 'whisper'))
+        if getattr(args, 'hybrid', False):
+            hybrid_details = json.loads((destination/(source.stem+'.hybrid.json')).read_text())
+            quality['text_review'] = [i+1 for i, anchor in enumerate(hybrid_details['anchors'])
+                                      if anchor['needs_review'] or anchor['stem_disagreement']]
+            tifa_details = json.loads((destination/(source.stem+'.tifa.json')).read_text())
+            quality['tifa_review'] = tifa_details['needs_review']
+            quality['notes'] = tifa_details['notes']
+            quality['needs_review'] |= bool(quality['text_review'] or quality['tifa_review'])
         quality_path = destination/(source.stem+'.quality.json')
         quality_temp = quality_path.with_suffix('.json.tmp')
         quality_temp.write_text(json.dumps(quality, ensure_ascii=False, indent=2))
         os.replace(quality_temp, quality_path)
-        source_engine = 'mms-ctc-mac' if getattr(args, 'aligner', 'whisper') == 'mms' else 'stable-ts-mac'
+        source_engine = 'mms-tifa-mac' if getattr(args, 'aligner', 'whisper') == 'tifa' else 'mms-ctc-mac' if getattr(args, 'aligner', 'whisper') == 'mms' else 'stable-ts-mac'
         lyrics = restore_text(result, phonetic_plan) if phonetic_plan else phrase_lines(align_payload(result, language, source=source_engine), supplied_lines)
-        if source_engine == 'mms-ctc-mac':
+        if source_engine in ('mms-ctc-mac', 'mms-tifa-mac'):
             lyrics['source'] = source_engine
         from services.karaoke_text import has_native_script
         if not has_native_script(''.join(token['t'] for line in lyrics['lines'] for token in line['tokens']), language):
@@ -674,7 +695,9 @@ def prepare(source, destination, args):
         meta_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding='utf-8')
         manifest = {'version': 1, 'duration': seconds, 'source': {'size': source.stat().st_size, 'sha256': sha256(source)},
                     'lyrics': lyrics, 'lyrics_origin': origin, 'generated_at': datetime.now(timezone.utc).isoformat(),
-                    'processing': {'alignment_engine': getattr(args, 'aligner', 'whisper'), 'whisper_model': args.model, 'demucs_model': 'reused' if reuse else demucs_model,
+                    'processing': {'hybrid': getattr(args, 'hybrid', False),
+                        'roformer_model': 'bs-roformer-viperx-1297' if getattr(args, 'hybrid', False) else None,
+                        'tifa_model': 'TIFA-1.0' if getattr(args, 'hybrid', False) and language in ('ja','en','zh','yue') else None, 'alignment_engine': getattr(args, 'aligner', 'whisper'), 'whisper_model': args.model, 'demucs_model': 'reused' if reuse else demucs_model,
                         'demucs_shifts': None if reuse else getattr(args, 'shifts', 2),
                         'demucs_overlap': None if reuse else getattr(args, 'overlap', .5),
                         'timestamp_refinement': refinement_used, 'low_confidence_words': uncertain,
@@ -702,8 +725,10 @@ def main(argv=None):
     parser.add_argument('--recursive', action='store_true')
     parser.add_argument('--overwrite', action='store_true', help='Régénérer les préparations existantes')
     parser.add_argument('--device', choices=('auto', 'cpu', 'mps'), default='auto', help='Périphérique Demucs')
-    parser.add_argument('--aligner', choices=('whisper', 'mms'), default='whisper',
+    parser.add_argument('--aligner', choices=('whisper', 'mms', 'tifa'), default='whisper',
                         help='MMS CTC expérimental sur CPU, ou alignement Whisper habituel')
+    parser.add_argument('--hybrid', action='store_true', help='Demucs + RoFormer, double Whisper, arbitrage IA sur IRIS, MMS + TIFA')
+    parser.add_argument('--refresh-arbitration', action='store_true', help='Redemander au relais IRIS ses décisions actualisées')
     parser.add_argument('--model', choices=('tiny', 'base', 'small', 'medium', 'large-v3'), default='large-v3')
     parser.add_argument('--demucs-model', choices=('htdemucs_ft', 'htdemucs'), default='htdemucs_ft')
     parser.add_argument('--shifts', type=int, default=2, help='Prédictions décalées moyennées par Demucs (1 à 8)')
@@ -718,6 +743,17 @@ def main(argv=None):
     parser.add_argument('--allow-estimated', action='store_true', help='Estimer le timing d’une phrase impossible à aligner au lieu d’échouer')
     parser.add_argument('--reuse-stems', type=Path, help='Dossier préparé valide dont réutiliser les pistes sans relancer Demucs')
     args = parser.parse_args(argv)
+    if args.refresh_arbitration and args.resume_alignment:
+        parser.error('--refresh-arbitration exige un nouvel alignement, sans --resume-alignment.')
+    if args.aligner == 'tifa' and not args.hybrid:
+        parser.error('Utiliser --hybrid pour TIFA avec double voix et arbitrage.')
+    if args.hybrid:
+        args.aligner = 'tifa'
+        from hybrid import preflight
+        try:
+            preflight()
+        except ValueError as exc:
+            parser.error(str(exc))
     args_estimated.allow = args.allow_estimated
     if not args.folder.is_dir():
         parser.error('Le dossier source est introuvable.')
