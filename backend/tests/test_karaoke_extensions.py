@@ -24,6 +24,7 @@ def reset(monkeypatch,tmp_path):
     h.reset_db()
     monkeypatch.setenv('KARAOKE_PREPARATION_MODE', 'server')
     tools.SESSIONS.clear()
+    monkeypatch.setattr(tools, "VOICE_LOCK", asyncio.Lock())
     karaoke.ROOMS.clear()
     monkeypatch.setenv('KARAOKE_VOICE_SECRET', KEY)
     monkeypatch.setenv('KARAOKE_CACHE_DIR', str(tmp_path))
@@ -230,3 +231,76 @@ def test_auto_voice_join_requires_room_membership_and_is_idempotent(monkeypatch)
     assert receiver.call_args.args[1]['channel_id'] is None
     session=next(iter(tools.SESSIONS.values()))
     assert session['channel_id']=='1556220183775805481' and session['consents']=={}
+
+
+def test_abandoned_voice_room_is_archived_stopped_and_replaced_without_consent_transfer(monkeypatch):
+    async def run():
+        old=karaoke.KRoom();old.touched=time.monotonic()-11
+        current=karaoke.KRoom();current.clients={1:karaoke.Client('123',False)}
+        karaoke.ROOMS.update(old=old,new=current)
+        tools.SESSIONS['old-id']={'id':'old-id','instance_id':'old','created_at':time.time(),'last_seen':time.time(),
+                                  'receiver_at':time.time(),'reference':None,'consents':{'someone':{}}}
+        archive=AsyncMock();receiver=AsyncMock(return_value={'channel_id':'1556220183775805481'})
+        monkeypatch.setattr(tools,'save_scores',archive);monkeypatch.setattr(tools,'receiver',receiver)
+        result=await tools.connect_voice(tools.VoiceStart(instance_id='new'),{'sub':'123'},reuse=True)
+        assert result['id']!='old-id' and 'old-id' not in tools.SESSIONS
+        archive.assert_awaited_once()
+        assert [call.args[0] for call in receiver.await_args_list]==['/stop','/start']
+        assert tools.SESSIONS[result['id']]['consents']=={}
+    asyncio.run(run())
+
+
+def test_active_other_room_is_not_stolen_and_status_explains_wait(monkeypatch):
+    async def run():
+        active=karaoke.KRoom();active.clients={1:karaoke.Client('other',False)}
+        current=karaoke.KRoom();current.clients={1:karaoke.Client('123',False)}
+        karaoke.ROOMS.update(old=active,new=current)
+        tools.SESSIONS['live']={'id':'live','instance_id':'old','created_at':time.time(),'last_seen':time.time(),
+                                'receiver_at':time.time(),'reference':None}
+        receiver=AsyncMock();monkeypatch.setattr(tools,'receiver',receiver)
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as error:
+            await tools.connect_voice(tools.VoiceStart(instance_id='new'),{'sub':'123'},reuse=True)
+        assert error.value.status_code==409 and 'live' in tools.SESSIONS
+        receiver.assert_not_awaited()
+        status=await tools.voice_status(token(),'new')
+        assert status['busy'] and 'active' in status['message']
+    asyncio.run(run())
+
+
+def test_lost_receiver_is_recoverable_and_short_reload_has_grace():
+    room=karaoke.KRoom();karaoke.ROOMS['room']=room
+    session={'id':'voice','instance_id':'room','created_at':time.time()-60,'receiver_at':time.time()-36,'last_seen':time.time()}
+    assert tools.voice_expired(session)
+    session['receiver_at']=time.time()
+    assert not tools.voice_expired(session)
+    room.touched=time.monotonic()-11
+    assert tools.voice_expired(session)
+    room.clients={1:karaoke.Client('123',False)}
+    assert not tools.voice_expired(session)
+    room.mode='blindtest'
+    assert tools.voice_expired(session)
+
+
+def test_concurrent_auto_join_returns_one_receiver_session(monkeypatch):
+    async def run():
+        karaoke.ROOMS['room']=karaoke.KRoom()
+        async def start(*args):
+            await asyncio.sleep(.01)
+            return {'channel_id':'1556220183775805481'}
+        receiver=AsyncMock(side_effect=start);monkeypatch.setattr(tools,'receiver',receiver)
+        payload=tools.VoiceStart(instance_id='room')
+        a,b=await asyncio.gather(tools.connect_voice(payload,{'sub':'123'},reuse=True),tools.connect_voice(payload,{'sub':'123'},reuse=True))
+        assert a==b and len(tools.SESSIONS)==1
+        receiver.assert_awaited_once()
+    asyncio.run(run())
+
+
+def test_receiver_control_releases_empty_room_after_reload_grace(monkeypatch):
+    room=karaoke.KRoom();room.touched=time.monotonic()-11;karaoke.ROOMS['old']=room
+    tools.SESSIONS['voice']={'id':'voice','instance_id':'old','created_at':time.time(),'receiver_at':time.time(),'last_seen':time.time(),'reference':None}
+    archive=AsyncMock();monkeypatch.setattr(tools,'save_scores',archive)
+    response=client.get('/activity/karaoke/internal/voice/control',params={'connected_id':'voice'},headers={'Authorization':'Bearer '+KEY})
+    assert response.status_code==200 and response.json()['sessions']==[]
+    assert not tools.SESSIONS
+    archive.assert_awaited_once()

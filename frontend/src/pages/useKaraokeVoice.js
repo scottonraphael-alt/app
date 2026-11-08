@@ -17,10 +17,11 @@ export function useKaraokeVoice(session,active){
     const status=await karaokeRequest({videoToken,apiRoot},'/voice/status',{query:{instance_id:instanceId}});
     if(stopped)return;
     setVoice(status);
-    if(status.connected){attempts.current=0;setError('');}
-    else if(active&&!status.connecting&&!pending.current&&attempts.current<3){
+    if(status.busy){attempts.current=0;setError(status.message||'OasisLink attend qu’une autre salle soit libre.');}
+    else if(status.connected){attempts.current=0;setError('');}
+    else if(active&&!status.connecting&&!pending.current&&attempts.current<5){
      attempts.current++;pending.current=true;
-     try{await connect();}finally{pending.current=false;}
+     try{await connect();if(!stopped)setError('');}finally{pending.current=false;}
     }
    }catch(e){if(!stopped)setError(e.message);}
    finally{if(!stopped)timer=setTimeout(refresh,3000);}

@@ -27,3 +27,13 @@ test('controls fade after inactivity and wake on activity, menus hold them visib
  await act(async()=>root.render(<Chrome paused/>));
  await act(async()=>jest.advanceTimersByTime(10000));expect(result.visible).toBe(true);
 });
+test('waits for a genuinely busy room and resumes automatic connection once free',async()=>{
+ let occupied=true;
+ global.fetch=jest.fn(async(url)=>({ok:true,json:async()=>url.includes('/status')?{connected:false,busy:occupied,message:occupied?'Autre salle active':''}:{status:'connected'}}));
+ await act(async()=>root.render(<Player/>));
+ expect(result.error).toBe('Autre salle active');expect(fetch.mock.calls.some(([url])=>url.includes('/ensure'))).toBe(false);
+ occupied=false;
+ await act(async()=>jest.advanceTimersByTime(3000));
+ expect(fetch.mock.calls.filter(([url])=>url.includes('/ensure'))).toHaveLength(1);
+ expect(fetch.mock.calls.some(([url])=>url.includes('/consent'))).toBe(false);
+});

@@ -23,6 +23,7 @@ from services.karaoke_scoring import result
 from services.karaoke_techniques import observe as observe_technique, summary as technique_summary
 
 router = APIRouter(prefix='/activity/karaoke', tags=['karaoke-tools'])
+VOICE_LOCK = asyncio.Lock()
 SESSIONS = {}  # One bot voice connection per guild. Like Activity rooms: one API process.
 logger = logging.getLogger(__name__)
 
@@ -175,17 +176,39 @@ async def voice_ensure(payload: VoiceStart, t: str):
     room = karaoke.ROOMS.get(payload.instance_id)
     if not room or str(actor['sub']) not in {c.uid for c in room.clients.values()}:
         raise HTTPException(403, 'Rejoins la salle de karaoké avant de connecter le bot.')
-    existing = next((s for s in SESSIONS.values() if s['instance_id'] == payload.instance_id), None)
-    if existing:
-        return {'status': 'connected', 'id': existing['id']}
-    return await connect_voice(payload, actor)
+    return await connect_voice(payload, actor, reuse=True)
+
+def voice_expired(session):
+    now = time.time()
+    room = karaoke.ROOMS.get(session['instance_id'])
+    if not room or room.mode != 'karaoke':
+        return True
+    if not room.clients and time.monotonic()-room.touched > 10:
+        return True
+    if now-session.get('last_seen', now) > 90 or now-session.get('created_at', now) > 6*3600:
+        return True
+    # A receiver that never connected, or lost its connection, must be recoverable.
+    return now-max(session.get('receiver_at', 0), session.get('created_at', now)) > 35
 
 
-async def connect_voice(payload, actor):
+async def connect_voice(payload, actor, reuse=False):
+    async with VOICE_LOCK:
+        for old in list(SESSIONS.values()):
+            if voice_expired(old):
+                await save_scores(old)
+                await receiver('/stop', {'id': old['id']})
+                SESSIONS.pop(old['id'], None)
+        existing = next((s for s in SESSIONS.values() if s['instance_id'] == payload.instance_id), None)
+        if existing and reuse:
+            return {'status': 'connected', 'id': existing['id']}
+        return await start_voice(payload, actor)
+
+
+async def start_voice(payload, actor):
     if not activity.INSTANCE_ID_RE.fullmatch(payload.instance_id) or payload.instance_id not in karaoke.ROOMS:
         raise HTTPException(404, 'Salle de karaoké introuvable.')
     if SESSIONS:
-        raise HTTPException(409, 'OasisLink est déjà utilisé pour une session vocale. Arrête-la avant de continuer.')
+        raise HTTPException(409, 'OasisLink est utilisé dans une autre salle active. La connexion reprendra dès qu’il sera libre.')
     room = karaoke.ROOMS[payload.instance_id]
     if room.mode != 'karaoke':
         raise HTTPException(409, 'Le score vocal est réservé au karaoké.')
@@ -207,10 +230,11 @@ async def connect_voice(payload, actor):
 @router.post('/voice/stop')
 async def voice_stop(t: str):
     await controller(t)
-    for ident, session in list(SESSIONS.items()):
-        await receiver('/stop', {'id': ident})
-        await save_scores(session)
-        SESSIONS.pop(ident, None)
+    async with VOICE_LOCK:
+        for ident, session in list(SESSIONS.items()):
+            await receiver('/stop', {'id': ident})
+            await save_scores(session)
+            SESSIONS.pop(ident, None)
     return {'status': 'stopped'}
 
 
@@ -241,6 +265,10 @@ async def voice_status(t: str, instance_id: str):
     actor = claims(t)
     session = next((s for s in SESSIONS.values() if s['instance_id'] == instance_id), None)
     if not session:
+        busy = any(not voice_expired(other) for other in SESSIONS.values())
+        return {'connected': False, 'busy': busy, 'scores': [],
+                'message': 'OasisLink est utilisé dans une autre salle active. La connexion reprendra dès qu’il sera libre.' if busy else ''}
+    if voice_expired(session):
         return {'connected': False, 'scores': []}
     session['last_seen'] = time.time()
     await synchronize(session)
@@ -260,11 +288,14 @@ async def voice_control(request: Request):
     await internal(request)
     configurations = []
     for session in list(SESSIONS.values()):
-        session['receiver_at'] = time.time() if request.query_params.get('connected_id') == session['id'] else 0
-        room = await synchronize(session)
-        if not room or session['last_seen'] < time.time()-90 or time.time()-session['created_at'] > 6*3600:
+        if request.query_params.get('connected_id') == session['id']:
+            session['receiver_at'] = time.time()
+        if voice_expired(session):
             await save_scores(session)
             SESSIONS.pop(session['id'], None)
+            continue
+        room = await synchronize(session)
+        if not room:
             continue
         present = {c.uid for c in room.clients.values() if c.plays}
         configurations.append({'id': session['id'], 'channel_id': session['channel_id'],
