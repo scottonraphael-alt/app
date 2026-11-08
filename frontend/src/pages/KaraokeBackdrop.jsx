@@ -37,18 +37,21 @@ export default function KaraokeBackdrop({audioRef,graphRef,energyMap,visualRef,t
    if(time<lastTime-.5){average=.1;lastBurst=stamp/1000;}
    lastTime=time;
    const ease=(current,target,attack,release)=>current+(target-current)*(1-Math.exp(-dt/(target>current?attack:release)));
+   const previousEnergy=smoothEnergy;
    smoothEnergy=ease(smoothEnergy,energy,.32,1.1);
    smoothVoice=ease(smoothVoice,vocals,.16,.65);
    smoothTension=ease(smoothTension,tension,.65,1.2);
    root.current?.style.setProperty('--energy',String(smoothEnergy));
    root.current?.style.setProperty('--tension',String(smoothTension));
    visualRef?.current?.style.setProperty('--vocal-energy',String(smoothVoice));
-   if(drop&&stamp/1000-lastBurst>7){
+   const lift=smoothEnergy>.62&&previousEnergy<=.62;
+   if(!reduced&&active&&(drop||lift)&&stamp/1000-lastBurst>12){
     lastBurst=stamp/1000;
     const burst=root.current?.querySelector('.kb-burst');
     animate(burst,[{opacity:0,transform:'scale(.3)'},{opacity:.08,offset:.3},{opacity:0,transform:'scale(1.8)'}],{duration:2200,easing:'ease-in-out'});
     root.current?.querySelectorAll('.kb-spark').forEach((spark,i)=>animate(spark,
-     [{opacity:.24,transform:'translate(0,0) scale(1)'},{opacity:0,transform:`translate(${Math.cos(i*Math.PI/6)*230}px,${Math.sin(i*Math.PI/6)*160}px) scale(0)`}],{duration:2000,easing:'ease-out'}));
+     [{opacity:0,transform:'translate(0,45px) scale(.3)'},{opacity:.85,offset:.15},{opacity:0,transform:`translate(${Math.cos((i%18)*Math.PI/9)*(100+i%3*35)}px,${Math.sin((i%18)*Math.PI/9)*(100+i%3*35)+55}px) scale(0)`}],{duration:2400,delay:Math.floor(i/18)*240,easing:'cubic-bezier(.12,.65,.3,1)'}));
+    root.current?.querySelectorAll('.kb-ring').forEach((ring,i)=>animate(ring,[{opacity:0,transform:'translate(-50%,-50%) scale(.2)'},{opacity:.25,offset:.2},{opacity:0,transform:'translate(-50%,-50%) scale(2)'}],{duration:2200,delay:i*240,easing:'ease-out'}));
    }
   };
   frame=requestAnimationFrame(tick);
@@ -56,7 +59,7 @@ export default function KaraokeBackdrop({audioRef,graphRef,energyMap,visualRef,t
  },[audioRef,graphRef,energyMap,visualRef]);
  return <div ref={root} className={`kb-root kb-${theme} ${playing?'kb-playing':''}`} aria-hidden="true">
   <div className="kb-orbit a"/><div className="kb-orbit b"/><div className="kb-orbit c"/>
-  <div className="kb-burst"/>{Array.from({length:12},(_,i)=><b className="kb-spark" key={i}/>)}
+  <div className="kb-burst"/>{[0,1,2].map(i=><b className="kb-ring" key={i} style={{left:`${[22,77,52][i]}%`,top:`${[35,30,46][i]}%`}}/>)}{Array.from({length:54},(_,i)=><b className="kb-spark" key={i} style={{left:`${[22,77,52][Math.floor(i/18)]}%`,top:`${[35,30,46][Math.floor(i/18)]}%`,background:['#ffd77b','#f4a5ed','#8af0df'][Math.floor(i/18)]}}/>)}
   {Array.from({length:18},(_,i)=><i key={i} style={{'--i':i}}/>)}
  </div>;
 }

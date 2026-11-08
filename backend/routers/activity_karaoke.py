@@ -447,6 +447,8 @@ class Client:
 
 class KRoom:
     def __init__(self) -> None:
+        self.intermission = None
+        self.next_timer = None
         self.song_generation = 0
         self.mode = "karaoke"  # "karaoke" | "blindtest"
         self.clock = PlaybackClock()
@@ -463,6 +465,8 @@ ROOMS: dict[str, KRoom] = {}
 def purge_rooms() -> None:
     now = time.monotonic()
     for key in [k for k, r in ROOMS.items() if not r.clients and now - r.touched > ROOM_TTL]:
+        from services.karaoke_intermission import clear
+        clear(ROOMS[key])
         _cancel_timer(ROOMS[key])
         del ROOMS[key]
 
@@ -474,9 +478,12 @@ def _cancel_timer(room: KRoom) -> None:
 
 
 def snapshot(room: KRoom) -> dict:
+    from services.karaoke_intermission import public as intermission_state
     tracks = library()
     local = karaoke_tracks()
     if room.mode == "karaoke" and room.track_id not in local:
+        from services.karaoke_intermission import clear
+        clear(room)
         room.track_id = next(iter(local), None)
         room.clock.set_playing(False)
         room.clock.seek(0)
@@ -487,9 +494,11 @@ def snapshot(room: KRoom) -> dict:
         **public(room),
         "type": "kstate",
         "mode": room.mode,
+        "intermission": intermission_state(room),
         "karaoke": {
             "track": track.public() if track else None,
             "playing": room.clock.playing,
+            "generation": room.song_generation,
             "position": round(room.clock.current(), 2),
         },
         "bt": {**room.game.snapshot(), "selection": getattr(room.game, "selection", {})} if room.game else None,
@@ -548,6 +557,8 @@ def on_activity_mode(instance_id: str, mode: str) -> None:
     room = ROOMS.get(instance_id)
     if room is None or mode == "karaoke":
         return
+    from services.karaoke_intermission import clear
+    clear(room)
     room.clock.set_playing(False)
     stop_game(room)
 
@@ -581,6 +592,7 @@ async def handle_guess(room: KRoom, websocket: WebSocket, client: Client, messag
 
 
 async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind: str, message: dict) -> None:
+    from services import karaoke_intermission as intermission
     tracks = library()
     running = room.game is not None and room.game.phase in ("round", "reveal")
 
@@ -591,6 +603,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
         if running:
             await websocket.send_json({"type": "error", "code": "game_running"})
         elif isinstance(name, str) and name in karaoke_tracks():
+            intermission.clear(room)
             room.track_id = name
             room.song_generation += 1
             room.mode = "karaoke"
@@ -599,20 +612,19 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
             room.clock.set_playing(True)
             await broadcast(room)
     elif kind in ("play", "pause") and room.mode == "karaoke":
+        intermission.clear(room)
         room.clock.set_playing(kind == "play")
         await broadcast(room)
     elif kind == "seek" and room.mode == "karaoke" and _finite_number(message.get("position")):
+        intermission.clear(room)
         room.song_generation += 1
         room.clock.seek(float(message["position"]))
         await broadcast(room)
-    elif kind == "ended" and room.mode == "karaoke" and message.get("id") == room.track_id:
-        room.clock.set_playing(False)
-        room.clock.seek(0.0)
-        from services.karaoke_social import handle as social_handle
-        if getattr(room, 'queue', []):
-            await social_handle(room, websocket, client, {'type': 'queue_next'}, tracks)
+    elif kind == "ended" and room.mode == "karaoke" and message.get("id") == room.track_id and message.get("generation") == room.song_generation:
+        intermission.finish(room)
         await broadcast(room)
     elif kind == "bt_start":
+        intermission.clear(room)
         if running:
             await websocket.send_json({'type': 'error', 'code': 'game_running'})
             return
@@ -683,6 +695,16 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
 
 async def handle_message(room: KRoom, websocket: WebSocket, client: Client, message) -> None:
     kind = message.get("type") if isinstance(message, dict) else None
+    if kind in ("next_song", "autoplay_pause") and room.mode == "karaoke":
+        from services import karaoke_intermission as intermission
+        value = room.intermission
+        if value and message.get("id") == value['id']:
+            if kind == "next_song" and client.can_control:
+                intermission.advance(room)
+            elif kind == "autoplay_pause" and isinstance(message.get('paused'), bool):
+                intermission.pause(room, message['paused'])
+            await broadcast(room)
+        return
     from services.karaoke_social import handle as social_handle
     if isinstance(message, dict) and await social_handle(room, websocket, client, message, library()):
         await broadcast(room)

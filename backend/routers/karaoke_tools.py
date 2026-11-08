@@ -132,7 +132,7 @@ async def save_scores(session):
 
 def scores(session):
     return [{'id': uid, 'name': session['names'].get(uid, 'Joueur'), **result(session['reference'], samples, session.get('until', 0), since=session['consents'][uid].get('start_position', 0)),
-             'techniques': technique_summary(session.get('techniques', {}).get(uid))}
+             'run_id': session.get('run_id'), 'techniques': technique_summary(session.get('techniques', {}).get(uid))}
             for uid in session['consents'] for samples in [session['samples'].get(uid, {})]] if session.get('reference') else []
 
 

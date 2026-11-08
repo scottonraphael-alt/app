@@ -26,5 +26,14 @@ def result(reference, samples, until, *, since=0):
     pitch = None
     if pitched:
         pitch = round(100*sum(pitch_accuracy(samples.get(bin, {}).get('pitch'), hz) for bin, hz in pitched)/len(pitched))
-    return {'rhythm': rhythm, 'pitch': pitch, 'score': rhythm if pitch is None else round(.5*rhythm+.5*pitch),
+    # 100 points per expected 100 ms of singing, shared equally between presence
+    # and pitch when a reliable reference note exists. Silence never earns points.
+    points = 0
+    for bin in expected:
+        value = samples.get(bin, {})
+        if not value.get('voiced'):
+            continue
+        hz = reference_pitch[bin] if bin < len(reference_pitch) else 0
+        points += 100 if not hz else 50 + round(50*pitch_accuracy(value.get('pitch'), hz))
+    return {'points': points, 'points_max': len(expected)*100, 'rhythm': rhythm, 'pitch': pitch, 'score': rhythm if pitch is None else round(.5*rhythm+.5*pitch),
             'coverage': round(hit/max(1, len(expected)), 3), 'reference': 'aligned-vocals', 'frames': len(samples)}

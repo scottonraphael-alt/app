@@ -1,4 +1,5 @@
 import {useEffect,useRef} from 'react';
+import KaraokeScore from './KaraokeScore';
 import {karaokeRequest} from './KaraokeTools';
 
 const name=midi=>['Do','Do♯','Ré','Ré♯','Mi','Fa','Fa♯','Sol','Sol♯','La','La♯','Si'][((Math.round(midi)%12)+12)%12]+(Math.floor(midi/12)-1);
@@ -60,7 +61,7 @@ export default function KaraokeNotes({notes,audioRef,octave,session,consented,sc
  return <section className="kn-root" aria-label="Guide de mélodie" style={{position:"relative",zIndex:1,flexShrink:0,padding:'8px 16px',border:'1px solid #ffffff25',borderRadius:12,background:'#100e25aa'}}>
   <div style={{display:'flex',justifyContent:'space-between',gap:12,fontSize:12}}>
    <span>Guide mélodique</span>
-   {score?.pitch!=null?<span style={{display:"flex",alignItems:"center",gap:8}}><progress aria-label="Justesse vocale indicative" max="100" value={score.pitch} style={{width:70,height:8,accentColor:"#ffae57"}}/><strong>Justesse : {score.pitch} %</strong></span>:<span>{consented?'Ta voix : briques jaunes':'Guide de référence · sans micro'}</span>}
+   {consented?<KaraokeScore score={score}/>:<span>Guide de référence · sans micro</span>}
   </div>
 
   <canvas className="kn-canvas" ref={canvas} style={{display:'block',width:'100%',height:130}} role="img" aria-label="Notes de référence et historique vocal jaune ; le repère blanc marque le présent"/>

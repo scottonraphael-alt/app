@@ -3,3 +3,5 @@
 @media(prefers-reduced-motion:reduce){.kb-burst,.kb-spark{display:none}.kl-fill{filter:none}.kb-orbit{transition:none}}
 
 @media(max-width:600px){.karaoke-stage .kn-canvas{height:90px!important}}
+
+.kb-ring{position:absolute;width:110px;height:110px;opacity:0;border:1px solid #ffe1a6;border-radius:50%;box-shadow:0 0 30px #ffb86a18;pointer-events:none}.kb-spark{box-shadow:0 0 10px currentColor;width:4px;height:4px}@media(prefers-reduced-motion:reduce){.kb-ring{display:none}}

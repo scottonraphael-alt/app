@@ -57,6 +57,8 @@ async def handle(room, websocket, client, message, tracks):
             return True
         reservation = room.queue.pop(0)
         if reservation['track']['id'] in tracks:
+            from services.karaoke_intermission import clear
+            clear(room)
             room.track_id = reservation['track']['id']
             room.song_generation = getattr(room, 'song_generation', 0) + 1
             room.clock.seek(0)

@@ -136,3 +136,12 @@ Exemple : sélectionner **Rock** et **Années 1980**. Le choix d’une catégori
 Les sélections utilisent des playlists publiques Deezer dont les titres correspondent aux thèmes demandés. Il s’agit de sélections thématiques, pas d’une vérification de l’année de sortie originale de chaque enregistrement. Seuls les morceaux disposant d’un extrait valide sont retenus. Une sélection vide ou indisponible est signalée, sans remplacer silencieusement le thème par le classement général.
 
 Les catégories sont chargées uniquement à la demande. Les requêtes simultanées pour une même sélection sont regroupées, les chargements réseau sont limités et 24 sélections au maximum restent en cache mémoire. Aucun service karaoké/Whisper supplémentaire n’est nécessaire.
+
+
+## Points de chant et fin de morceau
+
+Le compteur reçoit des points calculés côté serveur : jusqu’à 100 points par tranche chantée de 100 ms attendue dans les paroles. Une référence de hauteur exploitable partage les points à parts égales entre présence vocale et justesse (octave ignorée) ; sans hauteur, la présence attendue suffit. Le silence ne rapporte rien. Chaque gain est doré au maximum possible, turquoise au-dessus de la moitié, violet sinon. Le score repart de zéro avec une nouvelle lecture.
+
+À la fin d’un morceau, les résultats restent visibles pendant un compte à rebours partagé de 70 secondes. Tout participant peut le mettre en pause ou le reprendre ; l’animateur peut passer immédiatement au suivant. La file est prioritaire, puis le serveur tire un autre lot Mac valide (le même morceau uniquement s’il est seul). Une sélection manuelle annule le compte à rebours. Le calcul de l’échéance et le changement de morceau restent sur le serveur.
+
+Les effets visuels utilisent les fortes montées d’énergie et les drops préparés ou mesurés en direct ; ce ne sont pas des annotations manuelles des refrains. Les salves de particules sont espacées d’au moins 12 secondes et désactivées avec la préférence de réduction des animations.

@@ -1,3 +1,5 @@
+import KaraokeIntermission from './KaraokeIntermission';
+import KaraokeScore from './KaraokeScore';
 import { useCallback, useEffect, useRef, useState } from "react";
 import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
@@ -392,6 +394,7 @@ export default function KaraokeStage({ session, onExit }) {
   const {data:analysis, status:analysisStatus, error:analysisError, reload:reloadAnalysis} = useKaraokeAnalysis({
     trackId, apiRoot:PROXY, token:videoToken, revision:0});
   const {voice:voiceStatus,busy:scoreBusy,error:voiceError,toggle:toggleScore}=useKaraokeVoice(session,connected&&mode==='karaoke');
+  const ownScore=voiceStatus?.consented ? voiceStatus.scores?.find(item=>String(item.id)===String(userId)) : undefined;
   const chrome=useKaraokeChrome(catalogOpen||themeOpen||volumeOpen||Boolean(panel));
   const chromeClass='kc-chrome'+(chrome.visible?'':' kc-hidden');
   const audioUrl = trackId ? `${PROXY}/activity/karaoke/audio?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}&v=${encodeURIComponent(analysis?.version || "")}` : '';
@@ -592,7 +595,7 @@ export default function KaraokeStage({ session, onExit }) {
       }}
       onEnded={(event) => {
         if (canControl && stateRef.current && stateRef.current.mode === "karaoke") {
-          send({ type: "ended", id: event.currentTarget.dataset.id });
+          send({ type: "ended", id: event.currentTarget.dataset.id, generation: stateRef.current.karaoke?.generation });
         }
       }}
     /><audio ref={instrumentalRef} crossOrigin="anonymous" preload="auto" /><audio ref={vocalRef} crossOrigin="anonymous" preload="auto" /></div>
@@ -650,7 +653,9 @@ export default function KaraokeStage({ session, onExit }) {
       {(notice||voiceError||analysisStatus==='unavailable')&&<div className={'kc-notice '+chromeClass} role="status">{notice||voiceError||analysisError}{analysisStatus==='unavailable'&&<button className="kc-badge" onClick={reloadAnalysis}>Recharger le morceau</button>}</div>}
       {mode === 'karaoke' && showNotes && Boolean(analysis?.notes?.length) && <KaraokeNotes notes={analysis.notes}
         audioRef={audioRef} octave={octave} session={session} consented={Boolean(voiceStatus?.consented)}
-        score={voiceStatus?.consented ? voiceStatus.scores?.find(item=>String(item.id)===String(userId)) : undefined} />}
+        score={ownScore} />}
+      {mode==='karaoke'&&!showNotes&&voiceStatus?.consented&&<div className="ki-standalone-score"><KaraokeScore score={ownScore}/></div>}
+      {mode==='karaoke'&&<KaraokeIntermission value={state.intermission} score={ownScore} canControl={canControl} send={send}/>}
       <KaraokeTools session={session} state={state} library={library} favorites={favorites} send={send} plays={plays} open={catalogOpen} onClose={closeCatalog}/>
 
       <div className="karaoke-scene" style={S.main}>
