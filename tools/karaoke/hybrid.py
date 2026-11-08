@@ -96,6 +96,7 @@ def transcribe(model, audio, language, source, destination, args, label, existin
     try:
         saved = json.loads(path.read_text())
         if saved['signature'] == signature:
+            print(f'  Whisper {label} : transcription vérifiée reprise du cache.', flush=True)
             return saved['transcript']
     except (OSError, ValueError, KeyError, TypeError):
         pass
@@ -172,8 +173,8 @@ def arbitrate(rows, language, destination, source, refresh=False):
 
 def hybrid_text(model, primary, source, destination, args, metadata, seconds, raw, language, existing=None, hints=None):
     from prepare import lyric_lines, timestamp
+    demucs = transcribe(model, primary, getattr(args, 'language', None), source, destination, args, 'demucs', existing)
     other, _ = roformer_stems(source, destination, args, seconds)
-    demucs = transcribe(model, primary, language, source, destination, args, 'demucs', existing)
     roformer = transcribe(model, other, language, source, destination, args, 'roformer')
     lines = lyric_lines(raw) if raw else [''.join(w['word'] for w in s.get('words', [])).strip()
                                         for s in demucs['segments'] if s.get('words')]

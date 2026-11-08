@@ -149,3 +149,21 @@ def test_hybrid_keeps_double_transcripts_choices_and_acoustic_anchors(monkeypatc
     assert other.name == 'second.wav'
     saved = json.loads((tmp_path/'Artist - Song.candidates.json').read_text())
     assert len(saved['rows']) == 2 and all(row['demucs'] and row['roformer'] for row in saved['rows'])
+
+
+def test_primary_transcript_is_cached_even_when_roformer_fails(monkeypatch, tmp_path):
+    module = load('hybrid', monkeypatch)
+    source, voice = tmp_path/'song.mp3', tmp_path/'voice.wav'
+    source.write_bytes(b'original')
+    voice.write_bytes(b'isolated')
+    from unittest.mock import Mock
+    model = NS(transcribe=Mock(return_value=NS(to_dict=lambda: {'language':'en','segments':[]})))
+    def failure(*args):
+        raise RuntimeError('RoFormer export error')
+    monkeypatch.setattr(module, 'roformer_stems', failure)
+    args = NS(language=None, model='large-v3')
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match='export error'):
+            module.hybrid_text(model, voice, source, tmp_path, args, {}, 10, None, 'en')
+    assert model.transcribe.call_count == 1
+    assert (tmp_path/'song.demucs.transcript.json').is_file()

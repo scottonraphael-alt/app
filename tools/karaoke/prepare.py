@@ -552,9 +552,14 @@ def prepare(source, destination, args):
             model = stable_whisper.load_model(args.model, device='cpu')
             transcript = None
             if not raw:
-                transcript = model.transcribe(str(vocals), language=language, task='transcribe', fp16=False,
-                                              temperature=0, beam_size=5, condition_on_previous_text=False)
-                result = transcript.to_dict()
+                if getattr(args, 'hybrid', False):
+                    from hybrid import transcribe
+                    result = transcribe(model, vocals, language, source, destination, args, 'demucs')
+                    transcript = stable_whisper.WhisperResult(result)
+                else:
+                    transcript = model.transcribe(str(vocals), language=language, task='transcribe', fp16=False,
+                                                  temperature=0, beam_size=5, condition_on_previous_text=False)
+                    result = transcript.to_dict()
                 language = language or result.get('language') or getattr(transcript, 'language', None)
                 if not args.language:
                     raw, origin = source_lyrics(source, metadata, seconds, not args.no_lrclib, language)
