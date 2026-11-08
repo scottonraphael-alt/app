@@ -62,7 +62,7 @@ async def handle(room, websocket, client, message, tracks):
             room.track_id = reservation['track']['id']
             room.song_generation = getattr(room, 'song_generation', 0) + 1
             room.clock.seek(0)
-            room.clock.set_playing(True)
+            room.clock.set_playing(not bool(getattr(room, "welcome", None)))
     elif kind == 'roulette' and client.can_control:
         excluded = message.get('excluded', [])
         if not isinstance(excluded, list):

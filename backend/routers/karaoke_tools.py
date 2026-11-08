@@ -85,6 +85,15 @@ async def site_session(helper=Depends(current_helper)):
             'canControl': control, 'instanceId': 'site-oasis'}
 
 
+@router.get('/rankings')
+async def rankings(t: str, track_id: str | None = None):
+    claims(t)
+    if track_id and (len(track_id) > 64 or not track_id.isalnum()):
+        raise HTTPException(422, 'Morceau invalide.')
+    from services.karaoke_rankings import leaderboard
+    return {'rows': await leaderboard(track_id), 'scope': 'song' if track_id else 'overall'}
+
+
 @router.get('/preparation')
 async def preparation(t: str, id: str):
     claims(t)
@@ -124,11 +133,16 @@ class Consent(BaseModel):
     latency_ms: int = Field(default=0, ge=-500, le=2000)
 
 
-async def save_scores(session):
+async def save_scores(session, completed=False):
+    if completed:
+        session["completed"] = True
     if session.get('reference'):
         await db.karaoke_results.update_one({'_id': session['run_id']}, {'$set': {
             'instance_id': session['instance_id'], 'track_id': session['track_id'], 'at': time.time(),
-            'scores': scores(session)}}, upsert=True)
+            'scores': scores(session), 'completed': bool(session.get('completed'))}}, upsert=True)
+        if session.get('completed'):
+            from services.karaoke_rankings import record
+            await record(karaoke.local_library().get(session.get('track_id')), scores(session))
 
 
 def scores(session):
@@ -146,7 +160,7 @@ async def synchronize(session):
         await save_scores(session)
         track = karaoke.local_library().get(room.track_id)
         session.update(song_key=ident, track_id=room.track_id, reference=await asyncio.to_thread(prepared, track) if track else None,
-                       run_id=uuid4().hex, samples={}, techniques={}, until=0, seen={})
+                       run_id=uuid4().hex, samples={}, techniques={}, until=0, seen={}, completed=False)
         for consent in session['consents'].values():
             consent['start_position'] = room.clock.current()
     if not session.get('reference') and session.get('reference_checked', 0) < time.time()-3:

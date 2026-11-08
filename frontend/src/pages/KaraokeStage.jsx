@@ -1,3 +1,5 @@
+import KaraokeWelcome from './KaraokeWelcome';
+import KaraokeRankings from './KaraokeRankings';
 import KaraokeIntermission from './KaraokeIntermission';
 import KaraokeScore from './KaraokeScore';
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,7 +10,7 @@ import KaraokeNotes from "./KaraokeNotes";
 import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
 import { useKaraokeAudio } from "./karaokeAudio";
 import KaraokeBackdrop from "./KaraokeBackdrop";
-import {Volume2, Palette, Mic, Library, Users, Music2} from "lucide-react";
+import {Volume2, Palette, Mic, Library, Users, Music2, Trophy} from "lucide-react";
 import {useKaraokeVoice} from "./useKaraokeVoice";
 import {useKaraokeChrome} from "./useKaraokeChrome";
 import "./KaraokeStage.css";
@@ -352,6 +354,8 @@ function BlindTestView({ state, send, canControl, userId, feedback, plays, setPl
 export default function KaraokeStage({ session, onExit }) {
   const { videoToken, instanceId, canControl, userName, userId } = session;
   const PROXY = session.apiRoot || DEFAULT_PROXY;
+  const [rankingsOpen,setRankingsOpen]=useState(false);
+  const closeRankings=useCallback(()=>setRankingsOpen(false),[]);
   const [catalogOpen,setCatalogOpen]=useState(false);
   const [themeOpen,setThemeOpen]=useState(false);
   const [volumeOpen,setVolumeOpen]=useState(false);
@@ -372,7 +376,7 @@ export default function KaraokeStage({ session, onExit }) {
   const [seekPreview, setSeekPreview] = useState(null);
   const [volume, setVolume] = useState(() => loadPref("karaoke.volume", 0.8));
   const [showRomaji, setShowRomaji] = useState(() => loadPref("karaoke.romaji", true));
-  const [plays, setPlays] = useState(true);
+  const [plays, setPlays] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [notice, setNotice] = useState("");
   const [panel, setPanel] = useState(null); // "blindtest" | null
@@ -395,7 +399,7 @@ export default function KaraokeStage({ session, onExit }) {
     trackId, apiRoot:PROXY, token:videoToken, revision:0});
   const {voice:voiceStatus,busy:scoreBusy,error:voiceError,toggle:toggleScore}=useKaraokeVoice(session,connected&&mode==='karaoke');
   const ownScore=voiceStatus?.consented ? voiceStatus.scores?.find(item=>String(item.id)===String(userId)) : undefined;
-  const chrome=useKaraokeChrome(catalogOpen||themeOpen||volumeOpen||Boolean(panel));
+  const chrome=useKaraokeChrome(Boolean(state?.welcome)||rankingsOpen||catalogOpen||themeOpen||volumeOpen||Boolean(panel));
   const chromeClass='kc-chrome'+(chrome.visible?'':' kc-hidden');
   const audioUrl = trackId ? `${PROXY}/activity/karaoke/audio?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}&v=${encodeURIComponent(analysis?.version || "")}` : '';
   const { graphRef, mix } = useKaraokeAudio({ audioRef, instrumentalRef, vocalRef, stems: Boolean(analysis?.stems && mode === 'karaoke'),
@@ -628,7 +632,8 @@ export default function KaraokeStage({ session, onExit }) {
         <div className="kc-badges">
           <span className="kc-badge">{mode==='blindtest'?'🎯 Blind test':'🎤 Karaoké'}</span>
           <button className="kc-badge" disabled={mode!=='karaoke'} onClick={()=>setCatalogOpen(true)}><Library size={16}/>Catalogue{state.queue?.length?` · ${state.queue.length}`:''}</button>
-          <button className={'kc-badge '+(plays?'kc-selected':'')} aria-pressed={plays} onClick={()=>setPlays(v=>!v)}><Users size={16}/>{plays?'Je participe':'Spectateur'}</button>
+          <button className="kc-badge kc-icon" aria-label="Ouvrir les classements" onClick={()=>setRankingsOpen(true)}><Trophy size={17}/></button>
+          <button className={'kc-badge '+(plays?'kc-selected':'')} aria-pressed={plays} onClick={()=>setPlays(v=>!v)}><Users size={16}/>{plays?'Je participe ✓':'Je participe'}</button>
         </div>
         <div className="kc-track" title={track?`${track.title} — ${track.artist||''}`:''}>{track&&<><strong>{track.title}</strong><span>{track.artist}</span></>}</div>
         <div className="kc-actions">
@@ -641,11 +646,11 @@ export default function KaraokeStage({ session, onExit }) {
           </div>
           {mode==='karaoke'&&<button className={'kc-badge '+(voiceStatus?.consented?'kc-selected':'')} disabled={scoreBusy} aria-pressed={Boolean(voiceStatus?.consented)} title="L’activation analyse le rythme et la hauteur de ta voix dans le salon vocal. Aucun enregistrement conservé. Reclique pour arrêter." onClick={toggleScore}><Mic size={16}/>{scoreBusy?'Connexion…':voiceStatus?.consented?'Désactiver les scores':'Activer les scores'}</button>}
           {mode==='karaoke'&&<button className={'kc-badge '+(showNotes?'kc-selected':'')} disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes)} onClick={()=>setShowNotes(v=>{savePref('karaoke.notes',!v);return !v;})}><Music2 size={16}/>{showNotes?'Masquer le guide de notes':'Afficher le guide de notes'}</button>}
+          {mode==='karaoke'&&showNotes&&<label className="kc-badge kc-octave"><Music2 size={15}/><select aria-label="Tessiture" value={octave} onChange={e=>{const v=Number(e.target.value);setOctave(v);savePref('karaoke.octave',v);}}>{[[-2,'Très grave'],[-1,'Grave'],[0,'Neutre'],[1,'Aigu'],[2,'Très aigu']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
           <div className="kc-theme">
             <button className="kc-badge kc-icon" aria-label="Choisir le thème" aria-expanded={themeOpen} onClick={()=>setThemeOpen(v=>!v)}><Palette size={19}/></button>
             {themeOpen&&<div className="kc-theme-panel" role="group" aria-label="Thème et affichage">
               <strong>Ambiance</strong>{[['neon','Néon'],['ocean','Océan'],['aurora','Aurore']].map(([id,label])=><button key={id} disabled={!canControl} aria-pressed={state.theme===id} onClick={()=>{send({type:'theme',value:id});setThemeOpen(false);}}>{label}</button>)}
-              {showNotes&&<label>Octave <select aria-label="Mon octave" value={octave} onChange={e=>{const v=Number(e.target.value);setOctave(v);savePref('karaoke.octave',v);}}>{[-2,-1,0,1,2].map(v=><option key={v} value={v}>{v>0?'+':''}{v}</option>)}</select></label>}
             </div>}
           </div>
         </div>
@@ -655,7 +660,9 @@ export default function KaraokeStage({ session, onExit }) {
         audioRef={audioRef} octave={octave} session={session} consented={Boolean(voiceStatus?.consented)}
         score={ownScore} />}
       {mode==='karaoke'&&!showNotes&&voiceStatus?.consented&&<div className="ki-standalone-score"><KaraokeScore score={ownScore}/></div>}
-      {mode==='karaoke'&&<KaraokeIntermission value={state.intermission} score={ownScore} canControl={canControl} send={send}/>}
+      {mode==='karaoke'&&<KaraokeIntermission value={state.intermission} score={ownScore} canControl={canControl} send={send} onRankings={()=>setRankingsOpen(true)}/>}
+      {mode==='karaoke'&&<KaraokeWelcome value={state.welcome} players={state.players} plays={plays} setPlays={setPlays} onCatalog={()=>setCatalogOpen(true)} onRankings={()=>setRankingsOpen(true)}/>}
+      <KaraokeRankings session={session} open={rankingsOpen} onClose={closeRankings} track={track} tracks={localTracks}/>
       <KaraokeTools session={session} state={state} library={library} favorites={favorites} send={send} plays={plays} open={catalogOpen} onClose={closeCatalog}/>
 
       <div className="karaoke-scene" style={S.main}>

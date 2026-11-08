@@ -447,6 +447,9 @@ class Client:
 
 class KRoom:
     def __init__(self) -> None:
+        self.welcome = None
+        self.welcome_timer = None
+        self.needs_welcome = True
         self.intermission = None
         self.next_timer = None
         self.song_generation = 0
@@ -467,6 +470,8 @@ def purge_rooms() -> None:
     for key in [k for k, r in ROOMS.items() if not r.clients and now - r.touched > ROOM_TTL]:
         from services.karaoke_intermission import clear
         clear(ROOMS[key])
+        from services.karaoke_welcome import clear as clear_welcome
+        clear_welcome(ROOMS[key])
         _cancel_timer(ROOMS[key])
         del ROOMS[key]
 
@@ -495,6 +500,7 @@ def snapshot(room: KRoom) -> dict:
         "type": "kstate",
         "mode": room.mode,
         "intermission": intermission_state(room),
+        "welcome": room.welcome,
         "karaoke": {
             "track": track.public() if track else None,
             "playing": room.clock.playing,
@@ -559,6 +565,9 @@ def on_activity_mode(instance_id: str, mode: str) -> None:
         return
     from services.karaoke_intermission import clear
     clear(room)
+    from services.karaoke_welcome import clear as clear_welcome
+    clear_welcome(room)
+    room.needs_welcome = True
     room.clock.set_playing(False)
     stop_game(room)
 
@@ -609,9 +618,11 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
             room.mode = "karaoke"
             room.game = None
             room.clock.seek(0.0)
-            room.clock.set_playing(True)
+            room.clock.set_playing(not bool(room.welcome))
             await broadcast(room)
     elif kind in ("play", "pause") and room.mode == "karaoke":
+        if room.welcome:
+            return
         intermission.clear(room)
         room.clock.set_playing(kind == "play")
         await broadcast(room)
@@ -621,9 +632,18 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
         room.clock.seek(float(message["position"]))
         await broadcast(room)
     elif kind == "ended" and room.mode == "karaoke" and message.get("id") == room.track_id and message.get("generation") == room.song_generation:
+        if room.welcome:
+            return
         intermission.finish(room)
+        from routers import karaoke_tools
+        for session in list(karaoke_tools.SESSIONS.values()):
+            if ROOMS.get(session['instance_id']) is room:
+                await karaoke_tools.synchronize(session)
+                await karaoke_tools.save_scores(session, completed=True)
         await broadcast(room)
     elif kind == "bt_start":
+        from services.karaoke_welcome import clear as clear_welcome
+        clear_welcome(room)
         intermission.clear(room)
         if running:
             await websocket.send_json({'type': 'error', 'code': 'game_running'})
@@ -738,6 +758,7 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     purge_rooms()
     room = ROOMS.setdefault(instance_id, KRoom())
     client = Client(str(claims.get("sub") or "unknown"), bool(claims.get("can_control")))
+    client.plays = False  # Join is explicit on the welcome screen or participation badge.
     room.clients[websocket] = client
     room.touched = time.monotonic()
 
@@ -745,6 +766,8 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
         ensure_catalog()
         # Verify bundles off the event loop before the initial track selection.
         initial_library = await library_message()
+        from services.karaoke_welcome import ensure as ensure_welcome
+        ensure_welcome(room)
         await websocket.send_json(snapshot(room))
         if client.can_control:
             await websocket.send_json(initial_library)
@@ -760,6 +783,13 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     finally:
         room.clients.pop(websocket, None)
         room.touched = time.monotonic()
+        if not room.clients:
+            from services.karaoke_welcome import clear as clear_welcome
+            clear_welcome(room)
+            from services.karaoke_intermission import clear as clear_intermission
+            clear_intermission(room)
+            room.needs_welcome = True
+            room.clock.set_playing(False)
 
 
 @router.get("/analysis")

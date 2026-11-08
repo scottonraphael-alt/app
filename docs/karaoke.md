@@ -145,3 +145,12 @@ Le compteur reçoit des points calculés côté serveur : jusqu’à 100 points 
 À la fin d’un morceau, les résultats restent visibles pendant un compte à rebours partagé de 70 secondes. Tout participant peut le mettre en pause ou le reprendre ; l’animateur peut passer immédiatement au suivant. La file est prioritaire, puis le serveur tire un autre lot Mac valide (le même morceau uniquement s’il est seul). Une sélection manuelle annule le compte à rebours. Le calcul de l’échéance et le changement de morceau restent sur le serveur.
 
 Les effets visuels utilisent les fortes montées d’énergie et les drops préparés ou mesurés en direct ; ce ne sont pas des annotations manuelles des refrains. Les salves de particules sont espacées d’au moins 12 secondes et désactivées avec la préférence de réduction des animations.
+
+
+## Accueil et classements
+
+Une nouvelle salle affiche un accueil partagé de 20 secondes avant la première lecture. Chaque membre choisit « Je participe » pour rejoindre la roulette ; cette inscription reste disponible pendant la partie et ne donne pas l’accord d’analyse vocale. Rejoindre une salle déjà en cours ne relance pas l’accueil. Quand le dernier membre ferme la salle, ses minuteries sont annulées et la prochaine ouverture retrouve l’accueil.
+
+L’icône trophée ouvre les classements par chanson et général. Ils enregistrent les points calculés par le serveur à la fin d’une chanson avec le score vocal actif. Chaque membre conserve son meilleur score par morceau ; le classement général additionne ces records, sans cumuler les répétitions. Les données persistent dans MongoDB (`karaoke_bests`), avec au maximum 100 joueurs affichés par classement.
+
+La tessiture est réglable à côté du bouton du guide, séparément des thèmes : Très grave (−2 octaves), Grave (−1), Neutre, Aigu (+1), Très aigu (+2). Ce réglage reste personnel ; le calcul de justesse ignore l’octave.
