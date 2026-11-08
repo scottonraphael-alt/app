@@ -210,3 +210,21 @@ def test_preparation_transport_imports_without_the_rest_of_iris():
         "assert 'discord' not in sys.modules; assert 'anthropic' not in sys.modules; "
         "assert 'torch' not in sys.modules"],cwd=backend,capture_output=True,text=True)
     assert result.returncode==0,result.stderr
+
+
+def test_auto_voice_join_requires_room_membership_and_is_idempotent(monkeypatch):
+    receiver = AsyncMock(return_value={'status':'connected','channel_id':'1556220183775805481'})
+    monkeypatch.setattr(tools,'receiver',receiver)
+    room=karaoke.KRoom();karaoke.ROOMS['test-room']=room
+    body={'instance_id':'test-room'}
+    assert client.post('/activity/karaoke/voice/ensure',params={'t':token()},json=body).status_code==403
+    from types import SimpleNamespace
+    room.clients[object()]=SimpleNamespace(uid='123')
+    first=client.post('/activity/karaoke/voice/ensure',params={'t':token()},json=body)
+    second=client.post('/activity/karaoke/voice/ensure',params={'t':token()},json=body)
+    assert first.status_code==second.status_code==200
+    receiver.assert_awaited_once()
+    assert receiver.call_args.args[1]['actor_id']=='123'
+    assert receiver.call_args.args[1]['channel_id'] is None
+    session=next(iter(tools.SESSIONS.values()))
+    assert session['channel_id']=='1556220183775805481' and session['consents']=={}

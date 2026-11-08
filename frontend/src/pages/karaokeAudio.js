@@ -41,7 +41,7 @@ export function useKaraokeAudio({ audioRef, instrumentalRef, vocalRef, stems, au
     if (existing) { clearTimeout(existing.dispose); graphRef.current = existing; }
     const gains = () => {
       const { volume: level, guide: voice } = options.current;
-      const values = ready.current ? [0, clamp(level), clamp(level)*clamp(voice)] : [clamp(level), 0, 0];
+      const values = ready.current ? [0, clamp(level), clamp(voice)] : [clamp(level), 0, 0];
       const graph = graphRef.current;
       elements.forEach((element, index) => {
         if (graph) graph.channels[index].gain.gain.setTargetAtTime(values[index], graph.context.currentTime, .025);

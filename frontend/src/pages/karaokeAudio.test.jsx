@@ -39,7 +39,7 @@ test('mixe les pistes localement, synchronise un saut et revient à l’original
   await act(async()=>root.render(<Player guide={.5}/>));
   await act(async()=>master.dispatchEvent(new Event('play')));
   expect(sources).toBe(3);
-  expect(graph.current.channels.map(channel=>channel.gain.gain.value)).toEqual([0,.8,.4]);
+  expect(graph.current.channels.map(channel=>channel.gain.gain.value)).toEqual([0,.8,.5]);
   await act(async()=>root.render(<Player guide={0}/>));
   expect(graph.current.channels.map(channel=>channel.gain.gain.value)).toEqual([0,.8,0]);
   master.currentTime=34;

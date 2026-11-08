@@ -182,3 +182,14 @@ def stem_path(track, part):
     if part not in SUFFIXES or not portable(track):
         return None
     return track.path.with_suffix(SUFFIXES[part])
+
+
+def public_catalog(tracks, prepared_only=False):
+    """Run in a worker thread: verify once and expose Mac-ready songs explicitly."""
+    rows = []
+    for track in tracks.values():
+        ready = not track.remote and portable(track) is not None
+        if prepared_only and not ready:
+            continue
+        rows.append({**track.public(), 'prepared': ready})
+    return rows

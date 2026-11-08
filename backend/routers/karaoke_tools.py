@@ -115,7 +115,7 @@ async def prepare(t: str, id: str):
 
 class VoiceStart(BaseModel):
     instance_id: str = Field(max_length=128)
-    channel_id: str = Field(pattern=r'^\d{17,20}$')
+    channel_id: str | None = Field(default=None, pattern=r'^\d{17,20}$')
 
 
 class Consent(BaseModel):
@@ -166,6 +166,22 @@ async def synchronize(session):
 @router.post('/voice/start')
 async def voice_start(payload: VoiceStart, t: str):
     actor = await controller(t)
+    return await connect_voice(payload, actor)
+
+
+@router.post('/voice/ensure')
+async def voice_ensure(payload: VoiceStart, t: str):
+    actor = claims(t)
+    room = karaoke.ROOMS.get(payload.instance_id)
+    if not room or str(actor['sub']) not in {c.uid for c in room.clients.values()}:
+        raise HTTPException(403, 'Rejoins la salle de karaoké avant de connecter le bot.')
+    existing = next((s for s in SESSIONS.values() if s['instance_id'] == payload.instance_id), None)
+    if existing:
+        return {'status': 'connected', 'id': existing['id']}
+    return await connect_voice(payload, actor)
+
+
+async def connect_voice(payload, actor):
     if not activity.INSTANCE_ID_RE.fullmatch(payload.instance_id) or payload.instance_id not in karaoke.ROOMS:
         raise HTTPException(404, 'Salle de karaoké introuvable.')
     if SESSIONS:
@@ -180,7 +196,8 @@ async def voice_start(payload: VoiceStart, t: str):
                'created_at': time.time(), 'last_seen': time.time(), 'receiver_at': 0, 'reference': None}
     SESSIONS[ident] = session
     try:
-        await receiver('/start', {'id': ident, 'channel_id': payload.channel_id, 'guild_id': str(config.DISCORD_GUILD_ID), 'actor_id': actor['sub']})
+        connected = await receiver('/start', {'id': ident, 'channel_id': payload.channel_id, 'guild_id': str(config.DISCORD_GUILD_ID), 'actor_id': actor['sub']})
+        session['channel_id'] = connected.get('channel_id') or payload.channel_id
     except Exception:
         SESSIONS.pop(ident, None)
         raise

@@ -1,5 +1,6 @@
 """Shared song reservations, fair draws and per-member favourites."""
 import random
+import asyncio
 import time
 from uuid import uuid4
 from database import db
@@ -34,7 +35,8 @@ async def handle(room, websocket, client, message, tracks):
         row = await db.karaoke_preferences.find_one({'_id': client.uid})
         await websocket.send_json({'type': 'favorites', 'ids': row.get('favorites', [])})
     elif kind == 'browse' and room.mode == 'karaoke':
-        await websocket.send_json({'type': 'library', 'tracks': [t.public() for t in tracks.values()]})
+        from services.karaoke_assets import public_catalog
+        await websocket.send_json({'type': 'library', 'tracks': await asyncio.to_thread(public_catalog, tracks, True)})
         row = await db.karaoke_preferences.find_one({'_id': client.uid})
         await websocket.send_json({'type': 'favorites', 'ids': (row or {}).get('favorites', [])})
     elif kind == 'queue_add' and room.mode == 'karaoke':

@@ -6,6 +6,7 @@ export default function KaraokeBackdrop({audioRef,graphRef,energyMap,visualRef,t
  const root=useRef(null);
  useEffect(()=>{
   let frame, lastTick=0, average=.1, lastBurst=-10, lastTime=0;
+  let smoothEnergy=0,smoothVoice=0,smoothTension=0;
   const visual=visualRef?.current, host=root.current, effects=new Set();
   const animate=(node,frames,options)=>{const effect=node?.animate?.(frames,options);if(effect){effects.add(effect);effect.onfinish=()=>effects.delete(effect);effect.oncancel=()=>effects.delete(effect);}};
   const media=window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -14,6 +15,7 @@ export default function KaraokeBackdrop({audioRef,graphRef,energyMap,visualRef,t
   const tick=stamp=>{
    frame=requestAnimationFrame(tick);
    if(stamp-lastTick<33)return;
+   const dt=Math.min(.15,Math.max(.001,(stamp-lastTick)/1000));
    lastTick=stamp;
    const audio=audioRef.current, time=audio?.currentTime||0;
    const active=audio&&!audio.paused&&!audio.ended;
@@ -21,7 +23,7 @@ export default function KaraokeBackdrop({audioRef,graphRef,energyMap,visualRef,t
    let energy=0,vocals=0,tension=0,drop=false;
    if(active&&!reduced){
     const prepared=preparedEnergy(energyMap,time);
-    if(prepared){energy=Math.min(1,prepared.energy+(prepared.beat ? .12 : 0));vocals=prepared.vocals;tension=prepared.tension;drop=prepared.drop;}
+    if(prepared){energy=Math.min(1,prepared.energy+(prepared.beat ? .035 : 0));vocals=prepared.vocals;tension=prepared.tension;drop=prepared.drop;}
     else{
      const channels=graphRef?.current?.channels;
      const separated=Boolean(channels&&channels[1].gain.gain.value>.001);
@@ -34,15 +36,19 @@ export default function KaraokeBackdrop({audioRef,graphRef,energyMap,visualRef,t
    }
    if(time<lastTime-.5){average=.1;lastBurst=stamp/1000;}
    lastTime=time;
-   root.current?.style.setProperty('--energy',String(energy));
-   root.current?.style.setProperty('--tension',String(tension));
-   visualRef?.current?.style.setProperty('--vocal-energy',String(vocals));
-   if(drop&&stamp/1000-lastBurst>3){
+   const ease=(current,target,attack,release)=>current+(target-current)*(1-Math.exp(-dt/(target>current?attack:release)));
+   smoothEnergy=ease(smoothEnergy,energy,.32,1.1);
+   smoothVoice=ease(smoothVoice,vocals,.16,.65);
+   smoothTension=ease(smoothTension,tension,.65,1.2);
+   root.current?.style.setProperty('--energy',String(smoothEnergy));
+   root.current?.style.setProperty('--tension',String(smoothTension));
+   visualRef?.current?.style.setProperty('--vocal-energy',String(smoothVoice));
+   if(drop&&stamp/1000-lastBurst>7){
     lastBurst=stamp/1000;
     const burst=root.current?.querySelector('.kb-burst');
-    animate(burst,[{opacity:0,transform:'scale(.3)'},{opacity:.2,offset:.15},{opacity:0,transform:'scale(1.8)'}],{duration:1000,easing:'ease-out'});
+    animate(burst,[{opacity:0,transform:'scale(.3)'},{opacity:.08,offset:.3},{opacity:0,transform:'scale(1.8)'}],{duration:2200,easing:'ease-in-out'});
     root.current?.querySelectorAll('.kb-spark').forEach((spark,i)=>animate(spark,
-     [{opacity:.7,transform:'translate(0,0) scale(1)'},{opacity:0,transform:`translate(${Math.cos(i*Math.PI/6)*230}px,${Math.sin(i*Math.PI/6)*160}px) scale(0)`}],{duration:1000}));
+     [{opacity:.24,transform:'translate(0,0) scale(1)'},{opacity:0,transform:`translate(${Math.cos(i*Math.PI/6)*230}px,${Math.sin(i*Math.PI/6)*160}px) scale(0)`}],{duration:2000,easing:'ease-out'}));
    }
   };
   frame=requestAnimationFrame(tick);

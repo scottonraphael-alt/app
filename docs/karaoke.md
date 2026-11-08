@@ -12,18 +12,18 @@ Le code de l'archive `karaoke-complet-v1-v2-v3.zip` a été repris par modules. 
 
 - Paroles LRC, LRCLIB, romanisation japonais/chinois/coréen et autres alphabets, remplissage des paroles et pauses.
 - Blind test avec réponses et scores calculés sur le serveur, titre/artiste/source, manches communes, révélation et classement.
-- Catalogue local et extraits Deezer de 30 secondes réservés au blind test. Recherche par titre/artiste, filtre langue/source, recherche Deezer à la demande de l'animateur.
+- Catalogue karaoké limité aux lots Mac complets et valides, avec recherche, langue, favoris et file d’attente. Les extraits Deezer restent réservés au blind test.
 - Favoris sauvegardés par membre en MongoDB.
 - Réservation de chansons : jusqu'à trois par joueur, 50 dans la file. L'animateur lance la suivante ; la fin du morceau passe également à la suivante. Chacun peut retirer ses réservations, l'animateur toutes les réservations.
 - Roulette partagée, solo/duo, exclusions et évitement de la sélection précédente lorsque le nombre de candidats le permet. Chaque joueur peut se retirer du tirage.
 - Fonds originaux Néon, Océan, Aurore, avec particules et réaction à la musique lorsque Web Audio est disponible. Aucun visuel Joysound sous licence n'a été copié.
-- Import audio via le site/Activity par un animateur, avec titre, artiste et source. Formats MP3/OGG/OPUS/M4A/AAC/FLAC/WAV/WEBM. 200 Mo et 20 minutes maximum ; aucun téléchargement audio depuis une URL fournie par un joueur.
+- Interface de lecture : badges Catalogue et Je participe en haut à gauche ; volumes musique et voix guide indépendants dans le menu audio au survol (ou au clic sur écran tactile). Thème, notes et octave dans le menu à icône. Les commandes s’effacent après 3,2 secondes sans activité et restent affichées pendant l’utilisation d’un menu. Aucun réglage de synchronisation manuel.
 
 ## Préparation recommandée sur Mac
 
 Le traitement lourd peut désormais être réalisé hors du VPS. Le [guide du script Mac](../tools/karaoke/README.md) décrit l’installation, la préparation d’un dossier et la copie du lot de fichiers.
 
-Le mode par défaut de l’API est `KARAOKE_PREPARATION_MODE=external` : un import non préparé ne lance ni ne met en file de modèle sur le VPS. Les morceaux originaux restent lisibles. Les lots Mac valides fournissent directement les paroles, le score de référence, le mix personnel et les effets, sans base de préparation à reconstruire.
+Le mode par défaut de l’API est `KARAOKE_PREPARATION_MODE=external` : un import non préparé ne lance ni ne met en file de modèle sur le VPS. Seuls les lots Mac complets et validés sont proposés dans le catalogue karaoké. Les lots Mac valides fournissent directement les paroles, le score de référence, le mix personnel et les effets, sans base de préparation à reconstruire.
 
 Pour conserver explicitement l’ancien worker CPU optionnel, configurer `KARAOKE_PREPARATION_MODE=server` pour le backend et lancer le profil Compose `karaoke-cpu`. Ce worker reste facultatif ; sa configuration et les anciens diagnostics CPU ci-dessous concernent uniquement ce mode.
 
@@ -48,9 +48,9 @@ L'API doit rester à **un processus Uvicorn**, comme la configuration actuelle :
 
 Le service vocal utilise par défaut le **même bot OasisLink** via `DISCORD_BOT_TOKEN` et une connexion Gateway séparée limitée aux événements vocaux. Il ne réenregistre pas de commandes et ne traite pas la modération. Un bot n'occupe qu'un vocal par serveur ; si OasisLink y est déjà utilisé, la demande est refusée. Si cette identité provoque un conflit avec un autre usage vocal, on peut fournir `KARAOKE_BOT_TOKEN` pour un bot spécialisé déjà invité sur le serveur.
 
-L'animateur rejoint son vocal puis clique sur « Connecter OasisLink » (l'Activity renseigne le salon ; sur le site, saisir son identifiant). Le service vérifie la présence effective de l'animateur dans le salon. Permissions nécessaires : voir le salon, se connecter, écrire dans son chat vocal ; intents Guilds et GuildVoiceStates. Aucune permission d'administration n'est nécessaire.
+OasisLink rejoint automatiquement le salon vocal du participant à l’ouverture du karaoké. L’Activity fournit son salon lorsqu’il est disponible ; sinon le récepteur retrouve le vocal du membre via Discord. Le service vérifie sa présence effective dans ce salon. La connexion est idempotente pour une même salle, avec trois tentatives automatiques maximum. Permissions nécessaires : voir le salon, se connecter, écrire dans son chat vocal ; intents Guilds et GuildVoiceStates. Aucune permission d'administration n'est nécessaire.
 
-Un message d'information est envoyé **avant** la connexion vocale et aux nouveaux arrivants. Chaque joueur active séparément « J'accepte l'analyse de ma voix ». Un joueur sans accord n'a pas de flux audio abonné au décodeur. Le retrait est pris en compte côté API immédiatement et côté récepteur au passage suivant (environ 300 ms). Les joueurs absents de la salle de jeu ou du vocal ne sont pas analysés.
+Un message d'information est envoyé **avant** la connexion vocale et aux nouveaux arrivants. Chaque joueur clique sur « Activer les scores » pour donner son accord à l’analyse ; le même bouton devient « Désactiver les scores » pour retirer cet accord. La connexion automatique ne donne aucun accord implicite. Un joueur sans accord n'a pas de flux audio abonné au décodeur. Le retrait est pris en compte côté API immédiatement et côté récepteur au passage suivant (environ 300 ms). Les joueurs absents de la salle de jeu ou du vocal ne sont pas analysés.
 
 - Pas d'accès au micro du navigateur/Activity, donc la permission microphone reste désactivée dans Nginx.
 - Pas de stockage d'enregistrement vocal, de transcription de joueurs ni d'envoi de leur voix à Whisper ou à une API d'IA.
@@ -95,7 +95,7 @@ Compilation frontend complète effectuée avec `DISABLE_ESLINT_PLUGIN=true CI=fa
 
 Aucun accès au serveur de production ni salon Discord de test n'a été utilisé. Docker n'est pas installé dans cet environnement : les images et le téléchargement des modèles lourds restent à valider sur le serveur. Le code est livré avec cette distinction ; il ne constitue pas une validation vocale réelle de bout en bout.
 
-Après déploiement : importer un morceau, attendre sa préparation, rejoindre le vocal à deux, connecter OasisLink, vérifier l'annonce, tester sans accord puis avec accord, retirer l'accord, comparer une note à l'octave et calibrer la latence. Vérifier desktop et mobile. La réception audio Discord reste expérimentale dans la bibliothèque et ne bénéficie pas d'une garantie officielle de stabilité.
+Après déploiement : importer un morceau, attendre sa préparation, rejoindre le vocal à deux, vérifier la connexion automatique et l’annonce, tester sans score puis activer les scores, retirer l’accord et comparer une note à l’octave. Vérifier desktop et mobile. La réception audio Discord reste expérimentale dans la bibliothèque et ne bénéficie pas d'une garantie officielle de stabilité.
 
 Sources techniques : [Discord Voice/DAVE](https://github.com/discord/discord-api-docs/blob/main/developers/topics/voice-connections.mdx), [récepteur @discordjs/voice](https://github.com/discordjs/discord.js/tree/main/packages/voice), [WhisperX](https://github.com/m-bain/whisperX).
 

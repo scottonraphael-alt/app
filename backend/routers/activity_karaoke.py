@@ -492,8 +492,9 @@ def snapshot(room: KRoom) -> dict:
     }
 
 
-def library_message() -> dict:
-    return {"type": "library", "tracks": [track.public() for track in library().values()]}
+async def library_message() -> dict:
+    from services.karaoke_assets import public_catalog
+    return {"type": "library", "tracks": await asyncio.to_thread(public_catalog, library())}
 
 
 async def broadcast(room: KRoom, message: dict | None = None) -> None:
@@ -580,7 +581,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
     running = room.game is not None and room.game.phase in ("round", "reveal")
 
     if kind == "list":
-        await websocket.send_json(library_message())
+        await websocket.send_json(await library_message())
     elif kind == "select":
         name = message.get("id")
         if running:
@@ -718,7 +719,7 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
         ensure_catalog()
         await websocket.send_json(snapshot(room))
         if client.can_control:
-            await websocket.send_json(library_message())
+            await websocket.send_json(await library_message())
         while True:
             await handle_message(room, websocket, client, await websocket.receive_json())
     except WebSocketDisconnect:

@@ -59,10 +59,10 @@ export default function KaraokeNotes({notes,audioRef,octave,session,consented,sc
  },[notes,audioRef,octave]);
  return <section className="kn-root" aria-label="Guide de mélodie" style={{position:"relative",zIndex:1,flexShrink:0,padding:'8px 16px',border:'1px solid #ffffff25',borderRadius:12,background:'#100e25aa'}}>
   <div style={{display:'flex',justifyContent:'space-between',gap:12,fontSize:12}}>
-   <span>Guide mélodique · extraction automatique</span>
-   {score?.pitch!=null?<span style={{display:"flex",alignItems:"center",gap:8}}><progress aria-label="Justesse vocale indicative" max="100" value={score.pitch} style={{width:70,height:8,accentColor:"#ffae57"}}/><strong>Justesse : {score.pitch} % · score indicatif</strong></span>:<span>{consented?'Ta voix : briques jaunes':'Guide de référence · sans micro'}</span>}
+   <span>Guide mélodique</span>
+   {score?.pitch!=null?<span style={{display:"flex",alignItems:"center",gap:8}}><progress aria-label="Justesse vocale indicative" max="100" value={score.pitch} style={{width:70,height:8,accentColor:"#ffae57"}}/><strong>Justesse : {score.pitch} %</strong></span>:<span>{consented?'Ta voix : briques jaunes':'Guide de référence · sans micro'}</span>}
   </div>
-  {score?.techniques && <p style={{fontSize:11,opacity:.75,margin:'4px 0'}}>Techniques indicatives · vibratos : {score.techniques.vibrato} · glissandos : {score.techniques.glissando}</p>}
+
   <canvas className="kn-canvas" ref={canvas} style={{display:'block',width:'100%',height:130}} role="img" aria-label="Notes de référence et historique vocal jaune ; le repère blanc marque le présent"/>
  </section>;
 }

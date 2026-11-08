@@ -22,7 +22,7 @@ const CSS = `
 .kl-blob.b { background: #ff4f9a; right: -20%; bottom: -30%; animation-delay: -8s; opacity: 0.26; }
 .kl-blob.c { background: #1fb6ff; left: 30%; top: 35%; animation-delay: -15s; opacity: 0.16; }
 .kl-rows { position: absolute; inset: 0; z-index: 1; display: grid; grid-template-rows: minmax(0,1fr) minmax(0,1fr);
-  gap: 12px; padding: 24px 5%; box-sizing: border-box; font-size: clamp(24px, 4.4vw, 52px); font-weight: 800; }
+  gap: 6px; padding: 12px 4%; box-sizing: border-box; font-size: clamp(40px, 5.5vw, 92px); font-weight: 800; }
 .kl-slot { display: flex; align-items: center; width: 100%; min-height: 0; }
 .kl-slot.top { justify-content: flex-start; }
 .kl-slot.bottom { justify-content: flex-end; }
@@ -34,8 +34,8 @@ const CSS = `
 .kl-base { color: #fff; -webkit-text-stroke-color: #2b1d78; }
 .kl-fill { position: absolute; left: 0; top: 0; color: #ff4f9a; -webkit-text-stroke-color: #fff;
   clip-path: inset(-1em calc(100% - var(--p, 0%)) -1em 0); }
-.kl-tok ruby { display: inline-flex; flex-direction: column-reverse; align-items: center; vertical-align: bottom; padding-inline: .045em; ruby-align: center; }
-.kl-tok rt { display: block; line-height: 1.25; padding-inline: .10em; text-align: center; white-space: pre; font-size: 0.4em; font-weight: 700; letter-spacing: 0.04em; -webkit-text-stroke-width: 0.16em; }
+.kl-tok ruby { display: inline-flex; flex-direction: column-reverse; align-items: center; vertical-align: bottom; padding-inline: .01em; ruby-align: center; }
+.kl-tok rt { display: block; line-height: 1.25; padding-inline: .025em; text-align: center; white-space: pre; font-size: 0.29em; font-weight: 700; letter-spacing: 0; -webkit-text-stroke-width: 0.16em; }
 .kl-dots { position: absolute; left: 0; top: -0.7em; display: flex; gap: 0.22em; pointer-events: none; }
 .kl-dots i { width: 0.34em; height: 0.34em; border-radius: 50%; background: #ff4f9a; border: 0.05em solid #fff;
   opacity: 0; transform: scale(0.4); transition: opacity 140ms ease, transform 140ms ease; }
@@ -105,12 +105,13 @@ function Line({ line, showRomaji }) {
     const element = ref.current, slot = element?.parentElement;
     if (!element || !slot) return;
     const fit = () => {
-      element.style.fontSize = '52px';
+      const base=Math.min(92,Math.max(42,slot.clientWidth*.055));
+      element.style.fontSize = `${base}px`;
       const naturalWidth = element.scrollWidth;
       const naturalHeight = element.getBoundingClientRect().height;
       if (!slot.clientWidth || !slot.clientHeight || !naturalWidth || !naturalHeight) return;
       const scale = Math.min(1, (slot.clientWidth-24)/naturalWidth, (slot.clientHeight-24)/naturalHeight);
-      element.style.fontSize = `${Math.max(1, 52*scale)}px`;
+      element.style.fontSize = `${Math.max(1, base*scale)}px`;
     };
     fit();
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;

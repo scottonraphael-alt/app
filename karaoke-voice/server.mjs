@@ -88,7 +88,9 @@ const server=http.createServer(async(req,res)=>{
     if(!client.isReady())throw new Error('Le bot est en cours de connexion.');
     if(String(body.guild_id)!==String(process.env.DISCORD_GUILD_ID))throw new Error('Serveur non autorisé.');
     const guild=await client.guilds.fetch(body.guild_id);
-    const channel=await guild.channels.fetch(body.channel_id);
+    const channelId=body.channel_id||guild.voiceStates.cache.get(body.actor_id)?.channelId;
+    if(!channelId)throw new Error('Rejoins un salon vocal Discord pour activer les scores.');
+    const channel=await guild.channels.fetch(channelId);
     if(channel?.type!==ChannelType.GuildVoice||!channel.members.has(body.actor_id))throw new Error('Rejoins ce salon vocal avant de connecter le bot.');
     if(guild.members.me.voice.channelId)throw new Error('OasisLink est déjà utilisé dans un salon vocal.');
     // Notice must be delivered BEFORE joining/receiving any participant audio.
@@ -98,7 +100,7 @@ const server=http.createServer(async(req,res)=>{
     active={id:body.id,channel,connection,streams:new Map(),frames:[],sequence:new Map(),allowed:new Set(),generation:null};
     connection.on('error',()=>stop());
     connection.on(VoiceConnectionStatus.Disconnected,()=>stop());
-    reply(200,{status:'connected',bot_id:client.user.id});
+    reply(200,{status:'connected',bot_id:client.user.id,channel_id:channel.id});
   }catch(error){reply(409,{error:error.message});}finally{if(claimedStart)starting=false;}
 });
 client.once('clientReady',()=>{server.listen(8091,'0.0.0.0');loop();});

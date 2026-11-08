@@ -580,3 +580,12 @@ def test_analysis_explains_missing_pitch_without_exposing_server_paths(tmp_path)
     data = response.json()
     assert data['available'] is False and '.pitch.json' in data['error']
     assert str(tmp_path) not in data['error']
+
+
+def test_public_karaoke_catalog_excludes_unprepared_files(tmp_path):
+    song=bundle(tmp_path)
+    (tmp_path/'Raw.mp3').write_bytes(b'unprepared-audio')
+    tracks=rules.scan_library(tmp_path,'catalog-secret')
+    rows=assets.public_catalog(tracks,True)
+    assert len(rows)==1 and rows[0]['prepared'] is True
+    assert rows[0]['title'] in ('Titre', 'Artiste - Titre')

@@ -6,6 +6,10 @@ import KaraokeNotes from "./KaraokeNotes";
 import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
 import { useKaraokeAudio } from "./karaokeAudio";
 import KaraokeBackdrop from "./KaraokeBackdrop";
+import {Volume2, Palette, Mic, Library, Users, Music2} from "lucide-react";
+import {useKaraokeVoice} from "./useKaraokeVoice";
+import {useKaraokeChrome} from "./useKaraokeChrome";
+import "./KaraokeStage.css";
 
 // Même principe que CinéStream : tout passe par /.proxy (URL Mappings du portail Discord).
 const DEFAULT_PROXY = "/.proxy/backend/api";
@@ -346,18 +350,18 @@ function BlindTestView({ state, send, canControl, userId, feedback, plays, setPl
 export default function KaraokeStage({ session, onExit }) {
   const { videoToken, instanceId, canControl, userName, userId } = session;
   const PROXY = session.apiRoot || DEFAULT_PROXY;
-  const [mixRetry, setMixRetry] = useState(0);
-  const [voiceStatus, setVoiceStatus] = useState(null);
+  const [catalogOpen,setCatalogOpen]=useState(false);
+  const [themeOpen,setThemeOpen]=useState(false);
+  const [volumeOpen,setVolumeOpen]=useState(false);
+  const closeCatalog=useCallback(()=>setCatalogOpen(false),[]);
   const [guide, setGuide] = useState(() => Math.max(0, Math.min(1, Number(loadPref("karaoke.guide", 1)) || 0)));
-  const [showNotes, setShowNotes] = useState(() => loadPref("karaoke.notes", false));
+  const [showNotes, setShowNotes] = useState(() => loadPref("karaoke.notes", true));
   const [octave, setOctave] = useState(() => Math.max(-2, Math.min(2, Number(loadPref("karaoke.octave", 0)) || 0)));
   const [favorites, setFavorites] = useState([]);
-  const [preparationRevision, setPreparationRevision] = useState(0);
-  const onPrepared = useCallback(() => setPreparationRevision(v => v + 1), []);
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(null);
   const [library, setLibrary] = useState([]);
-  const localTracks = library.filter((item) => !item.preview); // les extraits de 30 s ne servent qu'au blind test
+  const localTracks = library.filter((item) => item.prepared === true && !item.preview); // les extraits de 30 s ne servent qu'au blind test
   const [lyrics, setLyrics] = useState({ status: "idle", lines: [] });
   const [lyricsGate, setLyricsGate] = useState(null);
   const [needsClick, setNeedsClick] = useState(false);
@@ -366,11 +370,10 @@ export default function KaraokeStage({ session, onExit }) {
   const [seekPreview, setSeekPreview] = useState(null);
   const [volume, setVolume] = useState(() => loadPref("karaoke.volume", 0.8));
   const [showRomaji, setShowRomaji] = useState(() => loadPref("karaoke.romaji", true));
-  const [offset, setOffset] = useState(() => loadPref("karaoke.offset", 0));
   const [plays, setPlays] = useState(true);
   const [feedback, setFeedback] = useState(null);
   const [notice, setNotice] = useState("");
-  const [panel, setPanel] = useState(null); // "tracks" | "blindtest" | null
+  const [panel, setPanel] = useState(null); // "blindtest" | null
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [starting, setStarting] = useState(false);
   const [settings, setSettings] = useState({ rounds: 10, seconds: 20, pool: "all", style: "", decade: "" });
@@ -387,10 +390,13 @@ export default function KaraokeStage({ session, onExit }) {
   const trackId = mode === "karaoke" && track ? track.id : null;
 
   const {data:analysis, status:analysisStatus, error:analysisError, reload:reloadAnalysis} = useKaraokeAnalysis({
-    trackId, apiRoot:PROXY, token:videoToken, revision:preparationRevision});
+    trackId, apiRoot:PROXY, token:videoToken, revision:0});
+  const {voice:voiceStatus,busy:scoreBusy,error:voiceError,toggle:toggleScore}=useKaraokeVoice(session,connected&&mode==='karaoke');
+  const chrome=useKaraokeChrome(catalogOpen||themeOpen||volumeOpen||Boolean(panel));
+  const chromeClass='kc-chrome'+(chrome.visible?'':' kc-hidden');
   const audioUrl = trackId ? `${PROXY}/activity/karaoke/audio?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}&v=${encodeURIComponent(analysis?.version || "")}` : '';
   const { graphRef, mix } = useKaraokeAudio({ audioRef, instrumentalRef, vocalRef, stems: Boolean(analysis?.stems && mode === 'karaoke'),
-    audioUrl, volume, guide, retry: mixRetry });
+    audioUrl, volume, guide });
 
 
   const send = useCallback((payload) => {
@@ -546,15 +552,9 @@ export default function KaraokeStage({ session, onExit }) {
         if (error.name !== "AbortError") setLyrics({ status: "error", lines: [] });
       });
     return () => controller.abort();
-  }, [trackId, lyricsGate, videoToken, preparationRevision, PROXY]);
+  }, [trackId, lyricsGate, videoToken, PROXY]);
 
-  const getTime = useCallback(() => (audioRef.current ? audioRef.current.currentTime : 0) + offset, [offset]);
-
-  const changeOffset = (delta) => {
-    const next = Math.round((offset + delta) * 100) / 100;
-    setOffset(next);
-    savePref("karaoke.offset", next);
-  };
+  const getTime = useCallback(() => audioRef.current?.currentTime || 0, []);
 
   const toggleRomaji = () => {
     setShowRomaji((value) => {
@@ -615,62 +615,44 @@ export default function KaraokeStage({ session, onExit }) {
   }[lyrics.status];
 
   return (
-    <div className="karaoke-stage" ref={visualRef} style={S.page}>
+    <div className="karaoke-stage" ref={visualRef} style={S.page} onPointerMove={chrome.wake} onPointerDown={e=>{chrome.wake();if(!e.target.closest(".kc-volume"))setVolumeOpen(false);if(!e.target.closest(".kc-theme"))setThemeOpen(false);}} onKeyDown={e=>{chrome.wake();if(e.key==="Escape"){setVolumeOpen(false);setThemeOpen(false);}}}>
       <KaraokeBackdrop audioRef={audioRef} graphRef={graphRef} energyMap={mode === 'karaoke' ? analysis?.energy : null}
         visualRef={visualRef} theme={state.theme} playing={playing || (mode === 'blindtest' && state.bt?.phase !== 'final')}/>
       <style>{KEYFRAMES}</style>
       {audioElement}
 
-      <div style={S.top}>
-        <span style={S.badge}>{mode === "blindtest" ? "🎯 Blind test" : "🎤 Karaoké"}</span>
-        {!connected && <span style={S.badge}>Connexion…</span>}
-        {mode === "karaoke" && track && (
-          <span style={{ fontSize: 15, opacity: 0.9 }}>
-            <strong>{track.title}</strong>
-            {track.artist ? ` — ${track.artist}` : ""}
-          </span>
-        )}
-        {notice && <span style={{ ...S.badge, background: "rgba(255,170,60,0.35)" }}>{notice}</span>}
-        <span style={{ flex: 1 }} />
-        <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center" }} title="Volume">
-          🔊
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={volume}
-            aria-label="Volume"
-            style={{ accentColor: "#ff6ec4" }}
-            onChange={(event) => changeVolume(Number(event.currentTarget.value))}
-          />
-        </label>
-      </div>
-
-      {mode === 'karaoke' && track && <div style={{display:'flex',gap:16,alignItems:'center',flexWrap:'wrap',padding:'4px 16px',position:'relative',zIndex:2}}>
-        <label style={{display:'flex',gap:8,alignItems:'center',fontSize:13}}>Voix guide
-          <input aria-label="Présence de la voix guide" type="range" min="0" max="1" step=".05" value={guide}
-            disabled={!analysis?.stems || mix === 'fallback'} onChange={event => { const value=Number(event.target.value);setGuide(value);savePref("karaoke.guide",value); }} />
-          {analysis?.stems ? `${Math.round(guide*100)} %` : analysisStatus === 'loading' ? 'Chargement…' : 'Pistes préparées non chargées'}
-        </label>
-        {mix === 'loading' && <small role="status">Chargement des pistes séparées…</small>}
-        {mix === 'fallback' && <><small role="status">Pistes séparées indisponibles : lecture du morceau original.</small><button type="button" style={S.ghost} onClick={()=>setMixRetry(value=>value+1)}>Réessayer les pistes séparées</button></>}
-        <small>Réglage personnel, mémorisé sur cet appareil.</small>
-        {analysisStatus === 'loading' && <small role="status">Chargement du guide de notes…</small>}
-        {(analysisStatus === 'unavailable' || (analysisStatus === 'ready' && !analysis?.notes?.length)) && <>
-          <small role="status">{analysisError || "Aucune mélodie exploitable dans la préparation de ce morceau."}</small>
-          <button type="button" style={S.ghost} onClick={reloadAnalysis}>Recharger les données du morceau</button>
-        </>}
-        <button type="button" style={S.ghost} disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes && analysis?.notes?.length)}
-          onClick={() => {setShowNotes(value=>{savePref("karaoke.notes",!value);return !value;});}}>Guide de notes : {analysis?.notes?.length ? (showNotes?'oui':'non') : analysisStatus === 'loading' ? 'chargement…' : 'indisponible'}</button>
-        {showNotes && Boolean(analysis?.notes?.length) && <label>Mon octave <select aria-label="Mon octave" value={octave}
-          onChange={event=>{const value=Number(event.target.value);setOctave(value);savePref("karaoke.octave",value);}}>
-          {[-2,-1,0,1,2].map(value=><option key={value} value={value}>{value>0?'+':''}{value}</option>)}</select></label>}
-      </div>}
+      <header className={'kc-top '+chromeClass}>
+        <div className="kc-badges">
+          <span className="kc-badge">{mode==='blindtest'?'🎯 Blind test':'🎤 Karaoké'}</span>
+          <button className="kc-badge" disabled={mode!=='karaoke'} onClick={()=>setCatalogOpen(true)}><Library size={16}/>Catalogue{state.queue?.length?` · ${state.queue.length}`:''}</button>
+          <button className={'kc-badge '+(plays?'kc-selected':'')} aria-pressed={plays} onClick={()=>setPlays(v=>!v)}><Users size={16}/>{plays?'Je participe':'Spectateur'}</button>
+        </div>
+        <div className="kc-track" title={track?`${track.title} — ${track.artist||''}`:''}>{track&&<><strong>{track.title}</strong><span>{track.artist}</span></>}</div>
+        <div className="kc-actions">
+          <div className="kc-volume" onFocus={()=>setVolumeOpen(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setVolumeOpen(false);}} onMouseEnter={()=>setVolumeOpen(true)} onMouseLeave={()=>setVolumeOpen(false)}>
+            <button className="kc-badge kc-icon" aria-label="Régler les volumes" aria-expanded={volumeOpen} onClick={()=>setVolumeOpen(true)}><Volume2 size={19}/></button>
+            <div className={'kc-volume-panel '+(volumeOpen?'is-open':'')}>
+              <label>Musique <output>{Math.round(volume*100)} %</output><input aria-label="Volume de la musique" type="range" min="0" max="1" step=".01" value={volume} onChange={e=>changeVolume(Number(e.target.value))}/></label>
+              <label>Voix guide <output>{Math.round(guide*100)} %</output><input aria-label="Volume de la voix guide" type="range" min="0" max="1" step=".01" value={guide} disabled={!analysis?.stems||mix==='fallback'} onChange={e=>{const v=Number(e.target.value);setGuide(v);savePref('karaoke.guide',v);}}/></label>
+            </div>
+          </div>
+          {mode==='karaoke'&&<button className={'kc-badge '+(voiceStatus?.consented?'kc-selected':'')} disabled={scoreBusy} aria-pressed={Boolean(voiceStatus?.consented)} title="L’activation analyse le rythme et la hauteur de ta voix dans le salon vocal. Aucun enregistrement conservé. Reclique pour arrêter." onClick={toggleScore}><Mic size={16}/>{scoreBusy?'Connexion…':voiceStatus?.consented?'Désactiver les scores':'Activer les scores'}</button>}
+          <div className="kc-theme">
+            <button className="kc-badge kc-icon" aria-label="Choisir le thème" aria-expanded={themeOpen} onClick={()=>setThemeOpen(v=>!v)}><Palette size={19}/></button>
+            {themeOpen&&<div className="kc-theme-panel" role="group" aria-label="Thème et affichage">
+              <strong>Ambiance</strong>{[['neon','Néon'],['ocean','Océan'],['aurora','Aurore']].map(([id,label])=><button key={id} disabled={!canControl} aria-pressed={state.theme===id} onClick={()=>{send({type:'theme',value:id});setThemeOpen(false);}}>{label}</button>)}
+              <button disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes)} onClick={()=>setShowNotes(v=>{savePref('karaoke.notes',!v);return !v;})}><Music2 size={14}/>Guide de notes {showNotes?'✓':''}</button>
+              {showNotes&&<label>Octave <select aria-label="Mon octave" value={octave} onChange={e=>{const v=Number(e.target.value);setOctave(v);savePref('karaoke.octave',v);}}>{[-2,-1,0,1,2].map(v=><option key={v} value={v}>{v>0?'+':''}{v}</option>)}</select></label>}
+            </div>}
+          </div>
+        </div>
+      </header>
+      {(notice||voiceError||analysisStatus==='unavailable')&&<div className={'kc-notice '+chromeClass} role="status">{notice||voiceError||analysisError}{analysisStatus==='unavailable'&&<button className="kc-badge" onClick={reloadAnalysis}>Recharger le morceau</button>}</div>}
       {mode === 'karaoke' && showNotes && Boolean(analysis?.notes?.length) && <KaraokeNotes notes={analysis.notes}
         audioRef={audioRef} octave={octave} session={session} consented={Boolean(voiceStatus?.consented)}
         score={voiceStatus?.consented ? voiceStatus.scores?.find(item=>String(item.id)===String(userId)) : undefined} />}
-      <KaraokeTools onVoiceChange={setVoiceStatus} session={session} state={state} library={library} favorites={favorites} onPrepared={onPrepared} send={send} setLibrary={setLibrary} track={track} plays={plays} setPlays={setPlays}/>
+      <KaraokeTools session={session} state={state} library={library} favorites={favorites} send={send} plays={plays} open={catalogOpen} onClose={closeCatalog}/>
+
       <div className="karaoke-scene" style={S.main}>
         {mode === "blindtest" && state.bt ? (
           <BlindTestView
@@ -690,28 +672,6 @@ export default function KaraokeStage({ session, onExit }) {
 
       {mode === "karaoke" && (
         <>
-          {canControl && panel === "tracks" && (
-            <div style={S.panel}>
-              <div style={{ padding: "6px 10px", fontSize: 13, opacity: 0.7 }}>Choisir un morceau ({localTracks.length})</div>
-              {localTracks.length === 0 && (
-                <div style={{ padding: 10 }}>Aucun fichier audio dans le dossier. Le catalogue Deezer ne sert qu'au blind test (extraits de 30 s).</div>
-              )}
-              {localTracks.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  style={{ ...S.item, background: track && item.id === track.id ? "rgba(255,255,255,0.14)" : "transparent" }}
-                  onClick={() => {
-                    setPanel(null);
-                    send({ type: "select", id: item.id });
-                  }}
-                >
-                  <span>{track && item.id === track.id ? "▶ " : ""}{item.title}{item.artist ? ` — ${item.artist}` : ""}</span>
-                  <span style={{ opacity: 0.6, fontSize: 12 }}>{item.lang ? item.lang.toUpperCase() : ""}</span>
-                </button>
-              ))}
-            </div>
-          )}
           {canControl && panel === "blindtest" && (
             <div style={{ ...S.panel, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ fontWeight: 800 }}>🎯 Lancer un blind test</div>
@@ -779,7 +739,7 @@ export default function KaraokeStage({ session, onExit }) {
             </div>
           )}
 
-          <div style={S.bar}>
+          <div className={'kc-bottom '+chromeClass} style={S.bar}>
             {canControl && (
               <div style={{ display: "grid", gridTemplateColumns: "48px minmax(120px, 1fr) 48px", alignItems: "center", gap: 10, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
                 <span>{formatTime(seekPreview === null ? position : seekPreview)}</span>
@@ -807,7 +767,7 @@ export default function KaraokeStage({ session, onExit }) {
                   <button type="button" style={S.button} disabled={!track} onClick={() => send({ type: playing ? "pause" : "play" })}>
                     {playing ? "⏸ Pause" : "▶ Lecture"}
                   </button>
-                  <button type="button" style={S.button} onClick={() => setPanel(panel === "tracks" ? null : "tracks")}>
+                  <button type="button" style={S.button} onClick={() => setCatalogOpen(true)}>
                     🎵 Morceaux
                   </button>
                   <button type="button" style={S.button} onClick={() => setPanel(panel === "blindtest" ? null : "blindtest")}>
@@ -824,12 +784,7 @@ export default function KaraokeStage({ session, onExit }) {
                 {showRomaji ? "Romaji : oui" : "Romaji : non"}
               </button>
 
-              <span style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }} title="Compense le décalage audio de ton appareil">
-                Synchro
-                <button type="button" style={S.ghost} onClick={() => changeOffset(-0.25)} aria-label="Paroles plus tard">−</button>
-                <span style={{ minWidth: 44, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{offset > 0 ? "+" : ""}{offset.toFixed(2)} s</span>
-                <button type="button" style={S.ghost} onClick={() => changeOffset(0.25)} aria-label="Paroles plus tôt">+</button>
-              </span>
+
             </div>
           </div>
         </>
