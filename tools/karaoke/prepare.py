@@ -267,6 +267,108 @@ def separated_stems(source, destination, args, seconds, device):
     return vocals, instrumental, cached
 
 
+class args_estimated:  # set by main() from --allow-estimated
+    allow = False
+
+
+CJK_LANGUAGES = ('ja', 'zh', 'ko')
+_KAKASI = []
+
+
+def lyric_units(text, language):
+    """Comparable units: words, or characters (kana for Japanese) for CJK."""
+    if language in CJK_LANGUAGES:
+        if language == 'ja':
+            import pykakasi
+            if not _KAKASI:
+                _KAKASI.append(pykakasi.kakasi())
+            text = ''.join(item['hira'] for item in _KAKASI[0].convert(text))
+        return [char for char in text.lower() if char.isalnum()]
+    return re.findall(r"[^\W_]+", text.lower())
+
+
+def lyric_lines(raw):
+    from services.karaoke_text import parse_lrc
+    lines = [entry['text'].strip() for entry in parse_lrc(raw) if entry['text'].strip()]
+    if lines:
+        return lines
+    plain = re.sub(r'\[[^\]]*\]|<\d[^>]*>', '', raw)
+    return [line.strip() for line in plain.splitlines() if line.strip()]
+
+
+def reconcile_lyrics(raw, transcript, language, seconds):
+    """Compare supplied lyrics with what Whisper hears on the isolated voice.
+
+    Disagreements are reported for review. Reference lines, repeats and sung
+    reading overrides are never deleted on ASR evidence alone.
+    Returns (lrc, report) or None when the lyrics do not match the recording."""
+    from difflib import SequenceMatcher
+    lines = lyric_lines(raw)
+    cjk = language in CJK_LANGUAGES
+    words = [w for segment in transcript.get('segments', []) for w in segment.get('words', []) if w.get('word', '').strip()]
+    t_units = [unit for word in words for unit in lyric_units(word['word'], language)]
+    l_units, l_line = [], []
+    for number, text in enumerate(lines):
+        for unit in lyric_units(text, language):
+            l_units.append(unit)
+            l_line.append(number)
+    if not t_units or not l_units:
+        return None
+    minimum = 3 if cjk else 2
+    blocks = [(b.a, b.b, b.size) for b in SequenceMatcher(None, l_units, t_units, autojunk=False).get_matching_blocks() if b.size >= minimum]
+    l_to_t = {b0+k: b1+k for b0, b1, size in blocks for k in range(size)}
+    totals, counts = {}, {}
+    for index, number in enumerate(l_line):
+        totals[number] = totals.get(number, 0)+1
+        if index in l_to_t:
+            counts[number] = counts.get(number, 0)+1
+    kept = {number for number in totals if counts.get(number, 0)/totals[number] >= .4}
+    if len(kept) < max(2, .4*len(totals)):
+        return None
+    # ASR disagreement is not evidence that a lyric is absent: singing,
+    # ad-libs and nonstandard kanji readings are frequently mistranscribed.
+    report = {'kept': len(lines), 'dropped': [], 'added': 0,
+              'suspect': [lines[n] for n in sorted(set(totals)-kept)]}
+    return raw, report
+
+
+def align_window(model, audio, sr, texts, language, seconds, expected, floor):
+    """Align the target line together with the next ones so that words are not
+    forced onto the wrong audio; keep only the target line's words."""
+    target = compact_text(texts[0])
+    for before, span, context, use_floor in ((3, 30, 1, True), (8, 45, 1, False), (15, 60, 3, False), (10, 40, 4, False)):
+        start = max(floor-.3 if use_floor else 0, expected-before, 0)
+        stop = min(seconds, expected+span)
+        if stop-start < 1:
+            continue
+        chunk = audio[round(start*sr):round(stop*sr)]
+        result = model.align(chunk, '\n'.join(texts[:context]), language=language, verbose=None).to_dict()
+        words = [word for segment in result['segments'] for word in segment.get('words', [])]
+        taken, text = [], ''
+        for word in words:
+            taken.append(word)
+            text += compact_text(word['word'])
+            if len(text) >= len(target):
+                break
+        if text == target and any(word['end'] > word['start'] for word in taken):
+            return taken, start, stop
+    return None
+
+
+def interpolated_segment(text, expected, following, seconds, language):
+    words = text.split()
+    if language in ('ja', 'zh', 'ko'):
+        words = [char for word in words for char in word]
+    start = min(max(0, expected), max(0, seconds-1))
+    stop = min(seconds, following-.1, expected+max(2.0, .4*len(words)))
+    if stop < start+.5:
+        stop = min(seconds, start+max(.5, .3*len(words)))
+    step = (stop-start)/max(1, len(words))
+    items = [{'word': (' ' if i else '')+word, 'start': round(start+i*step, 3),
+              'end': round(start+(i+1)*step, 3), 'probability': 0.0} for i, word in enumerate(words)]
+    return {'start': round(start, 3), 'end': round(stop, 3), 'text': text, 'words': items}
+
+
 def align_supplied(model, vocals, raw, provided, language, seconds):
     """Use LRC line anchors to avoid drifting through long instrumental breaks."""
     import librosa
@@ -301,33 +403,37 @@ def align_supplied(model, vocals, raw, provided, language, seconds):
         return result, False
     segments = []
     print(f'  Alignement phrase par phrase : {len(entries)} repères LRC, décalage initial {offset:+.2f} s.', flush=True)
+    current = offset
+    cursor = 0.0
+    estimated = []
     for index, entry in enumerate(entries):
+        # An overlong previous end must not move the next search window.
+        # Expand locally if needed; trim genuine overlaps only after alignment.
         expected = entry['t']+offset
-        following = entries[index+1]['t']+offset if index+1 < len(entries) else seconds
-        start = max(0, expected-3)
-        stop = min(seconds, following+3, expected+25)
-        if stop <= start:
-            raise ValueError('Les repères des paroles ne correspondent pas à cet enregistrement.')
-        result = model.align(audio[round(start*sr):round(stop*sr)], entry['text'], language=language, verbose=None).to_dict()
-        if aligned_text(result) != compact_text(entry['text']):
-            print(f'  Phrase {index+1} incomplète ; recherche élargie…', flush=True)
-            start = max(0, expected-8)
-            stop = min(seconds, following+8, expected+40)
-            result = model.align(audio[round(start*sr):round(stop*sr)], entry['text'], language=language, verbose=None).to_dict()
-        if aligned_text(result) != compact_text(entry['text']):
-            print(f'  Phrase {index+1} non résolue ; nouvel alignement sur le morceau entier…', flush=True)
-            global_result = model.align(str(vocals), provided, language=language)
-            if aligned_text(global_result.to_dict()) != compact_text(provided):
-                raise ValueError(f'Alignement incomplet après plusieurs tentatives (phrase {index+1}) ; pistes conservées.')
+        texts = [item['text'] for item in entries[index:index+4]]
+        found = align_window(model, audio, sr, texts, language, seconds, expected, 0)
+        if found:
+            words, start, stop = found
+            for word in words:
+                word['start'] = round(min(seconds, max(0, word['start']+start)), 3)
+                word['end'] = round(min(seconds, max(word['start'], word['end']+start)), 3)
+            segments.append({'start': words[0]['start'], 'end': words[-1]['end'], 'text': entry['text'], 'words': words})
+            cursor = words[-1]['end']
+            print(f'  Phrase alignée {index+1}/{len(entries)}', flush=True)
+            continue
+        print(f'  Phrase {index+1} non résolue : comparaison avec un alignement global…', flush=True)
+        global_result = model.align(str(vocals), provided, language=language)
+        if aligned_text(global_result.to_dict()) == compact_text(provided):
             return global_result, False
-        for segment in result['segments']:
-            for word in segment.get('words', []):
-                word['start'] = round(min(stop, max(start, word['start']+start)), 3)
-                word['end'] = round(min(stop, max(word['start'], word['end']+start)), 3)
-            segment['start'] = round(segment['start']+start, 3)
-            segment['end'] = round(segment['end']+start, 3)
-            segments.append(segment)
-        print(f'  Phrase alignée {index+1}/{len(entries)}', flush=True)
+        if not getattr(args_estimated, 'allow', False):
+            raise ValueError(f"Phrase {index+1} impossible à aligner (vers {timestamp(expected)}) : « {entry['text']} ». "
+                             'Vérifier ce passage dans la LRC/le .txt (texte différent du chant ?) ou utiliser --allow-estimated.')
+        segments.append(interpolated_segment(entry['text'], expected, entries[index+1]['t']+current if index+1 < len(entries) else seconds, seconds, language))
+        cursor = segments[-1]['end']
+        estimated.append(index+1)
+        print(f'  Phrase {index+1} non alignable : timing estimé (--allow-estimated).', flush=True)
+    if estimated:
+        print(f'  Phrases à timing estimé : {estimated}', flush=True)
     # Never push the following phrase later because an earlier word has an
     # overlong end. Trim overlapping ends backwards, preserving later onsets.
     # Collapsed words remain in the text and are reported as uncertain.
@@ -343,6 +449,27 @@ def align_supplied(model, vocals, raw, provided, language, seconds):
     return stable_whisper.WhisperResult({'language': language, 'segments': segments}), True
 
 
+def alignment_quality(result, engine):
+    issues = []
+    count = 0
+    for i, segment in enumerate(result.get('segments', [])):
+        for j, word in enumerate(segment.get('words', [])):
+            count += 1
+            reasons = []
+            start, end = word['start'], word['end']
+            if end <= start:
+                reasons.append('zero_duration')
+            if word.get('probability', 1) < .5:
+                reasons.append('low_acoustic_confidence')
+            if end-start > max(2., len(word['word'].strip())*.7):
+                reasons.append('unusually_long')
+            if reasons:
+                issues.append({'line': i+1, 'word': j+1, 'text': word['word'].strip(),
+                               'start': start, 'end': end, 'reasons': reasons})
+    return {'version': 1, 'engine': engine, 'word_count': count, 'issues': issues,
+            'needs_review': bool(issues), 'note': 'Scores acoustiques non comparables entre moteurs ; aucune garantie de synchronisation parfaite.'}
+
+
 def load_alignment_checkpoint(source, destination, args, seconds):
     path = destination/(source.stem+'.alignment.json')
     if path.is_symlink() or path.stat().st_size > 8_000_000:
@@ -354,6 +481,8 @@ def load_alignment_checkpoint(source, destination, args, seconds):
         raise ValueError('Le diagnostic d’alignement est incomplet.')
     if args.language and args.language != checkpoint.get('language'):
         raise ValueError('La langue demandée diffère du diagnostic enregistré.')
+    if checkpoint.get('alignment_engine', 'whisper') != getattr(args, 'aligner', 'whisper'):
+        raise ValueError('Le diagnostic utilise un autre moteur d’alignement.')
     hints_path = source.with_suffix('.readings.json')
     if checkpoint.get('reading_hints_sha256') != (sha256(hints_path) if hints_path.is_file() else None):
         raise ValueError('Les lectures chantées ont changé ; un nouvel alignement est nécessaire.')
@@ -430,6 +559,18 @@ def prepare(source, destination, args):
                 raise ValueError('Langue non détectée ; réessaie avec --language.')
             supplied_lines = None
             anchored_alignment = False
+            if raw and origin == 'lrclib' and not getattr(args, 'no_reconcile', False):
+                if transcript is None:
+                    transcript = model.transcribe(str(vocals), language=language, task='transcribe', fp16=False,
+                                                  temperature=0, beam_size=5, condition_on_previous_text=False)
+                    result = transcript.to_dict()
+                reconciled = reconcile_lyrics(raw, result, language, seconds)
+                if reconciled:
+                    raw, report = reconciled
+                    print(f"  Référence conservée : {report['kept']} lignes ; "
+                          f"{len(report['suspect'])} divergences avec Whisper à vérifier, aucune suppression.", flush=True)
+                else:
+                    print('  Écart important avec Whisper : référence conservée, vérifier la version des paroles.', flush=True)
             if raw:
                 supplied_lines = [entry['text'] for entry in parse_lrc(raw) if entry['text'].strip()]
                 provided = '\n'.join(supplied_lines)
@@ -447,21 +588,34 @@ def prepare(source, destination, args):
                 spoken = '\n'.join(line['spoken'] for line in phonetic_plan)
                 spoken_raw = '\n'.join(f"[{timestamp(entry['t'])}]"+line['spoken'] for entry, line in zip(entries, phonetic_plan)) if entries else spoken
                 print('  Japonais : alignement des sons en kana, conservation des kanji à l’affichage.', flush=True)
-                transcript, anchored_alignment = align_supplied(model, vocals, spoken_raw, spoken, language, seconds)
-            elif raw:
+                if getattr(args, 'aligner', 'whisper') == 'whisper':
+                    transcript, anchored_alignment = align_supplied(model, vocals, spoken_raw, spoken, language, seconds)
+            elif raw and getattr(args, 'aligner', 'whisper') == 'whisper':
                 transcript, anchored_alignment = align_supplied(model, vocals, raw, provided, language, seconds)
+            if getattr(args, 'aligner', 'whisper') == 'mms':
+                from mms_alignment import align_mms
+                ctc_lines = [line['spoken'] for line in phonetic_plan] if phonetic_plan else supplied_lines
+                if not ctc_lines:
+                    ctc_lines = [''.join(w['word'] for w in segment.get('words', [])) for segment in result['segments']]
+                # Release large-v3 before loading MMS on memory-limited Macs.
+                del model
+                gc.collect()
+                transcript = stable_whisper.WhisperResult(align_mms(vocals, ctc_lines, language))
+                model = None
+                refinement_used = False
             alignment_path = destination/(source.stem+'.alignment.json')
             checkpoint = {'source_sha256': sha256(source), 'duration': seconds, 'language': language,
                           'lyrics_origin': origin, 'provided_lines': supplied_lines, 'whisper_model': args.model,
                           'aligned': transcript.to_dict(), 'lrc_anchored_alignment': anchored_alignment,
-                          'timestamp_refinement': not getattr(args, 'no_refine', False),
+                          'timestamp_refinement': refinement_used,
+                          'alignment_engine': getattr(args, 'aligner', 'whisper'),
                           'phonetic_plan': phonetic_plan, 'reading_hints_sha256': sha256(hints_path) if hints_path.is_file() else None}
             def save_alignment():
                 temporary = alignment_path.with_suffix('.json.tmp')
                 temporary.write_text(json.dumps(checkpoint, ensure_ascii=False), encoding='utf-8')
                 os.replace(temporary, alignment_path)
             save_alignment()
-            if not getattr(args, 'no_refine', False):
+            if refinement_used:
                 print('  Affinage des limites des mots sur la voix isolée…', flush=True)
                 transcript = model.refine(str(vocals), transcript, precision=.05, inplace=False)
             result = transcript.to_dict()
@@ -476,7 +630,15 @@ def prepare(source, destination, args):
             print(f'  À vérifier : {uncertain} blocs de texte ont une confiance de reconnaissance faible.', flush=True)
         if instant:
             print(f'  À vérifier : {instant} blocs sans durée fiable sont conservés dans le texte.', flush=True)
-        lyrics = restore_text(result, phonetic_plan) if phonetic_plan else phrase_lines(align_payload(result, language, source='stable-ts-mac'), supplied_lines)
+        quality = alignment_quality(result, getattr(args, 'aligner', 'whisper'))
+        quality_path = destination/(source.stem+'.quality.json')
+        quality_temp = quality_path.with_suffix('.json.tmp')
+        quality_temp.write_text(json.dumps(quality, ensure_ascii=False, indent=2))
+        os.replace(quality_temp, quality_path)
+        source_engine = 'mms-ctc-mac' if getattr(args, 'aligner', 'whisper') == 'mms' else 'stable-ts-mac'
+        lyrics = restore_text(result, phonetic_plan) if phonetic_plan else phrase_lines(align_payload(result, language, source=source_engine), supplied_lines)
+        if source_engine == 'mms-ctc-mac':
+            lyrics['source'] = source_engine
         from services.karaoke_text import has_native_script
         if not has_native_script(''.join(token['t'] for line in lyrics['lines'] for token in line['tokens']), language):
             raise ValueError('Transcription sans écriture originale ; fournir une LRC en kana/kanji (ou dans la langue du morceau).')
@@ -512,7 +674,7 @@ def prepare(source, destination, args):
         meta_path.write_text(json.dumps(metadata, ensure_ascii=False), encoding='utf-8')
         manifest = {'version': 1, 'duration': seconds, 'source': {'size': source.stat().st_size, 'sha256': sha256(source)},
                     'lyrics': lyrics, 'lyrics_origin': origin, 'generated_at': datetime.now(timezone.utc).isoformat(),
-                    'processing': {'whisper_model': args.model, 'demucs_model': 'reused' if reuse else demucs_model,
+                    'processing': {'alignment_engine': getattr(args, 'aligner', 'whisper'), 'whisper_model': args.model, 'demucs_model': 'reused' if reuse else demucs_model,
                         'demucs_shifts': None if reuse else getattr(args, 'shifts', 2),
                         'demucs_overlap': None if reuse else getattr(args, 'overlap', .5),
                         'timestamp_refinement': refinement_used, 'low_confidence_words': uncertain,
@@ -540,6 +702,8 @@ def main(argv=None):
     parser.add_argument('--recursive', action='store_true')
     parser.add_argument('--overwrite', action='store_true', help='Régénérer les préparations existantes')
     parser.add_argument('--device', choices=('auto', 'cpu', 'mps'), default='auto', help='Périphérique Demucs')
+    parser.add_argument('--aligner', choices=('whisper', 'mms'), default='whisper',
+                        help='MMS CTC expérimental sur CPU, ou alignement Whisper habituel')
     parser.add_argument('--model', choices=('tiny', 'base', 'small', 'medium', 'large-v3'), default='large-v3')
     parser.add_argument('--demucs-model', choices=('htdemucs_ft', 'htdemucs'), default='htdemucs_ft')
     parser.add_argument('--shifts', type=int, default=2, help='Prédictions décalées moyennées par Demucs (1 à 8)')
@@ -550,8 +714,11 @@ def main(argv=None):
     parser.add_argument('--language', default=None, help='Code langue facultatif ; détection automatique sinon')
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--no-lrclib', action='store_true')
+    parser.add_argument('--no-reconcile', action='store_true', help='Ne pas confronter les paroles trouvées au chant')
+    parser.add_argument('--allow-estimated', action='store_true', help='Estimer le timing d’une phrase impossible à aligner au lieu d’échouer')
     parser.add_argument('--reuse-stems', type=Path, help='Dossier préparé valide dont réutiliser les pistes sans relancer Demucs')
     args = parser.parse_args(argv)
+    args_estimated.allow = args.allow_estimated
     if not args.folder.is_dir():
         parser.error('Le dossier source est introuvable.')
     if args.folder.resolve() == args.output.resolve() or args.folder.resolve() in args.output.resolve().parents:

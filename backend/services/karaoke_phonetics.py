@@ -6,6 +6,61 @@ def normalized(text):
     return ''.join(text.split())
 
 
+def morae(text):
+    """Keep digraphs, long vowels and the small tsu with their spoken group."""
+    result, pending = [], ''
+    for char in text:
+        if char in 'っッ':
+            pending += char
+        elif char in 'ゃゅょぁぃぅぇぉャュョァィゥェォー' and result and not pending:
+            result[-1] += char
+        else:
+            result.append(pending+char)
+            pending = ''
+    if pending:
+        result.append(pending)
+    return result
+
+
+def reading_parts(token):
+    """Kana per mora, kanji compounds together: never invent per-kanji readings."""
+    from services.karaoke_text import _kakasi
+    if token.get('reading_locked') or not token.get('r'):
+        return [token]
+    surface, kana = token['t'], token['kana']
+    # Literal kana provide reliable anchors within mixed kanji/okurigana words.
+    runs = re.findall(r'[一-鿿々〆ヵヶ]+|[^一-鿿々〆ヵヶ]+', surface)
+    pieces, cursor = [], 0
+    for index, run in enumerate(runs):
+        if re.fullmatch(r'[一-鿿々〆ヵヶ]+', run):
+            following = runs[index+1] if index+1 < len(runs) else ''
+            anchor = ''.join(p['hira'] for p in _kakasi().convert(following))
+            stop = kana.find(anchor, cursor) if anchor else len(kana)
+            if stop <= cursor:
+                return [token]
+            pieces.append((run, kana[cursor:stop]))
+            cursor = stop
+        else:
+            for part in morae(run):
+                sound = ''.join(p['hira'] for p in _kakasi().convert(part))
+                if not kana.startswith(sound, cursor):
+                    return [token]
+                pieces.append((part, sound))
+                cursor += len(sound)
+    if cursor != len(kana):
+        return [token]
+    result = []
+    for surface, sound in pieces:
+        reading = ''.join(p['hepburn'] for p in _kakasi().convert(sound))
+        # Grammatical readings are already known for the complete particle.
+        if len(pieces) == 1:
+            reading = token['r']
+        result.append({**token, 't': surface, 'kana': sound, 'r': reading, 'sp': False})
+    if result:
+        result[-1]['sp'] = token.get('sp', False)
+    return result or [token]
+
+
 def build_plan(lines, hints=None):
     from services.karaoke_text import tokenize, _kakasi
     hints = hints or {}
@@ -20,6 +75,7 @@ def build_plan(lines, hints=None):
         tokens, matched = [], set()
         for token in tokenize(text, 'ja'):
             kana = ''.join(part['hira'] for part in _kakasi().convert(token['t']))
+            kana = {'wa': 'わ', 'e': 'え', 'o': 'お'}.get(token.get('r'), kana) if token['t'] in ('は', 'へ', 'を') else kana
             token = {**token, 'kana': kana}
             if token['t'] in overrides:
                 kana = overrides[token['t']]
@@ -27,7 +83,7 @@ def build_plan(lines, hints=None):
                     raise ValueError('Une lecture chantée doit être écrite en kana.')
                 token.update(kana=kana, r=''.join(part['hepburn'] for part in _kakasi().convert(kana)), reading_locked=True)
                 matched.add(token['t'])
-            tokens.append(token)
+            tokens.extend(reading_parts(token))
         if set(overrides) != matched:
             raise ValueError('Un mot de la correction de lecture ne correspond pas aux paroles.')
         if overrides:

@@ -49,6 +49,28 @@ Après une mise à jour du script, réexécuter `.venv-karaoke-mac/bin/python -m
 
 Si l'alignement a terminé mais que l'export a échoué, `--resume-alignment` reprend le diagnostic `.alignment.json` du dossier de sortie. Le script vérifie l'empreinte de l'original, sa durée, sa langue et le modèle avant de l'utiliser ; Whisper et l'affinage ne sont pas relancés. Cette option ne réutilise pas automatiquement la séparation : `--reuse-stems` reste nécessaire si l'on dispose déjà d'un paquet complet valide dont reprendre les pistes. Ajouter `--overwrite` si des fichiers de sortie existent.
 
+## Comparer MMS CTC
+
+`--aligner mms` place les paroles sur la voix isolée avec MMS sur CPU, indépendamment des timings Whisper. Whisper reste utilisé pour détecter la langue et transcrire quand le texte manque. Le moteur habituel reste `--aligner whisper` tant que la comparaison à l’écoute n’est pas validée. TorchAudio compatible est déjà dans les requirements Mac ; aucun paquet supplémentaire n’est ajouté au VPS. Le modèle MMS se télécharge une fois (environ 1,2 Go), puis reste dans le cache PyTorch ; sa licence est CC-BY-NC 4.0.
+
+Pour comparer sans refaire Demucs ni remplacer les préparations existantes :
+
+```sh
+caffeinate -i .venv-karaoke-mac/bin/python tools/karaoke/prepare.py \
+  "$HOME/Music/Chansons" \
+  --output "$HOME/Music/Karaoke-MMS" \
+  --reuse-stems "$HOME/Music/Karaoke-haute-qualite" \
+  --device cpu --aligner mms
+```
+
+Il faut un paquet complet valide pour chaque morceau dans `--reuse-stems`. Sinon, retirer cette option : le cache de séparation du dossier de sortie est vérifié automatiquement. Ajouter `--overwrite` pour remplacer un résultat dans le même dossier.
+
+MMS analyse des fenêtres avec recouvrement et garde leurs positions absolues. Des jokers absorbent les sons non transcrits entre phrases ; cela ne garantit pas qu’un texte incorrect sera refusé. Les scores faibles et durées suspectes figurent dans `Artiste - Titre.quality.json`. Les scores MMS et Whisper ne sont pas calibrés de la même façon : ne pas choisir simplement le plus grand score.
+
+La confrontation avec Whisper est informative : les lignes mal reconnues, répétitions et lectures chantées ne sont plus supprimées. Les désaccords signalent des passages à écouter. La relecture Anthropic actuelle sur le VPS corrige le texte et les lectures après import, à timings fixes ; elle ne constitue pas encore un arbitrage avant alignement entre deux versions complètes.
+
+Les nouveaux paquets japonais attachent les romaji aux moras en kana et aux groupes de kanji dont la lecture est connue. Un composé irrégulier reste groupé pour éviter d’inventer une lecture par kanji. Régénérer les anciens paquets pour bénéficier de ce découpage.
+
 ## Fichiers produits
 
 Pour `Artiste - Titre.mp3` :
@@ -61,6 +83,7 @@ Pour `Artiste - Titre.mp3` :
 - `Artiste - Titre.energy.json` : courbes d'énergie des pistes, battements et drops possibles.
 - `Artiste - Titre.karaoke.json` : manifeste portable, paroles et romaji alignés, langue, empreintes d'intégrité.
 - `Artiste - Titre.json` : métadonnées du morceau.
+- `Artiste - Titre.quality.json` : passages incertains à vérifier (diagnostic local).
 - `Artiste - Titre.alignment.json` : diagnostic texte/timestamps sur le Mac, conservé pour comprendre une erreur sans perdre le résultat brut du modèle. Ce fichier n'est pas nécessaire à la lecture sur le VPS.
 
 **Copier l'ensemble**, en conservant les noms et leur voisinage, dans le dossier monté en `KARAOKE_DIR` sur le VPS (par défaut `/data/karaoke` dans le conteneur backend). Il ne suffit pas de copier seulement l'instrumental. Le dossier utilise actuellement le volume Docker `karaoke-music` : on peut y copier les fichiers via un conteneur ou le remplacer par un montage du dossier musical de l'hôte, selon l'installation.

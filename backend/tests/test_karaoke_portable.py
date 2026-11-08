@@ -548,3 +548,24 @@ def test_separation_cache_survives_failure_and_rejects_changed_audio(monkeypatch
     source.write_bytes(b'new original')
     second = cli.separated_stems(source, destination, args, 100., 'cpu')
     assert second[2] != first[2] and len(calls) == 3
+
+
+def test_asr_disagreement_never_removes_a_reference_line_or_sung_override():
+    cli = load_cli()
+    raw = '[00:00]この宇宙を抱いて輝く\n[00:10]少年よ神話になれ\n[00:20]この宇宙を抱いて輝く'
+    heard = {'segments': [{'words': [
+        {'word': 'この空を抱いて輝く', 'start': 0, 'end': 5, 'probability': .9},
+        {'word': '少年よ神話になれ', 'start': 10, 'end': 15, 'probability': .9}]}]}
+    result = cli.reconcile_lyrics(raw, heard, 'ja', 30)
+    if result:
+        reference, report = result
+        assert reference == raw and report['dropped'] == []
+        assert reference.count('この宇宙を抱いて輝く') == 2
+
+
+def test_alignment_quality_flags_uncertainty_without_modifying_timestamps():
+    cli = load_cli()
+    result = {'segments': [{'words': [{'word': 'word', 'start': 1, 'end': 1, 'probability': .1}]}]}
+    report = cli.alignment_quality(result, 'mms')
+    assert report['needs_review'] and report['issues'][0]['reasons'] == ['zero_duration', 'low_acoustic_confidence']
+    assert result['segments'][0]['words'][0]['start'] == result['segments'][0]['words'][0]['end'] == 1

@@ -34,7 +34,8 @@ const CSS = `
 .kl-base { color: #fff; -webkit-text-stroke-color: #2b1d78; }
 .kl-fill { position: absolute; left: 0; top: 0; color: #ff4f9a; -webkit-text-stroke-color: #fff;
   clip-path: inset(-1em calc(100% - var(--p, 0%)) -1em 0); }
-.kl-tok rt { font-size: 0.4em; font-weight: 700; letter-spacing: 0.04em; -webkit-text-stroke-width: 0.16em; }
+.kl-tok ruby { display: inline-flex; flex-direction: column-reverse; align-items: center; vertical-align: bottom; padding-inline: .045em; ruby-align: center; }
+.kl-tok rt { display: block; line-height: 1.25; padding-inline: .10em; text-align: center; white-space: pre; font-size: 0.4em; font-weight: 700; letter-spacing: 0.04em; -webkit-text-stroke-width: 0.16em; }
 .kl-dots { position: absolute; left: 0; top: -0.7em; display: flex; gap: 0.22em; pointer-events: none; }
 .kl-dots i { width: 0.34em; height: 0.34em; border-radius: 50%; background: #ff4f9a; border: 0.05em solid #fff;
   opacity: 0; transform: scale(0.4); transition: opacity 140ms ease, transform 140ms ease; }
