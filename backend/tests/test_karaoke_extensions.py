@@ -60,7 +60,9 @@ def test_rhythm_and_octave_invariant_pitch_do_not_reward_silence_or_singing_in_p
     assert scoring.pitch_accuracy(float('nan'),220)==0
 
 
-def test_queue_favourites_permissions_and_fair_duo():
+def test_queue_favourites_permissions_and_fair_duo(monkeypatch):
+    from services import karaoke_assets
+    monkeypatch.setattr(karaoke_assets, "cached_portable", lambda track: {"portable": True, "lyrics": {"lang": "fr", "lines": []}, "pitch": [], "notes": []})
     async def run():
         room=karaoke.KRoom()
         a,b,c=karaoke.Client('a',True),karaoke.Client('b',False),karaoke.Client('c',False)

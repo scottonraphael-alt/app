@@ -21,9 +21,9 @@ const CSS = `
 .kl-blob.a { background: #6a3cff; left: -15%; top: -25%; }
 .kl-blob.b { background: #ff4f9a; right: -20%; bottom: -30%; animation-delay: -8s; opacity: 0.26; }
 .kl-blob.c { background: #1fb6ff; left: 30%; top: 35%; animation-delay: -15s; opacity: 0.16; }
-.kl-rows { position: absolute; inset: 0; z-index: 1; display: grid; grid-template-rows: minmax(0,1fr) minmax(0,1fr);
+.kl-rows { position: absolute; inset: 0; z-index: 1; display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) minmax(0,1fr);
   gap: 6px; padding: 12px 4%; box-sizing: border-box; font-size: clamp(40px, 5.5vw, 92px); font-weight: 800; }
-.kl-slot { display: flex; align-items: center; width: 100%; min-height: 0; }
+.kl-slot { display: flex; align-items: center; width: 100%; min-width: 0; min-height: 0; }
 .kl-slot.top { justify-content: flex-start; }
 .kl-slot.bottom { justify-content: flex-end; }
 .kl-line { position: relative; display: inline-block; width: max-content; flex-shrink: 0; line-height: 1.3; animation: klIn 260ms ease-out; }
@@ -105,7 +105,8 @@ function Line({ line, showRomaji }) {
     const element = ref.current, slot = element?.parentElement;
     if (!element || !slot) return;
     const fit = () => {
-      const base=Math.min(92,Math.max(42,slot.clientWidth*.055));
+      const japanese = /[\u3040-\u30ff\u3400-\u9fff]/u.test(line.tokens.map(token=>token.t).join(""));
+      const base=Math.min(japanese?92:68,Math.max(24,slot.clientWidth*(japanese?.055:.043)));
       element.style.fontSize = `${base}px`;
       const naturalWidth = element.scrollWidth;
       const naturalHeight = element.getBoundingClientRect().height;

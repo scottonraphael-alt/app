@@ -17,13 +17,13 @@ Le code de l'archive `karaoke-complet-v1-v2-v3.zip` a été repris par modules. 
 - Réservation de chansons : jusqu'à trois par joueur, 50 dans la file. L'animateur lance la suivante ; la fin du morceau passe également à la suivante. Chacun peut retirer ses réservations, l'animateur toutes les réservations.
 - Roulette partagée, solo/duo, exclusions et évitement de la sélection précédente lorsque le nombre de candidats le permet. Chaque joueur peut se retirer du tirage.
 - Fonds originaux Néon, Océan, Aurore, avec particules et réaction à la musique lorsque Web Audio est disponible. Aucun visuel Joysound sous licence n'a été copié.
-- Interface de lecture : badges Catalogue et Je participe en haut à gauche ; volumes musique et voix guide indépendants dans le menu audio au survol (ou au clic sur écran tactile). Thème, notes et octave dans le menu à icône. Les commandes s’effacent après 3,2 secondes sans activité et restent affichées pendant l’utilisation d’un menu. Aucun réglage de synchronisation manuel.
+- Interface de lecture : badges Catalogue et Je participe en haut à gauche ; volumes musique et voix guide indépendants dans le menu audio au survol (ou au clic sur écran tactile). Bouton du guide de notes à côté des scores ; thème et octave dans le menu à icône. Les commandes s’effacent après 3,2 secondes sans activité et restent affichées pendant l’utilisation d’un menu. Aucun réglage de synchronisation manuel.
 
 ## Préparation recommandée sur Mac
 
 Le traitement lourd peut désormais être réalisé hors du VPS. Le [guide du script Mac](../tools/karaoke/README.md) décrit l’installation, la préparation d’un dossier et la copie du lot de fichiers.
 
-Le mode par défaut de l’API est `KARAOKE_PREPARATION_MODE=external` : un import non préparé ne lance ni ne met en file de modèle sur le VPS. Seuls les lots Mac complets et validés sont proposés dans le catalogue karaoké. Les lots Mac valides fournissent directement les paroles, le score de référence, le mix personnel et les effets, sans base de préparation à reconstruire.
+Le mode par défaut de l’API est `KARAOKE_PREPARATION_MODE=external` : un import non préparé ne lance ni ne met en file de modèle sur le VPS. Seuls les lots Mac complets et validés sont proposés dans le catalogue karaoké, sélectionnés au démarrage ou acceptés dans la file. Un ancien morceau non préparé est écarté et la position de lecture réinitialisée ; les fichiers restent sur le disque. Les anciennes réservations non préparées sont ignorées en passant au morceau suivant. Les lots Mac valides fournissent directement les paroles, le score de référence, le mix personnel et les effets, sans base de préparation à reconstruire.
 
 Pour conserver explicitement l’ancien worker CPU optionnel, configurer `KARAOKE_PREPARATION_MODE=server` pour le backend et lancer le profil Compose `karaoke-cpu`. Ce worker reste facultatif ; sa configuration et les anciens diagnostics CPU ci-dessous concernent uniquement ce mode.
 

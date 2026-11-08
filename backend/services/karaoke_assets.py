@@ -8,6 +8,8 @@ from collections import OrderedDict
 from pathlib import Path
 
 CACHE = OrderedDict()
+# Keep lightweight verification signatures after full song data leaves the 64-song cache.
+VERIFIED = OrderedDict()
 VERIFY_LOCK = threading.RLock()
 SUFFIXES = {'instrumental': '.inst.mp3', 'vocals': '.voix.mp3'}
 MAX_JSON = 4_000_000
@@ -123,6 +125,19 @@ def cached_portable(track):
         return None
 
 
+def verified_portable(track):
+    if cached_portable(track):
+        return True
+    try:
+        files = bundle_files(track.path)
+        if any(file.is_symlink() for file in files):
+            return False
+        stats = tuple((str(file.resolve()), file.stat().st_size, file.stat().st_mtime_ns) for file in files)
+        return stats in VERIFIED
+    except OSError:
+        return False
+
+
 def portable(track):
     # Call via to_thread in the API. Serialize first-time verification so a whole
     # room opening the same new song does not hash its stems in parallel.
@@ -171,6 +186,10 @@ def _portable(track):
             stats
         except UnboundLocalError:
             return None
+    VERIFIED[stats] = True
+    VERIFIED.move_to_end(stats)
+    while len(VERIFIED) > 4096:
+        VERIFIED.popitem(last=False)
     CACHE[stats] = result
     CACHE.move_to_end(stats)
     while len(CACHE) > 64:

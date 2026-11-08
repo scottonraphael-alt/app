@@ -25,6 +25,7 @@ def public(room):
 
 async def handle(room, websocket, client, message, tracks):
     initialize(room)
+    from services.karaoke_assets import verified_portable
     kind = message.get('type')
     if kind == 'favorite':
         ident = message.get('id')
@@ -41,12 +42,19 @@ async def handle(room, websocket, client, message, tracks):
         await websocket.send_json({'type': 'favorites', 'ids': (row or {}).get('favorites', [])})
     elif kind == 'queue_add' and room.mode == 'karaoke':
         track = tracks.get(message.get('id'))
-        if not track or track.remote or len(room.queue) >= 50 or sum(q['uid'] == client.uid for q in room.queue) >= 3:
+        if not track or track.remote or not verified_portable(track) or len(room.queue) >= 50 or sum(q['uid'] == client.uid for q in room.queue) >= 3:
             return False
         room.queue.append({'id': uuid4().hex, 'uid': client.uid, 'name': client.name, 'track': track.public()})
     elif kind == 'queue_remove':
         room.queue = [q for q in room.queue if not (q['id'] == message.get('id') and (client.can_control or q['uid'] == client.uid))]
     elif kind == 'queue_next' and client.can_control and room.mode == 'karaoke' and room.queue:
+        while room.queue:
+            candidate = tracks.get(room.queue[0]['track']['id'])
+            if candidate and not candidate.remote and verified_portable(candidate):
+                break
+            room.queue.pop(0)
+        if not room.queue:
+            return True
         reservation = room.queue.pop(0)
         if reservation['track']['id'] in tracks:
             room.track_id = reservation['track']['id']

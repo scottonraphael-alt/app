@@ -589,3 +589,44 @@ def test_public_karaoke_catalog_excludes_unprepared_files(tmp_path):
     rows=assets.public_catalog(tracks,True)
     assert len(rows)==1 and rows[0]['prepared'] is True
     assert rows[0]['title'] in ('Titre', 'Artiste - Titre')
+
+
+def test_startup_and_queue_skip_legacy_uploads_without_touching_files(tmp_path):
+    bundle(tmp_path)
+    legacy = tmp_path/'000-old-test.mp3'
+    legacy.write_bytes(b'old-test-audio')
+    tracks = karaoke.library()
+    assets.public_catalog(tracks, True)  # Same off-thread verification as opening a room.
+    ready = next(t for t in tracks.values() if assets.cached_portable(t))
+    raw = next(t for t in tracks.values() if t.path == legacy)
+    room = karaoke.KRoom()
+    room.track_id = raw.id
+    room.clock.seek(120)
+    room.clock.set_playing(True)
+    state = karaoke.snapshot(room)
+    assert state['karaoke']['track']['id'] == ready.id
+    assert state['karaoke']['position'] == 0 and not state['karaoke']['playing']
+    from services import karaoke_social as social
+    from unittest.mock import AsyncMock
+    social.initialize(room)
+    room.queue = [{'id':'old','track':raw.public()}, {'id':'ready','track':ready.public()}]
+    ws = NS(send_json=AsyncMock())
+    actor = karaoke.Client('123', True)
+    asyncio.run(karaoke.handle_control(room, ws, actor, 'select', {'id':raw.id}))
+    assert room.track_id == ready.id
+    assert not asyncio.run(social.handle(room,ws,actor,{'type':'queue_add','id':raw.id},tracks))
+    assert asyncio.run(social.handle(room,ws,actor,{'type':'queue_next'},tracks))
+    assert room.track_id == ready.id and not room.queue
+    assert legacy.read_bytes() == b'old-test-audio'
+
+
+def test_verified_catalog_survives_full_data_cache_eviction_and_rejects_changes(tmp_path):
+    song = bundle(tmp_path)
+    track = next(iter(karaoke.library().values()))
+    assert assets.portable(track)
+    assets.CACHE.clear()
+    assert assets.verified_portable(track)
+    assert track.id in karaoke.karaoke_tracks()
+    song.write_bytes(b'changed')
+    assert not assets.verified_portable(track)
+    assert track.id not in karaoke.karaoke_tracks()

@@ -306,6 +306,9 @@ def api(tmp_path, monkeypatch):
     music = tmp_path / "music"
     music.mkdir()
     make_library(music)
+    # These protocol fixtures stand in for already verified local songs.
+    from services import karaoke_assets
+    monkeypatch.setattr(karaoke_assets, "cached_portable", lambda track: {"portable": True, "lyrics": {"lang": "fr", "lines": []}, "pitch": [], "notes": []})
     monkeypatch.setattr(activity, "ACTIVITY_TOKEN_KEY", KEY)
     monkeypatch.setattr(karaoke, "KARAOKE_DIR", music)
     monkeypatch.setattr(karaoke, "KARAOKE_CACHE_DIR", tmp_path / "cache")

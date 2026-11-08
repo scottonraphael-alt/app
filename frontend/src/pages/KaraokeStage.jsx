@@ -637,11 +637,11 @@ export default function KaraokeStage({ session, onExit }) {
             </div>
           </div>
           {mode==='karaoke'&&<button className={'kc-badge '+(voiceStatus?.consented?'kc-selected':'')} disabled={scoreBusy} aria-pressed={Boolean(voiceStatus?.consented)} title="L’activation analyse le rythme et la hauteur de ta voix dans le salon vocal. Aucun enregistrement conservé. Reclique pour arrêter." onClick={toggleScore}><Mic size={16}/>{scoreBusy?'Connexion…':voiceStatus?.consented?'Désactiver les scores':'Activer les scores'}</button>}
+          {mode==='karaoke'&&<button className={'kc-badge '+(showNotes?'kc-selected':'')} disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes)} onClick={()=>setShowNotes(v=>{savePref('karaoke.notes',!v);return !v;})}><Music2 size={16}/>{showNotes?'Masquer le guide de notes':'Afficher le guide de notes'}</button>}
           <div className="kc-theme">
             <button className="kc-badge kc-icon" aria-label="Choisir le thème" aria-expanded={themeOpen} onClick={()=>setThemeOpen(v=>!v)}><Palette size={19}/></button>
             {themeOpen&&<div className="kc-theme-panel" role="group" aria-label="Thème et affichage">
               <strong>Ambiance</strong>{[['neon','Néon'],['ocean','Océan'],['aurora','Aurore']].map(([id,label])=><button key={id} disabled={!canControl} aria-pressed={state.theme===id} onClick={()=>{send({type:'theme',value:id});setThemeOpen(false);}}>{label}</button>)}
-              <button disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes)} onClick={()=>setShowNotes(v=>{savePref('karaoke.notes',!v);return !v;})}><Music2 size={14}/>Guide de notes {showNotes?'✓':''}</button>
               {showNotes&&<label>Octave <select aria-label="Mon octave" value={octave} onChange={e=>{const v=Number(e.target.value);setOctave(v);savePref('karaoke.octave',v);}}>{[-2,-1,0,1,2].map(v=><option key={v} value={v}>{v>0?'+':''}{v}</option>)}</select></label>}
             </div>}
           </div>

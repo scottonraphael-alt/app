@@ -258,8 +258,9 @@ def prefetch_previews(tracks: list[Track]) -> None:
 
 
 def karaoke_tracks() -> dict[str, Track]:
-    """Morceaux entiers (fichiers locaux) : seuls ceux-là ont un sens en karaoké."""
-    return {tid: track for tid, track in library().items() if not track.remote}
+    """Only verified Mac bundles may be selected or loaded by karaoke."""
+    from services.karaoke_assets import verified_portable
+    return {tid: track for tid, track in library().items() if not track.remote and verified_portable(track)}
 
 
 def _require_token(token: str) -> dict:
@@ -477,6 +478,9 @@ def snapshot(room: KRoom) -> dict:
     local = karaoke_tracks()
     if room.mode == "karaoke" and room.track_id not in local:
         room.track_id = next(iter(local), None)
+        room.clock.set_playing(False)
+        room.clock.seek(0)
+        room.song_generation += 1
     track = tracks.get(room.track_id) if room.track_id else None
     from services.karaoke_social import public
     return {
@@ -586,7 +590,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
         name = message.get("id")
         if running:
             await websocket.send_json({"type": "error", "code": "game_running"})
-        elif isinstance(name, str) and name in tracks and not tracks[name].remote:
+        elif isinstance(name, str) and name in karaoke_tracks():
             room.track_id = name
             room.song_generation += 1
             room.mode = "karaoke"
@@ -717,9 +721,11 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
 
     try:
         ensure_catalog()
+        # Verify bundles off the event loop before the initial track selection.
+        initial_library = await library_message()
         await websocket.send_json(snapshot(room))
         if client.can_control:
-            await websocket.send_json(await library_message())
+            await websocket.send_json(initial_library)
         while True:
             await handle_message(room, websocket, client, await websocket.receive_json())
     except WebSocketDisconnect:
