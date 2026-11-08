@@ -569,3 +569,14 @@ def test_alignment_quality_flags_uncertainty_without_modifying_timestamps():
     report = cli.alignment_quality(result, 'mms')
     assert report['needs_review'] and report['issues'][0]['reasons'] == ['zero_duration', 'low_acoustic_confidence']
     assert result['segments'][0]['words'][0]['start'] == result['segments'][0]['words'][0]['end'] == 1
+
+
+def test_analysis_explains_missing_pitch_without_exposing_server_paths(tmp_path):
+    song = bundle(tmp_path)
+    track = next(iter(karaoke.local_library().values()))
+    song.with_suffix('.pitch.json').unlink()
+    response = client.get('/activity/karaoke/analysis', params={'t': token(), 'id':track.id})
+    assert response.status_code == 200
+    data = response.json()
+    assert data['available'] is False and '.pitch.json' in data['error']
+    assert str(tmp_path) not in data['error']

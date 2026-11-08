@@ -745,7 +745,13 @@ async def karaoke_analysis(t: str, id: str):
     from services.karaoke_assets import notes_from_pitch
     ready = await asyncio.to_thread(prepared, track)
     if not ready:
-        return {'available': False}
+        from services.karaoke_assets import bundle_files
+        labels = ('audio original', 'manifeste', 'mélodie (.pitch.json)', 'énergie', 'instrumental', 'voix', 'paroles (.lrc)')
+        missing = [label for file, label in zip(bundle_files(track.path), labels) if not file.is_file()]
+        error = ('Préparation incomplète sur le serveur : '+', '.join(missing)+'. Recopie le paquet complet du Mac.'
+                 if missing else 'Le paquet préparé ne correspond pas aux fichiers du serveur. Recopie ensemble l’original et tous ses fichiers de préparation.')
+        return {'available': False, 'error': error}
+
     values = ready.get('pitch', [])
     return {'available': True, 'duration': ready['duration'], 'pitch_step': ready.get('pitch_step', .1),
             'pitch': values, 'notes': ready['notes'] if 'notes' in ready else await asyncio.to_thread(notes_from_pitch, values),

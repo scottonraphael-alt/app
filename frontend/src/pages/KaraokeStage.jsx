@@ -3,6 +3,7 @@ import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
 import BlindTestCategories from "./BlindTestCategories";
 import KaraokeNotes from "./KaraokeNotes";
+import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
 import { useKaraokeAudio } from "./karaokeAudio";
 import KaraokeBackdrop from "./KaraokeBackdrop";
 
@@ -346,7 +347,6 @@ export default function KaraokeStage({ session, onExit }) {
   const { videoToken, instanceId, canControl, userName, userId } = session;
   const PROXY = session.apiRoot || DEFAULT_PROXY;
   const [mixRetry, setMixRetry] = useState(0);
-  const [analysis, setAnalysis] = useState(null);
   const [voiceStatus, setVoiceStatus] = useState(null);
   const [guide, setGuide] = useState(() => Math.max(0, Math.min(1, Number(loadPref("karaoke.guide", 1)) || 0)));
   const [showNotes, setShowNotes] = useState(() => loadPref("karaoke.notes", false));
@@ -386,19 +386,12 @@ export default function KaraokeStage({ session, onExit }) {
   const playing = state && state.karaoke ? state.karaoke.playing : false;
   const trackId = mode === "karaoke" && track ? track.id : null;
 
+  const {data:analysis, status:analysisStatus, error:analysisError, reload:reloadAnalysis} = useKaraokeAnalysis({
+    trackId, apiRoot:PROXY, token:videoToken, revision:preparationRevision});
   const audioUrl = trackId ? `${PROXY}/activity/karaoke/audio?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}&v=${encodeURIComponent(analysis?.version || "")}` : '';
   const { graphRef, mix } = useKaraokeAudio({ audioRef, instrumentalRef, vocalRef, stems: Boolean(analysis?.stems && mode === 'karaoke'),
     audioUrl, volume, guide, retry: mixRetry });
-  useEffect(() => {
-    const controller = new AbortController();
-    setAnalysis(null);
-    if (!trackId) return () => controller.abort();
-    fetch(`${PROXY}/activity/karaoke/analysis?t=${encodeURIComponent(videoToken)}&id=${encodeURIComponent(trackId)}`, { signal: controller.signal })
-      .then(response => response.ok ? response.json() : null)
-      .then(data => { if (!controller.signal.aborted) setAnalysis(data?.available ? data : null); })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [trackId, PROXY, videoToken, preparationRevision]);
+
 
   const send = useCallback((payload) => {
     const socket = socketRef.current;
@@ -658,13 +651,18 @@ export default function KaraokeStage({ session, onExit }) {
         <label style={{display:'flex',gap:8,alignItems:'center',fontSize:13}}>Voix guide
           <input aria-label="Présence de la voix guide" type="range" min="0" max="1" step=".05" value={guide}
             disabled={!analysis?.stems || mix === 'fallback'} onChange={event => { const value=Number(event.target.value);setGuide(value);savePref("karaoke.guide",value); }} />
-          {analysis?.stems ? `${Math.round(guide*100)} %` : 'Morceau à préparer sur Mac'}
+          {analysis?.stems ? `${Math.round(guide*100)} %` : analysisStatus === 'loading' ? 'Chargement…' : 'Pistes préparées non chargées'}
         </label>
         {mix === 'loading' && <small role="status">Chargement des pistes séparées…</small>}
         {mix === 'fallback' && <><small role="status">Pistes séparées indisponibles : lecture du morceau original.</small><button type="button" style={S.ghost} onClick={()=>setMixRetry(value=>value+1)}>Réessayer les pistes séparées</button></>}
         <small>Réglage personnel, mémorisé sur cet appareil.</small>
-        <button type="button" style={S.ghost} disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes)}
-          onClick={() => {setShowNotes(value=>{savePref("karaoke.notes",!value);return !value;});}}>Guide de notes : {showNotes?'oui':'non'}</button>
+        {analysisStatus === 'loading' && <small role="status">Chargement du guide de notes…</small>}
+        {(analysisStatus === 'unavailable' || (analysisStatus === 'ready' && !analysis?.notes?.length)) && <>
+          <small role="status">{analysisError || "Aucune mélodie exploitable dans la préparation de ce morceau."}</small>
+          <button type="button" style={S.ghost} onClick={reloadAnalysis}>Recharger les données du morceau</button>
+        </>}
+        <button type="button" style={S.ghost} disabled={!analysis?.notes?.length} aria-pressed={Boolean(showNotes && analysis?.notes?.length)}
+          onClick={() => {setShowNotes(value=>{savePref("karaoke.notes",!value);return !value;});}}>Guide de notes : {analysis?.notes?.length ? (showNotes?'oui':'non') : analysisStatus === 'loading' ? 'chargement…' : 'indisponible'}</button>
         {showNotes && Boolean(analysis?.notes?.length) && <label>Mon octave <select aria-label="Mon octave" value={octave}
           onChange={event=>{const value=Number(event.target.value);setOctave(value);savePref("karaoke.octave",value);}}>
           {[-2,-1,0,1,2].map(value=><option key={value} value={value}>{value>0?'+':''}{value}</option>)}</select></label>}
