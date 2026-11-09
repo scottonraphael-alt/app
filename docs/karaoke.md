@@ -3,8 +3,8 @@
 ## Accès
 
 - **Dans Iris** : lien « Karaoké & blind test » sur l'accueil, route `/karaoke`. La session Iris existante est requise. Les membres connectés sur le site partagent la salle `site-oasis`.
-- **Dans l'Activity Discord** : bouton Karaoké de CinéStream. Chaque instance Discord a sa propre salle, sa file d'attente, son animateur et ses scores. Sans vidéo disponible, l'Activity démarre directement en karaoké.
-- Les membres du serveur accèdent à l'Activity via l'OAuth existant. Les contrôles sont réservés aux rôles `ACTIVITY_CONTROLLER_ROLE_IDS` (Staff par défaut). Sur le site, les Responsables et Animateurs sont également autorisés. Les actions sensibles HTTP revérifient les rôles auprès de Discord.
+- **Dans l’Activity Discord OasisGame** : menu principal Karaoké / Blind test, indépendant de CinéStream. Chaque instance Discord a sa propre salle et son hôte. Le karaoké est limité au salon `1569069812804751431`, vérifié côté serveur ; voir le [guide de création OasisGame](oasisgame.md).
+- Tous les membres du serveur peuvent ouvrir OasisGame via son OAuth dédié ; le premier membre devient hôte. CinéStream conserve son OAuth et son accès staff. L’ancien accès depuis le site Iris reste réservé à ses utilisateurs autorisés. La préparation et l’import administratifs conservent leurs contrôles de rôles.
 
 Le code de l'archive `karaoke-complet-v1-v2-v3.zip` a été repris par modules. Le serveur et l'application Iris n'ont pas été remplacés par leurs versions présentes dans l'archive.
 

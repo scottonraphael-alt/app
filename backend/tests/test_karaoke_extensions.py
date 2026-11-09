@@ -175,9 +175,9 @@ def test_import_rejects_paths_and_queues_a_real_uploaded_file(monkeypatch,tmp_pa
     assert client.post('/activity/karaoke/import',params={'t':token()},files={'file':('song.mp3',b'audio','audio/mpeg')}).status_code==403
 
 
-def test_activity_without_video_starts_in_karaoke(monkeypatch):
+def test_cinestream_without_video_stays_in_cinema(monkeypatch):
     monkeypatch.setattr(activity,'list_videos',lambda:[])
-    assert activity.Room().mode=='karaoke'
+    assert activity.Room().mode=='cinema'
 
 
 def test_light_japanese_romanization_without_cutlet_or_unidic(monkeypatch):

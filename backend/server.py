@@ -7,7 +7,7 @@ import logging
 from config import CORS_ORIGINS
 from database import client, db, initialize_indexes
 from routers import sanction_access, announcements, server_statistics, admin, auth, members, profiles, resources, staff, agenda, tickets, animateur, animateur_calendar, activity, responsable, casier, channel_archives, notifications, agenda_ics, search, handoffs, reply_templates, ticket_ai, presence, ticket_routing, staff_load, web_push, casier_history, member_360, monthly_report, team_presence, ticket_notes, ticket_tags, ticket_followups, agenda_polls, agenda_move, meeting_extras, casier_bulk, moderation_stats, project_extras, staff_directory, staff_status, kudos, onboarding, team_weather, reflex_sheets, trainings, debriefs, staff_announcements, system_health
-from routers import activity_karaoke, karaoke_tools, karaoke_arbitration
+from routers import activity_karaoke, karaoke_tools, karaoke_arbitration, oasis_games
 from routers import command_descriptions
 from services.command_descriptions import run as run_command_descriptions
 from routers import resolutions
@@ -102,6 +102,7 @@ app.include_router(workflow_settings.router, prefix="/api")
 app.include_router(casework.router, prefix="/api")
 app.include_router(verifications.router, prefix="/api")
 app.include_router(activity.router, prefix="/api")
+app.include_router(oasis_games.router, prefix="/api")
 app.include_router(activity_karaoke.router, prefix="/api")
 app.include_router(karaoke_tools.router, prefix="/api")
 app.include_router(karaoke_arbitration.router, prefix="/api")

@@ -165,3 +165,7 @@ construisent à partir du déploiement ; une période trop récente reste indiqu
 Le bloc 4 ajoute Interactions et équilibre : diversité, réciprocité, concentration, indice
 explicable, matrice des catégories, tendances et silences inhabituels. Les délais de réponse
 utilisent uniquement les références Discord disponibles dans le registre de 30 jours.
+
+## OasisGame
+
+Le karaoké et le blind test disposent d’une Activity dédiée, séparée de CinéStream. Le [guide OasisGame](docs/oasisgame.md) décrit la création de l’application Discord, ses identifiants OAuth, l’accès des membres et le salon réservé au karaoké.

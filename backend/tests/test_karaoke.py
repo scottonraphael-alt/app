@@ -484,7 +484,7 @@ def test_blind_test_flow_over_websocket(api):
         assert stopped["bt"] is None
 
 
-def test_switching_activity_back_to_cinema_stops_the_game(api):
+def test_cinema_cannot_switch_to_or_stop_the_separate_game(api):
     with open_ws(api, "staff", True, "same") as staff:
         receive_until(staff, "library")
         staff.send_json({"type": "bt_start", "rounds": 1, "seconds": 30})
@@ -496,10 +496,11 @@ def test_switching_activity_back_to_cinema_stops_the_game(api):
         with cinema as ws:
             assert receive_until(ws, "state")["mode"] == "cinema"
             ws.send_json({"type": "set_mode", "mode": "karaoke"})
-            assert receive_until(ws, "state")["mode"] == "karaoke"
+            ws.send_json({"type": "sync"})
+            assert receive_until(ws, "state")["mode"] == "cinema"
             ws.send_json({"type": "set_mode", "mode": "cinema"})
             assert receive_until(ws, "state")["mode"] == "cinema"
-        assert karaoke.ROOMS["same"].game is None and karaoke.ROOMS["same"].mode == "karaoke"
+        assert karaoke.ROOMS["same"].game is not None and karaoke.ROOMS["same"].mode == "blindtest"
 
 
 def test_cinema_mode_is_controller_only(api):

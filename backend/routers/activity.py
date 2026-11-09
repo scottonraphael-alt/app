@@ -202,7 +202,8 @@ async def activity_token(payload: ActivityTokenRequest) -> dict:
     user_name = (member.get("nick") or user.get("global_name") or user.get("username") or "Joueur")[:32]
 
     member_roles = set(member.get("roles", []))
-    if ACTIVITY_ALLOWED_ROLE_IDS and not member_roles & ACTIVITY_ALLOWED_ROLE_IDS:
+    allowed_roles = ACTIVITY_ALLOWED_ROLE_IDS or ACTIVITY_CONTROLLER_ROLE_IDS
+    if not allowed_roles or not member_roles & allowed_roles:
         raise HTTPException(status_code=403, detail="Rôle insuffisant.")
     can_control = bool(member_roles & ACTIVITY_CONTROLLER_ROLE_IDS)
 
@@ -310,7 +311,7 @@ class Room:
         self.since = time.monotonic()
         self.touched = time.monotonic()
         self.clients: set[WebSocket] = set()
-        self.mode = "cinema" if list_videos() else "karaoke"
+        self.mode = "cinema"
 
     def current_position(self) -> float:
         if not self.playing:
@@ -348,7 +349,7 @@ ROOMS: dict[str, Room] = {}
 
 # Modes de l'Activity : « cinema » (vidéo, par défaut) ou « karaoke » (karaoké + blind test,
 # voir routers/activity_karaoke.py). Les modules intéressés s'y abonnent : callback(instance_id, mode).
-ACTIVITY_MODES = ("cinema", "karaoke")
+ACTIVITY_MODES = ("cinema",)
 MODE_LISTENERS: list = []
 
 

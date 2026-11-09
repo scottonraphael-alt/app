@@ -264,7 +264,8 @@ def karaoke_tracks() -> dict[str, Track]:
 
 
 def _require_token(token: str) -> dict:
-    claims = activity.decode_video_token(token)
+    from services.oasis_games_auth import decode
+    claims = decode(token) or activity.decode_video_token(token)
     if claims is None:
         raise HTTPException(status_code=403, detail="Accès refusé.")
     return claims
@@ -449,6 +450,7 @@ class KRoom:
     def __init__(self) -> None:
         self.welcome = None
         self.welcome_timer = None
+        self.host_id = None
         self.needs_welcome = True
         self.intermission = None
         self.next_timer = None
@@ -501,6 +503,7 @@ def snapshot(room: KRoom) -> dict:
         "mode": room.mode,
         "intermission": intermission_state(room),
         "welcome": room.welcome,
+        "host_id": room.host_id,
         "karaoke": {
             "track": track.public() if track else None,
             "playing": room.clock.playing,
@@ -715,6 +718,38 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
 
 async def handle_message(room: KRoom, websocket: WebSocket, client: Client, message) -> None:
     kind = message.get("type") if isinstance(message, dict) else None
+    game_claims = getattr(client, 'game_claims', None)
+    if game_claims:
+        from services.oasis_games_auth import require_karaoke_channel
+        if kind == 'choose_game' and client.can_control and message.get('game') in ('menu','karaoke','blindtest_setup'):
+            target = message['game']
+            if target == 'karaoke':
+                try:
+                    require_karaoke_channel(game_claims)
+                except HTTPException as error:
+                    await websocket.send_json({'type':'error','code':'karaoke_channel','detail':error.detail})
+                    return
+            from services import karaoke_welcome, karaoke_intermission
+            karaoke_welcome.clear(room);karaoke_intermission.clear(room)
+            stop_game(room)
+            room.clock.set_playing(False)
+            room.mode = target
+            if target == 'karaoke':
+                room.needs_welcome = True
+                karaoke_welcome.ensure(room)
+            await broadcast(room)
+            return
+        if kind in ('select','play','pause','seek','queue_add','queue_next','roulette','ended'):
+            try:
+                require_karaoke_channel(game_claims)
+            except HTTPException as error:
+                await websocket.send_json({'type':'error','code':'karaoke_channel','detail':error.detail})
+                return
+        if kind == 'bt_stop' and client.can_control:
+            stop_game(room)
+            room.mode = 'blindtest_setup'
+            await broadcast(room)
+            return
     if kind in ("next_song", "autoplay_pause") and room.mode == "karaoke":
         from services import karaoke_intermission as intermission
         value = room.intermission
@@ -746,7 +781,8 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
 
 @router.websocket("/ws")
 async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
-    claims = activity.decode_video_token(t)
+    from services.oasis_games_auth import decode, require_instance, AUDIENCE
+    claims = decode(t) or activity.decode_video_token(t)
     if claims is None:
         await websocket.close(code=4403)
         return
@@ -754,10 +790,21 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
         await websocket.close(code=4400)
         return
 
+    try:
+        require_instance(claims, instance_id)
+    except HTTPException:
+        await websocket.close(code=4403)
+        return
     await websocket.accept()
     purge_rooms()
     room = ROOMS.setdefault(instance_id, KRoom())
     client = Client(str(claims.get("sub") or "unknown"), bool(claims.get("can_control")))
+    client.game_claims = claims if claims.get('aud') == AUDIENCE else None
+    if client.game_claims:
+        if not room.clients:
+            room.mode = 'menu'
+            room.host_id = client.uid
+        client.can_control = room.host_id == client.uid
     client.plays = False  # Join is explicit on the welcome screen or participation badge.
     room.clients[websocket] = client
     room.touched = time.monotonic()
@@ -783,11 +830,21 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     finally:
         room.clients.pop(websocket, None)
         room.touched = time.monotonic()
+        if getattr(client, 'game_claims', None) and room.clients and not any(c.uid == room.host_id for c in room.clients.values()):
+            room.host_id = next(iter(room.clients.values())).uid
+            for member in room.clients.values():
+                member.can_control = member.uid == room.host_id
+            await broadcast(room)
         if not room.clients:
             from services.karaoke_welcome import clear as clear_welcome
             clear_welcome(room)
             from services.karaoke_intermission import clear as clear_intermission
             clear_intermission(room)
+            if getattr(client, "game_claims", None):
+                stop_game(room)
+                room.mode = "menu"
+                room.host_id = None
+                room.queue = []
             room.needs_welcome = True
             room.clock.set_playing(False)
 

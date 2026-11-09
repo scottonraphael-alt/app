@@ -28,10 +28,14 @@ SESSIONS = {}  # One bot voice connection per guild. Like Activity rooms: one AP
 logger = logging.getLogger(__name__)
 
 
-def claims(token):
-    value = activity.decode_video_token(token)
+def claims(token, instance_id=None):
+    from services.oasis_games_auth import decode
+    value = decode(token) or activity.decode_video_token(token)
     if not value:
         raise HTTPException(401, 'Session expirée : rouvre le karaoké.')
+    if instance_id is not None:
+        from services.oasis_games_auth import require_instance
+        require_instance(value, instance_id)
     return value
 
 
@@ -42,6 +46,17 @@ async def controller(token):
     if not value.get('can_control') or not roles & (allowed-{''}):
         raise HTTPException(403, 'Action réservée aux animateurs autorisés.')
     return value
+
+
+async def catalog_controller(token):
+    actor = claims(token)
+    from services.oasis_games_auth import AUDIENCE
+    if actor.get('aud') == AUDIENCE:
+        room = karaoke.ROOMS.get(actor.get('instance_id'))
+        if not room or room.host_id != str(actor['sub']) or str(actor['sub']) not in {c.uid for c in room.clients.values()}:
+            raise HTTPException(403, 'L’hôte de la partie choisit le catalogue.')
+        return actor
+    return await controller(token)
 
 
 def voice_secret():
@@ -186,7 +201,7 @@ async def voice_start(payload: VoiceStart, t: str):
 
 @router.post('/voice/ensure')
 async def voice_ensure(payload: VoiceStart, t: str):
-    actor = claims(t)
+    actor = claims(t, payload.instance_id)
     room = karaoke.ROOMS.get(payload.instance_id)
     if not room or str(actor['sub']) not in {c.uid for c in room.clients.values()}:
         raise HTTPException(403, 'Rejoins la salle de karaoké avant de connecter le bot.')
@@ -206,6 +221,10 @@ def voice_expired(session):
 
 
 async def connect_voice(payload, actor, reuse=False):
+    from services.oasis_games_auth import require_instance, require_karaoke_channel, AUDIENCE
+    require_instance(actor, payload.instance_id)
+    if actor.get('aud') == AUDIENCE:
+        require_karaoke_channel(actor)
     async with VOICE_LOCK:
         for old in list(SESSIONS.values()):
             if voice_expired(old):
@@ -254,7 +273,7 @@ async def voice_stop(t: str):
 
 @router.post('/voice/consent')
 async def consent(payload: Consent, t: str, instance_id: str):
-    actor = claims(t)
+    actor = claims(t, instance_id)
     session = next((s for s in SESSIONS.values() if s['instance_id'] == instance_id), None)
     if not session:
         raise HTTPException(409, 'L’animateur doit d’abord connecter OasisLink au salon vocal.')
@@ -276,7 +295,7 @@ async def consent(payload: Consent, t: str, instance_id: str):
 
 @router.get('/voice/status')
 async def voice_status(t: str, instance_id: str):
-    actor = claims(t)
+    actor = claims(t, instance_id)
     session = next((s for s in SESSIONS.values() if s['instance_id'] == instance_id), None)
     if not session:
         busy = any(not voice_expired(other) for other in SESSIONS.values())
@@ -409,7 +428,7 @@ async def import_track(request: Request, t: str):
 
 @router.get('/catalog/search')
 async def catalog_search(q: str, t: str):
-    await controller(t)
+    await catalog_controller(t)
     if not 2 <= len(q.strip()) <= 80:
         raise HTTPException(422, 'Recherche de 2 à 80 caractères.')
     # Only the configured API is called; users cannot supply a download URL.
@@ -426,14 +445,14 @@ async def catalog_search(q: str, t: str):
 
 @router.get('/catalog/categories')
 async def catalog_categories(t: str):
-    await controller(t)
+    await catalog_controller(t)
     from services import karaoke_catalog as catalog
     return catalog.category_options()
 
 
 @router.get('/catalog/category')
 async def catalog_category(t: str, style: str = '', decade: str = ''):
-    await controller(t)
+    await catalog_controller(t)
     if not style and not decade:
         raise HTTPException(422, 'Choisis un style ou une décennie.')
     try:
@@ -446,7 +465,7 @@ async def catalog_category(t: str, style: str = '', decade: str = ''):
 
 @router.get('/voice/pitch')
 async def voice_pitch(t: str, instance_id: str):
-    actor = claims(t)
+    actor = claims(t, instance_id)
     uid = str(actor['sub'])
     session = next((value for value in SESSIONS.values() if value['instance_id'] == instance_id), None)
     if not session or uid not in session['consents'] or session.get('receiver_at', 0) < time.time()-10:

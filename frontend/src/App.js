@@ -20,7 +20,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./api/client";
 import AppShell from "./components/AppShell";
-import ActivityPage from "./pages/ActivityPage";
+import DiscordActivityEntry from "./pages/DiscordActivityEntry";
 const NewDashboardPage = lazy(() => import("./pages/NewDashboardPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));
@@ -464,7 +464,7 @@ const isDiscordActivity = (() => {
 
 export default function App() {
   // L'Activity ne passe pas par la session IRIS : elle a sa propre vérification (serveur Discord).
-  return isDiscordActivity ? <ActivityPage /> : <MainApp />;
+  return isDiscordActivity ? <DiscordActivityEntry /> : <MainApp />;
 }
 
 function MainApp() {

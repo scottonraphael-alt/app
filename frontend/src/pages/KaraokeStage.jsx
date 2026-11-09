@@ -5,7 +5,9 @@ import KaraokeScore from './KaraokeScore';
 import { useCallback, useEffect, useRef, useState } from "react";
 import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
-import BlindTestCategories from "./BlindTestCategories";
+import BlindTestSetup from "./BlindTestSetup";
+import OasisGameMenu from "./OasisGameMenu";
+import "./OasisGame.css";
 import KaraokeNotes from "./KaraokeNotes";
 import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
 import { useKaraokeAudio } from "./karaokeAudio";
@@ -351,8 +353,8 @@ function BlindTestView({ state, send, canControl, userId, feedback, plays, setPl
   );
 }
 
-export default function KaraokeStage({ session, onExit }) {
-  const { videoToken, instanceId, canControl, userName, userId } = session;
+export default function KaraokeStage({ session }) {
+  const { videoToken, instanceId, canControl:sessionCanControl, userName, userId } = session;
   const PROXY = session.apiRoot || DEFAULT_PROXY;
   const [rankingsOpen,setRankingsOpen]=useState(false);
   const closeRankings=useCallback(()=>setRankingsOpen(false),[]);
@@ -366,6 +368,7 @@ export default function KaraokeStage({ session, onExit }) {
   const [favorites, setFavorites] = useState([]);
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(null);
+  const canControl=session.games ? state?.host_id===String(userId) : sessionCanControl;
   const [library, setLibrary] = useState([]);
   const localTracks = library.filter((item) => item.prepared === true && !item.preview); // les extraits de 30 s ne servent qu'au blind test
   const [lyrics, setLyrics] = useState({ status: "idle", lines: [] });
@@ -390,7 +393,7 @@ export default function KaraokeStage({ session, onExit }) {
   const stateRef = useRef(null);
   const inputRef = useRef(null);
 
-  const mode = state ? state.mode : "karaoke";
+  const mode = state ? state.mode : session.games ? "menu" : "karaoke";
   const track = state && state.karaoke ? state.karaoke.track : null;
   const playing = state && state.karaoke ? state.karaoke.playing : false;
   const trackId = mode === "karaoke" && track ? track.id : null;
@@ -448,7 +451,7 @@ export default function KaraokeStage({ session, onExit }) {
           setStarting(true);
         } else if (message.type === "error") {
           setStarting(false);
-          setNotice(NOTICES[message.code] || "Action impossible.");
+          setNotice(message.detail || NOTICES[message.code] || "Action impossible.");
         }
       };
       socket.onclose = () => {
@@ -478,6 +481,10 @@ export default function KaraokeStage({ session, onExit }) {
   useEffect(() => {
     if (connected) { send({ type: "hello", name: userName, plays }); send({type:"browse"}); }
   }, [connected, plays, userName, send]);
+
+  useEffect(() => {
+    if (connected && canControl && (panel === 'blindtest' || mode === 'blindtest_setup')) send({type:'list'});
+  }, [connected, canControl, panel, mode, send]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -621,6 +628,11 @@ export default function KaraokeStage({ session, onExit }) {
     idle: "Choisis un morceau pour commencer.",
   }[lyrics.status];
 
+  if(session.games&&['menu','blindtest_setup'].includes(mode))return <div className="og-root">{audioElement}
+    <OasisGameMenu {...{session,state,canControl,send,notice}}/>
+    {mode==='blindtest_setup'&&canControl&&<BlindTestSetup {...{session,settings,setSettings,library,localTracks,plays,setPlays,starting,setStarting,categoryLoading,setCategoryLoading,connected,send,setNotice}}/>}
+  </div>;
+
   return (
     <div className="karaoke-stage" ref={visualRef} style={S.page} onPointerMove={chrome.wake} onPointerDown={e=>{chrome.wake();if(!e.target.closest(".kc-volume"))setVolumeOpen(false);if(!e.target.closest(".kc-theme"))setThemeOpen(false);}} onKeyDown={e=>{chrome.wake();if(e.key==="Escape"){setVolumeOpen(false);setThemeOpen(false);}}}>
       <KaraokeBackdrop audioRef={audioRef} graphRef={graphRef} energyMap={mode === 'karaoke' ? analysis?.energy : null}
@@ -630,6 +642,7 @@ export default function KaraokeStage({ session, onExit }) {
 
       <header className={'kc-top '+chromeClass}>
         <div className="kc-badges">
+          {session.games&&canControl&&<button className="kc-badge" onClick={()=>send({type:"choose_game",game:"menu"})}>← Jeux</button>}
           <span className="kc-badge">{mode==='blindtest'?'🎯 Blind test':'🎤 Karaoké'}</span>
           <button className="kc-badge" disabled={mode!=='karaoke'} onClick={()=>setCatalogOpen(true)}><Library size={16}/>Catalogue{state.queue?.length?` · ${state.queue.length}`:''}</button>
           <button className="kc-badge kc-icon" aria-label="Ouvrir les classements" onClick={()=>setRankingsOpen(true)}><Trophy size={17}/></button>
@@ -663,7 +676,7 @@ export default function KaraokeStage({ session, onExit }) {
       {mode==='karaoke'&&<KaraokeIntermission value={state.intermission} score={ownScore} canControl={canControl} send={send} onRankings={()=>setRankingsOpen(true)}/>}
       {mode==='karaoke'&&<KaraokeWelcome value={state.welcome} players={state.players} plays={plays} setPlays={setPlays} onCatalog={()=>setCatalogOpen(true)} onRankings={()=>setRankingsOpen(true)}/>}
       <KaraokeRankings session={session} open={rankingsOpen} onClose={closeRankings} track={track} tracks={localTracks}/>
-      <KaraokeTools session={session} state={state} library={library} favorites={favorites} send={send} plays={plays} open={catalogOpen} onClose={closeCatalog}/>
+      <KaraokeTools session={{...session,canControl}} state={state} library={library} favorites={favorites} send={send} plays={plays} open={catalogOpen} onClose={closeCatalog}/>
 
       <div className="karaoke-scene" style={S.main}>
         {mode === "blindtest" && state.bt ? (
@@ -685,70 +698,7 @@ export default function KaraokeStage({ session, onExit }) {
       {mode === "karaoke" && (
         <>
           {canControl && panel === "blindtest" && (
-            <div style={{ ...S.panel, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ fontWeight: 800 }}>🎯 Lancer un blind test</div>
-              <label style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                Morceaux
-                <select
-                  value={settings.pool}
-                  style={{ padding: 6, borderRadius: 8, maxWidth: 260 }}
-                  onChange={(event) => {
-                    if (event.currentTarget.value === "local") setCategoryLoading(false);
-                    setSettings({ ...settings, pool: event.currentTarget.value, ...(event.currentTarget.value === "local" ? { style: "", decade: "" } : {}) });
-                  }}
-                >
-                  <option value="all">Tout ({library.length})</option>
-                  <option value="local">Mes fichiers ({localTracks.length})</option>
-                  <option value="preview">Catalogue Deezer ({library.length - localTracks.length})</option>
-                </select>
-              </label>
-              {settings.pool !== "local" && <BlindTestCategories session={session} style={settings.style} decade={settings.decade}
-                onLoading={setCategoryLoading} onChange={selection => {
-                  setCategoryLoading(Boolean(selection.style || selection.decade));
-                  setSettings(current => ({ ...current, ...selection, pool: "preview" }));
-                }} />}
-              <label style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                Nombre de manches
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={settings.rounds}
-                  style={{ width: 80, padding: 6, borderRadius: 8 }}
-                  onChange={(event) => setSettings({ ...settings, rounds: Number(event.currentTarget.value) })}
-                />
-              </label>
-              <label style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                Durée d'une manche (s)
-                <input
-                  type="number"
-                  min="5"
-                  max="90"
-                  value={settings.seconds}
-                  style={{ width: 80, padding: 6, borderRadius: 8 }}
-                  onChange={(event) => setSettings({ ...settings, seconds: Number(event.currentTarget.value) })}
-                />
-              </label>
-              {settings.pool !== "local" && settings.seconds > 28 && (
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Les extraits du catalogue durent 30 s : au-delà de ~28 s, la musique s'arrête avant la fin de la manche.</div>
-              )}
-              <label style={{ fontSize: 14, display: "flex", gap: 6, alignItems: "center" }}>
-                <input type="checkbox" checked={plays} onChange={(event) => setPlays(event.target.checked)} />
-                Je participe aussi
-              </label>
-              <button
-                type="button"
-                style={S.button}
-                disabled={starting || categoryLoading || !connected}
-                onClick={() => {
-                  setStarting(true);
-                  setNotice("");
-                  send({ type: "bt_start", ...settings });
-                }}
-              >
-                {starting ? "Préparation de la partie…" : categoryLoading ? "Chargement de la sélection…" : "Lancer la partie"}
-              </button>
-            </div>
+            <div className="og-form-overlay"><button className="kc-badge" onClick={()=>setPanel(null)}>← Retour au karaoké</button><BlindTestSetup {...{session,settings,setSettings,library,localTracks,plays,setPlays,starting,setStarting,categoryLoading,setCategoryLoading,connected,send,setNotice}}/></div>
           )}
 
           <div className={'kc-bottom '+chromeClass} style={S.bar}>
@@ -782,14 +732,10 @@ export default function KaraokeStage({ session, onExit }) {
                   <button type="button" style={S.button} onClick={() => setCatalogOpen(true)}>
                     🎵 Morceaux
                   </button>
-                  <button type="button" style={S.button} onClick={() => setPanel(panel === "blindtest" ? null : "blindtest")}>
+                  <button type="button" style={S.button} onClick={() => session.games ? send({type:"choose_game",game:"blindtest_setup"}) : setPanel(panel === "blindtest" ? null : "blindtest")}>
                     🎯 Blind test
                   </button>
-                  {onExit && (
-                    <button type="button" style={S.ghost} onClick={onExit}>
-                      🎞 Cinéma
-                    </button>
-                  )}
+
                 </>
               )}
               <button type="button" style={S.ghost} onClick={toggleRomaji} aria-pressed={showRomaji} title="Afficher la romanisation au-dessus des paroles">
