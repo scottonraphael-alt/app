@@ -66,7 +66,6 @@ nav a:hover, nav a[aria-current="page"] { color: var(--accent); text-decoration:
 .legal-copy p + p { margin-top: 12px; }
 .legal-copy li + li { margin-top: 9px; }
 .legal-copy a { text-underline-offset: 3px; }
-.draft { margin-bottom: 24px; padding: 13px 16px; border-left: 3px solid var(--accent); background: var(--rose); font-size: 14px; }
 .contact { color: var(--accent); font-weight: 720; overflow-wrap: anywhere; }
 .legal-footer { border-top: 1px solid var(--line); }
 @media (max-width: 760px) {

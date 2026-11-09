@@ -8,7 +8,7 @@ Le dossier `dist/` contient les trois pages et leurs ressources. Nginx peut serv
 | Conditions d’utilisation | https://loasis.app/conditions-utilisation/ |
 | Politique de confidentialité | https://loasis.app/politique-de-confidentialite/ |
 
-Les deux textes sont des brouillons. Ils indiquent Raph Scotton comme éditeur et responsable du traitement, le compte Discord `raph_scttn` pour les demandes, et la France pour l’hébergement. La durée prévue est de deux ans pour les scores, les favoris et les journaux. Le code actuel ne configure pas leur expiration à deux ans. Appliquer cette durée aux données concernées et valider les bases légales, notamment pour les classements, avant de retirer les mentions « Projet de texte » et `noindex`. Voir [les informations à fournir aux personnes selon la CNIL](https://www.cnil.fr/fr/informer-les-personnes).
+Les deux textes sont des brouillons. Ils indiquent Raph Scotton comme éditeur et responsable du traitement, le compte Discord `raph_scttn` pour les demandes, et la France pour l’hébergement. La durée prévue est de deux ans pour les scores, les favoris et les journaux. Le code actuel ne configure pas leur expiration à deux ans. Appliquer cette durée aux données concernées et valider les bases légales, notamment pour les classements, avant de retirer la directive `noindex`. Voir [les informations à fournir aux personnes selon la CNIL](https://www.cnil.fr/fr/informer-les-personnes).
 
 ## Repérer le dossier servi sur le VPS
 
