@@ -2,7 +2,7 @@ import {act} from 'react';
 import {createRoot} from 'react-dom/client';
 import Menu from './OasisGameMenu';
 import Setup from './BlindTestSetup';
-import ConnectFour from './ConnectFour';
+import BoardGame from './BoardGame';
 global.IS_REACT_ACT_ENVIRONMENT=true;
 let host,root;
 beforeEach(()=>{host=document.createElement('div');root=createRoot(host);});
@@ -42,6 +42,7 @@ test('only the active player can drop a token from the board', async () => {
  const send = jest.fn();
  const state = {
    at: performance.now(),
+   mode: 'connect_four',
    connect_four: {
      phase: 'playing', board: [[0, 0], [1, 0]], settings: { size: 'classic', seconds: 0 },
      turn: 2, round: 1, round_id: 'round', remaining: null, score: [0, 0], spectators: 1,
@@ -49,13 +50,43 @@ test('only the active player can drop a token from the board', async () => {
      history: [{ row: 1, column: 0, player: 1 }],
    },
  };
- await act(async () => root.render(<ConnectFour state={state} userId="spectator" connected send={send} />));
- const second = () => host.querySelectorAll('.c4-column')[1];
+ await act(async () => root.render(<BoardGame state={state} userId="spectator" connected send={send} />));
+ const second = () => host.querySelectorAll('.bg-column')[1];
  expect(second().getAttribute('aria-disabled')).toBe('true');
  await act(async () => second().click());
  expect(send).not.toHaveBeenCalled();
- await act(async () => root.render(<ConnectFour state={state} userId="b" connected send={send} />));
+ await act(async () => root.render(<BoardGame state={state} userId="b" connected send={send} />));
  expect(second().getAttribute('aria-disabled')).toBe('false');
  await act(async () => second().click());
  expect(send).toHaveBeenCalledWith({ type: 'c4_drop', round_id: 'round', column: 1, ply: 1 });
+});
+
+test('the host can open the morpion from the games menu', async () => {
+ const send = jest.fn();
+ await act(async () => root.render(<Menu session={session} state={{ mode: 'menu' }} canControl send={send} />));
+ const button = [...host.querySelectorAll('button')].find(item => item.textContent.includes('Jouer au morpion'));
+ await act(async () => button.click());
+ expect(send).toHaveBeenCalledWith({ type: 'choose_game', game: 'tic_tac_toe' });
+});
+
+test('the morpion sends the selected free cell and leaves occupied cells disabled', async () => {
+ const send = jest.fn();
+ const state = {
+   at: performance.now(), mode: 'tic_tac_toe',
+   tic_tac_toe: {
+     phase: 'playing', board: [[1, 0, 0], [0, 0, 0], [0, 0, 0]],
+     settings: { seconds: 0 }, turn: 2, round: 1, round_id: 'round', remaining: null,
+     score: [0, 0], spectators: 0,
+     seats: [{ id: 'a', name: 'Alice', connected: true }, { id: 'b', name: 'Bob', connected: true }],
+     history: [{ row: 0, column: 0, player: 1 }],
+   },
+ };
+ await act(async () => root.render(<BoardGame state={state} userId="b" connected send={send} />));
+ const cells = host.querySelectorAll('.bg-cell');
+ expect(cells).toHaveLength(9);
+ expect(cells[0].getAttribute('aria-disabled')).toBe('true');
+ await act(async () => cells[0].click());
+ expect(send).not.toHaveBeenCalled();
+ await act(async () => cells[4].click());
+ expect(send).toHaveBeenCalledWith({ type: 'ttt_place', round_id: 'round', cell: 4, ply: 1 });
 });

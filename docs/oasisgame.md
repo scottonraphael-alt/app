@@ -9,6 +9,7 @@ Le menu propose :
 - **Karaoké** : uniquement depuis le salon `1569069812804751431`. Le serveur vérifie aussi la présence vocale réelle du membre via le bot OasisLink ; un simple identifiant de salon envoyé par le navigateur ne suffit pas. Le bot doit être connecté et voir ce salon. L’accueil de 20 secondes, les morceaux Mac, les scores et les classements sont conservés.
 - **Blind test** : page de préparation dédiée, avec styles et décennies Deezer, nombre de manches et durée, puis bouton « Lancer la partie ». Aucun rôle staff n’est requis pour l’hôte OasisGame. Le blind test n’est pas limité au salon karaoké.
 - **Puissance 4** : duel en direct ou contre l’ordinateur, trois tailles de grille, chrono facultatif et spectateurs. L’hôte ouvre le plateau depuis le menu. Les joueurs prennent une place avant de lancer la manche. Le score est conservé entre les revanches du même duel.
+- **Morpion** : grille 3 × 3, duel entre membres ou contre l’ordinateur à trois niveaux. Le jeu propose un chrono facultatif, des spectateurs, des revanches et la relecture de la dernière manche.
 
 ## Créer l’application
 

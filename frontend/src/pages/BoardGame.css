@@ -1,0 +1,163 @@
+.og-game.og-connect-four > span { background: #ffcb881c; color: #ffd194; }
+.og-game.og-connect-four button { background: #ffce91; color: #35201a; }
+@media (min-width: 1000px) {
+  .og-menu .og-games { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.bg-page {
+  --bg-coral: #ff9487;
+  --bg-mint: #83ead1;
+  max-width: 1080px;
+  margin: auto;
+  padding: clamp(14px, 3vw, 34px);
+}
+.bg-header, .bg-title, .bg-status, .bg-actions, .bg-player strong, .bg-clock,
+.bg-spectators, .bg-replay, .bg-replay label, .bg-rules summary, .bg-page button:not(.bg-column, .bg-cell) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bg-header, .bg-title, .bg-status { justify-content: space-between; }
+.bg-title { margin: 36px 0 20px; flex-wrap: wrap; }
+.bg-title > div > span { color: #ffd194; letter-spacing: .18em; font-size: 10px; font-weight: 750; }
+.bg-title h1 { margin: 4px 0 0; letter-spacing: -.045em; font-size: clamp(36px, 6vw, 60px); line-height: 1.1; }
+.bg-spectators, .bg-clock { color: #d2c0df; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bg-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(245px, 1fr); gap: clamp(16px, 3vw, 30px); }
+.bg-stage, .bg-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.bg-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.bg-player, .bg-panel {
+  border: 1px solid #f2e0ff21;
+  border-radius: 18px;
+  background: #171426b5;
+}
+.bg-player {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+.bg-player-1.bg-current { border-color: var(--bg-coral); }
+.bg-player-2.bg-current { border-color: var(--bg-mint); }
+.bg-player strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-player strong svg { display: inline; margin-right: 5px; vertical-align: text-bottom; }
+.bg-player .bg-token { width: 22px; height: 22px; }
+.bg-player small { color: #ffc5b3; }
+.bg-muted { color: #c4b2d1; font-size: 12px; line-height: 1.5; }
+.bg-score { font-size: 21px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.bg-stage progress { width: 100%; height: 6px; accent-color: #ffd194; }
+.bg-board {
+  display: grid;
+  grid-template-columns: repeat(var(--columns), minmax(0, 1fr));
+  gap: clamp(2px, .7vw, 7px);
+  padding: clamp(4px, 1vw, 11px);
+  border: 1px solid #aa9af36b;
+  border-radius: 23px;
+  background: linear-gradient(150deg, #4a3b7d, #30234f 90%);
+  box-shadow: inset 0 1px 0 #ffffff2c, 0 14px 35px #08071750;
+  overflow: hidden;
+}
+.bg-page .bg-column, .bg-page .bg-column:hover {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(3px, .7vw, 7px);
+  padding: clamp(2px, .45vw, 5px);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  translate: none;
+}
+.bg-page .bg-column[aria-disabled="true"] { cursor: default; }
+.bg-page .bg-column[aria-disabled="false"]:is(:hover, :focus-visible) { background: #ffffff1c; border-color: #ffffff42; }
+.bg-column-number { color: #e6daf7; text-align: center; font-size: 12px; }
+.bg-hole {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #161128;
+  box-shadow: inset 0 3px 7px #05030cb8, 0 1px 0 #ffffff36;
+}
+.bg-token {
+  display: block;
+  width: 92%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid #fff6;
+  box-shadow: inset 0 0 0 3px #ffffff2b, inset 0 -4px 6px #0004;
+}
+.bg-token-1 { background: radial-gradient(circle at 34% 23%, #ffb3a0, #ff776b 55%, #c33c48); }
+.bg-token-2 { background: radial-gradient(circle at 34% 23%, #c5ffe8, #72dfc9 55%, #2a9f9b); }
+.bg-token.bg-last { animation: bg-drop 280ms cubic-bezier(.3, .8, .5, 1) both; }
+.bg-token.bg-win { outline: 2px solid #fff; outline-offset: -5px; box-shadow: 0 0 13px #fff9; }
+@keyframes bg-drop { from { transform: translateY(calc(-107% * var(--fall))); opacity: .3; } }
+.bg-panel { padding: clamp(14px, 2vw, 22px); }
+.bg-panel h2 { margin: 0 0 12px; font-size: 19px; }
+.bg-panel p { line-height: 1.5; margin: 10px 0 0; }
+.bg-options { display: grid; gap: 10px; margin: 16px 0; }
+.bg-options label { display: grid; gap: 4px; font-size: 12px; color: #dacbe5; }
+.bg-options select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #e3caff40;
+  border-radius: 9px;
+  background: #242037;
+  color: #f8efff;
+  font: inherit;
+}
+.bg-actions { flex-wrap: wrap; margin-top: 12px; }
+.bg-page .bg-primary { background: #ffce91; color: #35201a; }
+.bg-page .bg-primary:hover { background: #ffdea9; }
+.bg-page :focus-visible { outline: 2px solid #ffce91; outline-offset: 2px; }
+.bg-rules summary { cursor: pointer; font-weight: 650; }
+.bg-rules p { color: #dacbe5; font-size: 13px; }
+.bg-replay { flex-wrap: wrap; justify-content: center; font-size: 12px; }
+.bg-replay input { max-width: 120px; accent-color: #ffd194; }
+.bg-page .bg-replay button { padding: 6px 9px; }
+.bg-side .og-error { margin: 0; }
+@media (max-width: 680px) {
+  .bg-title { margin-top: 24px; }
+  .bg-layout { grid-template-columns: minmax(0, 1fr); }
+  .bg-player { gap: 6px; padding: 8px; }
+  .bg-player strong { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bg-token.bg-last { animation: none; }
+}
+
+.og-game.og-morpion > span { background: #c5a7ff22; color: #dbc7ff; }
+.og-game.og-morpion button { background: #dbc7ff; color: #261734; }
+
+.bg-morpion {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 460px);
+  align-self: center;
+  gap: clamp(6px, 1.5vw, 12px);
+  padding: clamp(8px, 1.5vw, 15px);
+}
+.bg-page .bg-cell, .bg-page .bg-cell:hover {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border-radius: clamp(10px, 2vw, 19px);
+  background: #1c1635;
+  translate: none;
+}
+.bg-page .bg-cell[aria-disabled="true"] { cursor: default; }
+.bg-page .bg-cell[aria-disabled="false"]:is(:hover, :focus-visible) { background: #32244f; }
+.bg-page .bg-cell.bg-cell-win { background: #47346c; border-color: #dbc7ff; }
+.bg-symbol { width: 54%; height: 54%; stroke-width: 2.5; }
+.bg-symbol-1 { color: var(--bg-coral); }
+.bg-symbol-2 { color: var(--bg-mint); }
+.bg-player .bg-symbol { width: 22px; height: 22px; }
+.bg-symbol-preview { opacity: 0; }
+.bg-cell:is(:hover, :focus-visible) .bg-symbol-preview { opacity: .38; }
+.bg-symbol-last { animation: bg-mark 160ms ease-out both; }
+@keyframes bg-mark { from { transform: scale(.75); opacity: .4; } }
+@media (prefers-reduced-motion: reduce) {
+  .bg-symbol-last { animation: none; }
+}

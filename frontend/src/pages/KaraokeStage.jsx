@@ -7,7 +7,7 @@ import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
 import BlindTestSetup from "./BlindTestSetup";
 import OasisGameMenu from "./OasisGameMenu";
-import ConnectFour from "./ConnectFour";
+import BoardGame from "./BoardGame";
 import "./OasisGame.css";
 import KaraokeNotes from "./KaraokeNotes";
 import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
@@ -451,7 +451,7 @@ export default function KaraokeStage({ session }) {
           setLibrary(message.tracks || []);
         } else if (message.type === "guess_result") {
           setFeedback({ ...message, key: Date.now() });
-        } else if (message.type === "c4_error") {
+        } else if (["c4_error", "ttt_error"].includes(message.type)) {
           setNotice(message.detail);
         } else if (message.type === "catalog_loading") {
           setStarting(true);
@@ -634,11 +634,11 @@ export default function KaraokeStage({ session }) {
     idle: "Choisis un morceau pour commencer.",
   }[lyrics.status];
 
-  if (session.games && mode === "connect_four") {
+  if (session.games && ["connect_four", "tic_tac_toe"].includes(mode)) {
     return (
       <div className="og-root">
         {audioElement}
-        <ConnectFour {...{ state, userId, canControl, connected, send }} error={notice} />
+        <BoardGame {...{ state, userId, canControl, connected, send }} error={notice} />
       </div>
     );
   }

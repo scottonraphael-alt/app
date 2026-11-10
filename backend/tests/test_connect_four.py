@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 
-from services import connect_four as c4
+from services import board_games, connect_four as c4
 
 
 def match():
@@ -59,18 +59,18 @@ def test_computer_finds_immediate_win_and_blocks_threat():
 def test_bot_move_is_scheduled_without_another_client_message(monkeypatch):
     async def run():
         game = match()
-        game.seats[1]['id'] = c4.BOT
+        game.seats[1]['id'] = board_games.BOT
         game.drop(0, 0)
-        room = SimpleNamespace(connect_four=game)
+        room = SimpleNamespace(board_match=game)
         updates = []
 
         async def broadcast(_):
             updates.append(len(game.history))
 
-        monkeypatch.setattr(c4, 'time', SimpleNamespace(monotonic=lambda: 1))
-        c4.schedule(room, broadcast)
+        monkeypatch.setattr(board_games, 'time', SimpleNamespace(monotonic=lambda: 1))
+        board_games.schedule(room, broadcast)
         await game.timer
         assert updates == [2] and game.turn == 1
-        c4.clear(room)
+        board_games.clear(room)
 
     asyncio.run(run())

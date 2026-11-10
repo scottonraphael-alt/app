@@ -34,13 +34,15 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 
 from routers import activity
-from services import connect_four
+from services import board_games, connect_four, tic_tac_toe
 from services import karaoke_catalog as catalog
 from services import karaoke_game as game_rules
 from services.karaoke_game import BlindTest, Track
 from services.karaoke_text import LRCLIB_USER_AGENT, build_lines, fetch_lrclib
 
 logger = logging.getLogger("activity.karaoke")
+
+BOARD_GAMES = {"connect_four": connect_four.Match, "tic_tac_toe": tic_tac_toe.Match}
 
 KARAOKE_DIR = Path(os.environ.get("KARAOKE_DIR", "/data/karaoke"))
 # Cache des paroles téléchargées : doit être inscriptible (le dossier de musique peut être en :ro).
@@ -460,7 +462,7 @@ class KRoom:
         self.clock = PlaybackClock()
         self.track_id: str | None = None
         self.game: BlindTest | None = None
-        self.connect_four: connect_four.Match | None = None
+        self.board_match: board_games.Match | None = None
         self.sequence = 0
         self.clients: dict[WebSocket, Client] = {}
         self.timer: asyncio.Task | None = None
@@ -489,10 +491,10 @@ def _cancel_timer(room: KRoom) -> None:
 
 def snapshot(room: KRoom) -> dict:
     room.sequence += 1
-    if room.connect_four is not None:
+    if room.board_match is not None:
         return {
             "type": "kstate", "mode": room.mode, "host_id": room.host_id, "sequence": room.sequence,
-            "connect_four": room.connect_four.public(connect_four.online_ids(room), time.monotonic()),
+            room.mode: room.board_match.public(board_games.online_ids(room), time.monotonic()),
         }
     from services.karaoke_intermission import public as intermission_state
     tracks = library()
@@ -574,7 +576,7 @@ def stop_game(room: KRoom) -> None:
 def on_activity_mode(instance_id: str, mode: str) -> None:
     """Appelé par routers/activity.py : quand l'Activity repasse en mode cinéma, tout s'arrête."""
     room = ROOMS.get(instance_id)
-    if room is None or room.connect_four is not None or mode == "karaoke":
+    if room is None or room.board_match is not None or mode == "karaoke":
         return
     from services.karaoke_intermission import clear
     clear(room)
@@ -692,7 +694,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
                 if (CATALOG_ENABLED or not track.remote)
                 and (pool not in ("local", "preview") or bool(track.remote) == (pool == "preview"))
             ]
-        if room.connect_four is not None or (room.game is not None and room.game.phase in ('round', 'reveal')):
+        if room.board_match is not None or (room.game is not None and room.game.phase in ('round', 'reveal')):
             await websocket.send_json({'type': 'error', 'code': 'game_running'})
             return
         test = BlindTest(
@@ -731,9 +733,9 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
     game_claims = getattr(client, 'game_claims', None)
     if game_claims:
         from services.oasis_games_auth import require_karaoke_channel
-        if kind == 'choose_game' and client.can_control and message.get('game') in ('menu','karaoke','blindtest_setup','connect_four'):
+        if kind == 'choose_game' and client.can_control and message.get('game') in ('menu', 'karaoke', 'blindtest_setup', *BOARD_GAMES):
             target = message['game']
-            if target == room.mode == "connect_four":
+            if target == room.mode and room.board_match is not None:
                 return
             if target == 'karaoke':
                 try:
@@ -744,19 +746,19 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
             from services import karaoke_welcome, karaoke_intermission
             karaoke_welcome.clear(room);karaoke_intermission.clear(room)
             stop_game(room)
-            connect_four.clear(room)
+            board_games.clear(room)
             room.clock.set_playing(False)
             room.mode = target
-            if target == "connect_four":
-                room.connect_four = connect_four.Match()
+            if target in BOARD_GAMES:
+                room.board_match = BOARD_GAMES[target]()
             if target == 'karaoke':
                 room.needs_welcome = True
                 karaoke_welcome.ensure(room)
             await broadcast(room)
             return
-        if room.connect_four is not None:
-            if isinstance(kind, str) and kind.startswith("c4_"):
-                await connect_four.handle(room, websocket, client, kind, message, broadcast)
+        if room.board_match is not None:
+            if isinstance(kind, str) and kind.startswith(room.board_match.message_prefix):
+                await board_games.handle(room, websocket, client, kind, message, broadcast)
             elif kind == "sync":
                 await websocket.send_json(snapshot(room))
             elif kind == "hello":
@@ -827,7 +829,7 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     if client.game_claims:
         client.name = game_rules.clean_name(claims.get("name"))
         if not room.clients:
-            if room.connect_four is None:
+            if room.board_match is None:
                 room.mode = 'menu'
             room.host_id = client.uid
         client.can_control = room.host_id == client.uid
@@ -836,9 +838,9 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     room.touched = time.monotonic()
 
     try:
-        if room.connect_four is not None:
-            if connect_four.refresh(room):
-                connect_four.schedule(room, broadcast)
+        if room.board_match is not None:
+            if board_games.refresh(room):
+                board_games.schedule(room, broadcast)
             await broadcast(room)
         else:
             ensure_catalog()
@@ -867,9 +869,9 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
             for member in room.clients.values():
                 member.can_control = member.uid == room.host_id
             host_changed = True
-        if room.connect_four is not None:
-            if connect_four.refresh(room):
-                connect_four.schedule(room, broadcast)
+        if room.board_match is not None:
+            if board_games.refresh(room):
+                board_games.schedule(room, broadcast)
             await broadcast(room)
         elif host_changed:
             await broadcast(room)

@@ -178,3 +178,53 @@ def test_connect_four_duel_enforces_seats_turns_and_rematch():
                     assert state['phase'] == 'playing' and state['turn'] == 2 and state['score'] == [1, 0]
                     guest.send_json(action)
                     assert guest.receive_json()['type'] == 'c4_error'
+
+
+def test_tic_tac_toe_plays_a_diagonal_and_switches_back_to_connect_four():
+    room = auth.room_id('morpion')
+    with TestClient(app) as game_client:
+        def connect(uid):
+            token = signed(uid=uid, instance='morpion', channel='other-channel')
+            return game_client.websocket_connect(f'/activity/karaoke/ws?t={token}&instance_id={room}')
+
+        with connect('123') as host:
+            host.receive_json()
+            host.receive_json()
+            host.send_json({'type': 'choose_game', 'game': 'tic_tac_toe'})
+            assert host.receive_json()['tic_tac_toe']['board'] == [[0] * 3 for _ in range(3)]
+            host.send_json({'type': 'ttt_join'})
+            host.receive_json()
+
+            with connect('456') as guest:
+                guest.receive_json()
+                host.receive_json()
+
+                def shared_state():
+                    state = host.receive_json()
+                    assert state == guest.receive_json()
+                    return state['tic_tac_toe']
+
+                guest.send_json({'type': 'ttt_join'})
+                assert len(shared_state()['seats']) == 2
+                host.send_json({'type': 'ttt_start'})
+                state = shared_state()
+                action = {'type': 'ttt_place', 'round_id': state['round_id']}
+                host.send_json({**action, 'cell': True, 'ply': 0})
+                assert host.receive_json()['type'] == 'ttt_error'
+
+                for ply, cell in enumerate((0, 1, 4, 2, 8)):
+                    socket = host if ply % 2 == 0 else guest
+                    socket.send_json({**action, 'cell': cell, 'ply': ply})
+                    state = shared_state()
+                    if ply == 0:
+                        guest.send_json({**action, 'cell': 0, 'ply': 1})
+                        assert guest.receive_json()['type'] == 'ttt_error'
+                assert state['result']['winner'] == 1
+                assert set(map(tuple, state['result']['line'])) == {(0, 0), (1, 1), (2, 2)}
+                assert state['score'] == [1, 0]
+
+                host.send_json({'type': 'choose_game', 'game': 'connect_four'})
+                updated = host.receive_json()
+                assert updated == guest.receive_json()
+                assert updated['mode'] == 'connect_four' and 'tic_tac_toe' not in updated
+                assert updated['connect_four']['board'] == [[0] * 7 for _ in range(6)]

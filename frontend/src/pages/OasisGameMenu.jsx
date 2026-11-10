@@ -10,6 +10,13 @@ export default function OasisGameMenu({session,state,canControl,send,notice}){
    <article className="og-game og-karaoke"><span aria-hidden="true">♫</span><small>À VOUS DE CHANTER</small><h2>Karaoké</h2><p>Paroles synchronisées, guide mélodique et défis vocaux.</p><button disabled={!canControl||!allowed} onClick={()=>send({type:'choose_game',game:'karaoke'})}>Entrer sur scène →</button>{!allowed&&<a href={'https://discord.com/channels/'+session.guildId+'/'+session.karaokeChannelId} target="_blank" rel="noreferrer">Rejoins le salon du karaoké et ouvre OasisGame depuis celui-ci.</a>}</article>
    <article className="og-game og-blindtest"><span aria-hidden="true">◎</span><small>À VOUS DE DEVINER</small><h2>Blind test</h2><p>Des extraits, tous les styles et une course aux bonnes réponses.</p><button disabled={!canControl} onClick={()=>send({type:'choose_game',game:'blindtest_setup'})}>Préparer une partie →</button></article>
    <article className="og-game og-connect-four"><span aria-hidden="true">⠿</span><small>À VOUS DE JOUER</small><h2>Puissance 4</h2><p>Aligne quatre jetons avant ton adversaire. Défie un ami ou joue contre l’ordinateur.</p><button disabled={!canControl} onClick={()=>send({type:'choose_game',game:'connect_four'})}>Ouvrir le plateau →</button></article>
+   <article className="og-game og-morpion">
+    <span aria-hidden="true">×○</span>
+    <small>À VOUS DE JOUER</small>
+    <h2>Morpion</h2>
+    <p>Aligne trois croix ou trois ronds sur une grille de 3 × 3. Joue à deux ou contre l’ordinateur.</p>
+    <button disabled={!canControl} onClick={() => send({ type: 'choose_game', game: 'tic_tac_toe' })}>Jouer au morpion →</button>
+   </article>
   </div>}
  </main>;
 }
