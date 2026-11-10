@@ -258,3 +258,4 @@ async def handle(room, websocket, client, kind, message, broadcast):
         await broadcast(room)
     if not accepted:
         await websocket.send_json({"type": match.message_prefix + "error", "detail": "Action indisponible. Vérifie l’état de la partie."})
+    return accepted

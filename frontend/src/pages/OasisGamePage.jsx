@@ -19,7 +19,7 @@ export default function OasisGamePage(){
    if(!response.ok)throw new Error(data.detail||'Connexion à OasisGame refusée.');
    await sdk.commands.authenticate({access_token:data.access_token});
    try{await sdk.commands.setActivity({activity:{type:0,details:'Choisit un jeu',state:'OasisGame',instance:true}});}catch{/* Presence is optional. */}
-   if(!cancelled)setSession({videoToken:data.video_token,instanceId:data.instance_id,userId:data.user_id,userName:data.user_name,canControl:data.can_control,games:true,channelId:sdk.channelId,guildId:sdk.guildId,karaokeChannelId:data.karaoke_channel_id,apiRoot:PROXY});
+   if(!cancelled)setSession({videoToken:data.video_token,instanceId:data.instance_id,userId:data.user_id,userName:data.user_name,canControl:data.can_control,games:true,channelId:sdk.channelId,guildId:sdk.guildId,karaokeChannelId:data.karaoke_channel_id,apiRoot:PROXY,openInvite:()=>sdk.commands.openInviteDialog()});
   })().catch(e=>{if(!cancelled)setError(e.message);});
   return()=>{cancelled=true;};
  },[]);

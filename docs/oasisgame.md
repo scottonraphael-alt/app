@@ -38,7 +38,9 @@ OASISGAME_DISCORD_CLIENT_ID=IDENTIFIANT_PUBLIC_OASISGAME
 OASISGAME_DISCORD_CLIENT_SECRET=SECRET_OAUTH_OASISGAME
 ```
 
-Conserver `ACTIVITY_DISCORD_CLIENT_ID` et `ACTIVITY_DISCORD_CLIENT_SECRET` pour CinéStream. OasisGame réutilise le récepteur vocal OasisLink existant ; il ne demande pas de nouveau token de bot ni de nouvelle préparation audio.
+Conserver `ACTIVITY_DISCORD_CLIENT_ID` et `ACTIVITY_DISCORD_CLIENT_SECRET` pour CinéStream. OasisGame réutilise le récepteur vocal OasisLink existant.
+
+Pour activer les invitations automatiques, ajouter `OASISGAME_DISCORD_BOT_TOKEN` dans le `.env` avec le token du bot de l’application **OasisGame**, depuis **Bot** dans le portail Discord. Installer ce bot sur L’Oasis et lui donner accès au salon de lancement, avec les permissions **Envoyer des messages** et **Voir les anciens messages**. Dans les fils, autoriser aussi l’envoi de messages dans les fils. La permission **Créer une invitation** permet un lien direct dans les salons vocaux. Le bouton **Inviter** dans l’Activity ouvre également la boîte d’invitation Discord.
 
 Après publication du commit :
 

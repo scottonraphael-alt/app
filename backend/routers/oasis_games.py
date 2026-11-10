@@ -48,7 +48,7 @@ async def token(payload: GameTokenRequest):
     name = (member.get('nick') or user.get('global_name') or user.get('username') or 'Joueur')[:32]
     instance = room_id(payload.instance_id)
     signed = jwt.encode({'sub':str(user['id']), 'name':name, 'aud':AUDIENCE, 'can_control':True,
-                        'instance_id':instance, 'channel_id':payload.channel_id, 'exp':int(time.time())+activity.VIDEO_TOKEN_TTL},
+                        'instance_id':instance, 'discord_instance_id':payload.instance_id, 'channel_id':payload.channel_id, 'exp':int(time.time())+activity.VIDEO_TOKEN_TTL},
                        activity.ACTIVITY_TOKEN_KEY, algorithm='HS256')
     return {'access_token':access,'video_token':signed,'user_id':str(user['id']),'user_name':name,
             'instance_id':instance,'can_control':True,'karaoke_channel_id':KARAOKE_CHANNEL_ID}

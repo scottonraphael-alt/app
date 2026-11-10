@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Bot, CircleHelp, Eye, Flag, RotateCcw, Timer, Users, X, Circle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, CircleHelp, Eye, Flag, RotateCcw, Timer, Users, X, Circle, Volume2, VolumeX } from "lucide-react";
+import { useBoardSounds } from "./useBoardSounds";
 import "./BoardGame.css";
 
 const COLORS = ["", "Corail", "Menthe"];
@@ -191,9 +192,10 @@ function Players({ game, userId, morpion }) {
   );
 }
 
-export default function BoardGame({ state, userId, canControl, connected, send, error }) {
+export default function BoardGame({ state, userId, canControl, connected, send, error, onInvite }) {
   const mode = state.mode;
   const game = state[mode];
+  const sounds = useBoardSounds(mode, game.round_id, game.history.length, connected);
   const variant = GAMES[mode];
   const morpion = mode === "tic_tac_toe";
   const seat = game.seats.findIndex(player => player.id === userId) + 1;
@@ -227,10 +229,17 @@ export default function BoardGame({ state, userId, canControl, connected, send, 
   const remaining = hasClock ? Math.max(0, game.remaining - Math.max(0, now - state.at) / 1000) : game.remaining;
 
   return (
-    <main className="bg-page">
+    <main className="bg-page" onClickCapture={sounds.enabled ? sounds.unlock : undefined}
+      onKeyDownCapture={sounds.enabled ? sounds.unlock : undefined}>
       <header className="bg-header">
         <span className="og-brand">✦ OasisGame</span>
-        {canControl && <button disabled={!connected} onClick={() => send({ type: "choose_game", game: "menu" })}><ArrowLeft size={16} /> Tous les jeux</button>}
+        <div className="bg-header-actions">
+          <button type="button" onClick={sounds.toggle} aria-pressed={sounds.enabled}>
+            {sounds.enabled ? <Volume2 size={17} /> : <VolumeX size={17} />} Bruitages
+          </button>
+          {onInvite && <button type="button" onClick={onInvite}><Users size={16} /> Inviter</button>}
+          {canControl && <button disabled={!connected} onClick={() => send({ type: "choose_game", game: "menu" })}><ArrowLeft size={16} /> Tous les jeux</button>}
+        </div>
       </header>
       <div className="bg-title">
         <div><span>LES DUELS DE L’OASIS</span><h1>{variant.name}</h1></div>

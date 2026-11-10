@@ -34,7 +34,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 
 from routers import activity
-from services import board_games, connect_four, tic_tac_toe
+from services import board_games, connect_four, oasis_game_invites, tic_tac_toe
 from services import karaoke_catalog as catalog
 from services import karaoke_game as game_rules
 from services.karaoke_game import BlindTest, Track
@@ -715,6 +715,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
         room.game = test
         room.mode = "blindtest"
         schedule(room)
+        oasis_game_invites.schedule(room, client)
         await broadcast(room)
     elif kind == "bt_skip" and room.game is not None:
         if room.game.phase == "round":
@@ -754,11 +755,13 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
             if target == 'karaoke':
                 room.needs_welcome = True
                 karaoke_welcome.ensure(room)
+            oasis_game_invites.schedule(room, client)
             await broadcast(room)
             return
         if room.board_match is not None:
             if isinstance(kind, str) and kind.startswith(room.board_match.message_prefix):
-                await board_games.handle(room, websocket, client, kind, message, broadcast)
+                if await board_games.handle(room, websocket, client, kind, message, broadcast):
+                    oasis_game_invites.schedule(room, client)
             elif kind == "sync":
                 await websocket.send_json(snapshot(room))
             elif kind == "hello":

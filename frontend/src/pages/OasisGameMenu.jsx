@@ -1,8 +1,8 @@
-export default function OasisGameMenu({session,state,canControl,send,notice}){
+export default function OasisGameMenu({session,state,canControl,send,notice,onInvite}){
  const allowed=String(session.channelId)===String(session.karaokeChannelId);
  const setup=state.mode==='blindtest_setup';
  return <main className="og-menu">
-  <header><span className="og-brand">✦ OasisGame</span>{setup&&canControl&&<button onClick={()=>send({type:'choose_game',game:'menu'})}>← Tous les jeux</button>}</header>
+  <header><span className="og-brand">✦ OasisGame</span>{setup&&onInvite&&<button onClick={onInvite}>Inviter</button>}{setup&&canControl&&<button onClick={()=>send({type:'choose_game',game:'menu'})}>← Tous les jeux</button>}</header>
   <div className="og-intro"><small>LE SALON DE JEUX DE L’OASIS</small><h1>{setup?'Prépare ton blind test':'À quoi joue-t-on ?'}</h1><p>{setup?'Choisis ton ambiance musicale, invite les autres et lance la partie.':'Chante, devine les morceaux ou défie un ami.'}</p></div>
   {notice&&<p className="og-error" role="alert">{notice}</p>}
   {!canControl&&<p className="og-wait" role="status">L’hôte prépare la partie. Tu rejoindras le jeu avec les autres participants.</p>}

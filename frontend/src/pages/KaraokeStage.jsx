@@ -383,6 +383,13 @@ export default function KaraokeStage({ session }) {
   const [plays, setPlays] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [notice, setNotice] = useState("");
+  const openInvite = session.openInvite ? async () => {
+    try {
+      await session.openInvite();
+    } catch {
+      setNotice("Discord n’a pas pu ouvrir l’invitation.");
+    }
+  } : undefined;
   const [panel, setPanel] = useState(null); // "blindtest" | null
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -638,13 +645,13 @@ export default function KaraokeStage({ session }) {
     return (
       <div className="og-root">
         {audioElement}
-        <BoardGame {...{ state, userId, canControl, connected, send }} error={notice} />
+        <BoardGame {...{ state, userId, canControl, connected, send }} error={notice} onInvite={openInvite} />
       </div>
     );
   }
 
   if(session.games&&['menu','blindtest_setup'].includes(mode))return <div className="og-root">{audioElement}
-    <OasisGameMenu {...{session,state,canControl,send,notice}}/>
+    <OasisGameMenu {...{session,state,canControl,send,notice}} onInvite={openInvite}/>
     {mode==='blindtest_setup'&&canControl&&<BlindTestSetup {...{session,settings,setSettings,library,localTracks,plays,setPlays,starting,setStarting,categoryLoading,setCategoryLoading,connected,send,setNotice}}/>}
   </div>;
 
@@ -658,6 +665,7 @@ export default function KaraokeStage({ session }) {
       <header className={'kc-top '+chromeClass}>
         <div className="kc-badges">
           {session.games&&canControl&&<button className="kc-badge" onClick={()=>send({type:"choose_game",game:"menu"})}>← Jeux</button>}
+          {openInvite&&<button className="kc-badge" onClick={openInvite}><Users size={16}/>Inviter</button>}
           <span className="kc-badge">{mode==='blindtest'?'🎯 Blind test':'🎤 Karaoké'}</span>
           <button className="kc-badge" disabled={mode!=='karaoke'} onClick={()=>setCatalogOpen(true)}><Library size={16}/>Catalogue{state.queue?.length?` · ${state.queue.length}`:''}</button>
           <button className="kc-badge kc-icon" aria-label="Ouvrir les classements" onClick={()=>setRankingsOpen(true)}><Trophy size={17}/></button>

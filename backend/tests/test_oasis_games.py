@@ -228,3 +228,84 @@ def test_tic_tac_toe_plays_a_diagonal_and_switches_back_to_connect_four():
                 assert updated == guest.receive_json()
                 assert updated['mode'] == 'connect_four' and 'tic_tac_toe' not in updated
                 assert updated['connect_four']['board'] == [[0] * 7 for _ in range(6)]
+
+
+@pytest.mark.parametrize("mode, channel_type, expected_label", [
+    ("connect_four", 2, "Rejoindre la partie"),
+    ("tic_tac_toe", 0, "Ouvrir l’invitation Discord"),
+    ("karaoke", 2, "Rejoindre la partie"),
+    ("blindtest_setup", 0, "Ouvrir l’invitation Discord"),
+])
+def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, channel_type, expected_label):
+    import json
+    from services import oasis_game_invites as invites
+
+    app_id, channel, launch, launch_message = (
+        "111111111111111111", "222222222222222222", "333333333333333333", "444444444444444444",
+    )
+    instance = "oasis-discord-instance"
+    player = NS(uid="player", plays=True, game_claims={"discord_instance_id": instance, "channel_id": channel})
+    room = karaoke.KRoom()
+    room.mode = mode
+    room.clients = {"socket": player}
+    if mode in karaoke.BOARD_GAMES:
+        room.board_match = karaoke.BOARD_GAMES[mode]()
+        room.board_match.seats = [{"id": player.uid, "name": "Player"}]
+
+    monkeypatch.setenv("OASISGAME_DISCORD_CLIENT_ID", app_id)
+    monkeypatch.setenv("OASISGAME_DISCORD_BOT_TOKEN", "fake-oasis-bot")
+    monkeypatch.setattr(invites, "_cooldowns", type(invites._cooldowns)())
+    messages = []
+    requested_channels = []
+
+    def handler(request):
+        assert request.headers["Authorization"] == "Bot fake-oasis-bot"
+        path = request.url.path
+        if "/activity-instances/" in path:
+            return httpx.Response(200, json={
+                "application_id": app_id, "instance_id": instance, "launch_id": launch,
+                "location": {"guild_id": str(activity.DISCORD_GUILD_ID), "channel_id": channel},
+                "users": [player.uid],
+            })
+        assert f"/channels/{channel}" in path
+        requested_channels.append(path)
+        if path.endswith("/invites"):
+            assert channel_type == 2
+            assert json.loads(request.content)["target_application_id"] == app_id
+            return httpx.Response(200, json={"code": "native-invite"})
+        if path.endswith("/messages") and request.method == "GET":
+            return httpx.Response(200, json=[{
+                "id": launch_message, "application_id": app_id, "interaction_metadata": {"id": launch},
+            }])
+        if path.endswith("/messages"):
+            messages.append(json.loads(request.content))
+        return httpx.Response(200, json={"type": channel_type})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(invites, "httpx", NS(
+        AsyncClient=lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs),
+        HTTPError=httpx.HTTPError,
+    ))
+
+    async def run():
+        if room.board_match is not None:
+            room.board_match.settings["opponent"] = "bot"
+            assert invites.schedule(room, player) is None
+            room.board_match.settings["opponent"] = "duel"
+        else:
+            room.clients["guest"] = NS(uid="guest", plays=True)
+            assert invites.schedule(room, player) is None
+            del room.clients["guest"]
+        await invites.schedule(room, player)
+        assert invites.schedule(room, player) is None
+        # A fabricated launch channel must never turn into a Discord message.
+        invites._cooldowns.clear()
+        player.game_claims["channel_id"] = "555555555555555555"
+        await invites.schedule(room, player)
+
+    asyncio.run(run())
+    assert requested_channels and len(messages) == 1
+    assert messages[0]["allowed_mentions"] == {"parse": []}
+    button = messages[0]["components"][0]["components"][0]
+    assert button["label"] == expected_label
+    assert button["url"].endswith("native-invite" if channel_type == 2 else launch_message)
