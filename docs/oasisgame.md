@@ -13,7 +13,7 @@ Le menu propose :
 ## Créer l’application
 
 1. Ouvrir [Discord Developer Portal](https://discord.com/developers/applications) et créer l’application **OasisGame** dans le même compte ou la même équipe que CinéStream.
-2. Dans **General Information**, copier son **Application ID**. Dans **OAuth2**, récupérer son **Client Secret**. Le secret reste uniquement dans le `.env` du VPS : ne pas le coller dans un message ou dans le code frontend.
+2. Dans **General Information**, copier son **Application ID**. Dans **OAuth2 → Redirects**, ajouter `https://127.0.0.1` et cliquer sur **Save Changes**. Cette URL est requise pour que Discord autorise l’Activity. Le SDK gère le retour dans Discord. Dans **OAuth2**, récupérer aussi le **Client Secret** et le conserver dans le `.env` du VPS.
 3. Ajouter les **URL Mappings** utilisés par CinéStream, sur cette nouvelle application :
 
    | Prefix | Target |
