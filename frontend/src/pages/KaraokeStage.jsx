@@ -7,6 +7,7 @@ import KaraokeLyrics, { LYRICS_FONT } from "./KaraokeLyrics";
 import KaraokeTools from "./KaraokeTools";
 import BlindTestSetup from "./BlindTestSetup";
 import OasisGameMenu from "./OasisGameMenu";
+import ConnectFour from "./ConnectFour";
 import "./OasisGame.css";
 import KaraokeNotes from "./KaraokeNotes";
 import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
@@ -427,6 +428,7 @@ export default function KaraokeStage({ session }) {
       endpoint.search = query.toString();
       const socket = new WebSocket(endpoint.toString());
       socketRef.current = socket;
+      let latestState = 0;
       socket.onopen = () => {
         retries = 0;
         setConnected(true);
@@ -434,6 +436,8 @@ export default function KaraokeStage({ session }) {
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "kstate") {
+          if (message.sequence !== undefined && message.sequence <= latestState) return;
+          latestState = message.sequence ?? latestState;
           const stamped = { ...message, at: performance.now() };
           stateRef.current = stamped;
           setState(stamped);
@@ -447,6 +451,8 @@ export default function KaraokeStage({ session }) {
           setLibrary(message.tracks || []);
         } else if (message.type === "guess_result") {
           setFeedback({ ...message, key: Date.now() });
+        } else if (message.type === "c4_error") {
+          setNotice(message.detail);
         } else if (message.type === "catalog_loading") {
           setStarting(true);
         } else if (message.type === "error") {
@@ -627,6 +633,15 @@ export default function KaraokeStage({ session }) {
     error: "Paroles indisponibles pour le moment.",
     idle: "Choisis un morceau pour commencer.",
   }[lyrics.status];
+
+  if (session.games && mode === "connect_four") {
+    return (
+      <div className="og-root">
+        {audioElement}
+        <ConnectFour {...{ state, userId, canControl, connected, send }} error={notice} />
+      </div>
+    );
+  }
 
   if(session.games&&['menu','blindtest_setup'].includes(mode))return <div className="og-root">{audioElement}
     <OasisGameMenu {...{session,state,canControl,send,notice}}/>

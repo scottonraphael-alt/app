@@ -34,6 +34,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 
 from routers import activity
+from services import connect_four
 from services import karaoke_catalog as catalog
 from services import karaoke_game as game_rules
 from services.karaoke_game import BlindTest, Track
@@ -459,6 +460,8 @@ class KRoom:
         self.clock = PlaybackClock()
         self.track_id: str | None = None
         self.game: BlindTest | None = None
+        self.connect_four: connect_four.Match | None = None
+        self.sequence = 0
         self.clients: dict[WebSocket, Client] = {}
         self.timer: asyncio.Task | None = None
         self.touched = time.monotonic()
@@ -485,6 +488,12 @@ def _cancel_timer(room: KRoom) -> None:
 
 
 def snapshot(room: KRoom) -> dict:
+    room.sequence += 1
+    if room.connect_four is not None:
+        return {
+            "type": "kstate", "mode": room.mode, "host_id": room.host_id, "sequence": room.sequence,
+            "connect_four": room.connect_four.public(connect_four.online_ids(room), time.monotonic()),
+        }
     from services.karaoke_intermission import public as intermission_state
     tracks = library()
     local = karaoke_tracks()
@@ -500,6 +509,7 @@ def snapshot(room: KRoom) -> dict:
     return {
         **public(room),
         "type": "kstate",
+        "sequence": room.sequence,
         "mode": room.mode,
         "intermission": intermission_state(room),
         "welcome": room.welcome,
@@ -564,7 +574,7 @@ def stop_game(room: KRoom) -> None:
 def on_activity_mode(instance_id: str, mode: str) -> None:
     """Appelé par routers/activity.py : quand l'Activity repasse en mode cinéma, tout s'arrête."""
     room = ROOMS.get(instance_id)
-    if room is None or mode == "karaoke":
+    if room is None or room.connect_four is not None or mode == "karaoke":
         return
     from services.karaoke_intermission import clear
     clear(room)
@@ -682,7 +692,7 @@ async def handle_control(room: KRoom, websocket: WebSocket, client: Client, kind
                 if (CATALOG_ENABLED or not track.remote)
                 and (pool not in ("local", "preview") or bool(track.remote) == (pool == "preview"))
             ]
-        if room.game is not None and room.game.phase in ('round', 'reveal'):
+        if room.connect_four is not None or (room.game is not None and room.game.phase in ('round', 'reveal')):
             await websocket.send_json({'type': 'error', 'code': 'game_running'})
             return
         test = BlindTest(
@@ -721,8 +731,10 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
     game_claims = getattr(client, 'game_claims', None)
     if game_claims:
         from services.oasis_games_auth import require_karaoke_channel
-        if kind == 'choose_game' and client.can_control and message.get('game') in ('menu','karaoke','blindtest_setup'):
+        if kind == 'choose_game' and client.can_control and message.get('game') in ('menu','karaoke','blindtest_setup','connect_four'):
             target = message['game']
+            if target == room.mode == "connect_four":
+                return
             if target == 'karaoke':
                 try:
                     require_karaoke_channel(game_claims)
@@ -732,12 +744,24 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
             from services import karaoke_welcome, karaoke_intermission
             karaoke_welcome.clear(room);karaoke_intermission.clear(room)
             stop_game(room)
+            connect_four.clear(room)
             room.clock.set_playing(False)
             room.mode = target
+            if target == "connect_four":
+                room.connect_four = connect_four.Match()
             if target == 'karaoke':
                 room.needs_welcome = True
                 karaoke_welcome.ensure(room)
             await broadcast(room)
+            return
+        if room.connect_four is not None:
+            if isinstance(kind, str) and kind.startswith("c4_"):
+                await connect_four.handle(room, websocket, client, kind, message, broadcast)
+            elif kind == "sync":
+                await websocket.send_json(snapshot(room))
+            elif kind == "hello":
+                client.name = game_rules.clean_name(message.get("name"))
+                client.plays = message.get("plays") is not False
             return
         if kind in ('select','play','pause','seek','queue_add','queue_next','roulette','ended'):
             try:
@@ -801,8 +825,10 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     client = Client(str(claims.get("sub") or "unknown"), bool(claims.get("can_control")))
     client.game_claims = claims if claims.get('aud') == AUDIENCE else None
     if client.game_claims:
+        client.name = game_rules.clean_name(claims.get("name"))
         if not room.clients:
-            room.mode = 'menu'
+            if room.connect_four is None:
+                room.mode = 'menu'
             room.host_id = client.uid
         client.can_control = room.host_id == client.uid
     client.plays = False  # Join is explicit on the welcome screen or participation badge.
@@ -810,14 +836,19 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     room.touched = time.monotonic()
 
     try:
-        ensure_catalog()
-        # Verify bundles off the event loop before the initial track selection.
-        initial_library = await library_message()
-        from services.karaoke_welcome import ensure as ensure_welcome
-        ensure_welcome(room)
-        await websocket.send_json(snapshot(room))
-        if client.can_control:
-            await websocket.send_json(initial_library)
+        if room.connect_four is not None:
+            if connect_four.refresh(room):
+                connect_four.schedule(room, broadcast)
+            await broadcast(room)
+        else:
+            ensure_catalog()
+            # Verify bundles off the event loop before the initial track selection.
+            initial_library = await library_message()
+            from services.karaoke_welcome import ensure as ensure_welcome
+            ensure_welcome(room)
+            await websocket.send_json(snapshot(room))
+            if client.can_control:
+                await websocket.send_json(initial_library)
         while True:
             await handle_message(room, websocket, client, await websocket.receive_json())
     except WebSocketDisconnect:
@@ -830,12 +861,19 @@ async def karaoke_ws(websocket: WebSocket, t: str, instance_id: str) -> None:
     finally:
         room.clients.pop(websocket, None)
         room.touched = time.monotonic()
+        host_changed = False
         if getattr(client, 'game_claims', None) and room.clients and not any(c.uid == room.host_id for c in room.clients.values()):
             room.host_id = next(iter(room.clients.values())).uid
             for member in room.clients.values():
                 member.can_control = member.uid == room.host_id
+            host_changed = True
+        if room.connect_four is not None:
+            if connect_four.refresh(room):
+                connect_four.schedule(room, broadcast)
             await broadcast(room)
-        if not room.clients:
+        elif host_changed:
+            await broadcast(room)
+        elif not room.clients:
             from services.karaoke_welcome import clear as clear_welcome
             clear_welcome(room)
             from services.karaoke_intermission import clear as clear_intermission

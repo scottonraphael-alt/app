@@ -120,3 +120,61 @@ def test_non_staff_host_can_launch_blindtest_from_its_setup_page(monkeypatch,tmp
         assert audio.status_code==200 and audio.content==b'audio-fixture'
         host.send_json({'type':'bt_stop'})
         assert host.receive_json()['mode']=='blindtest_setup'
+
+
+def test_connect_four_duel_enforces_seats_turns_and_rematch():
+    room = auth.room_id('duel')
+
+    with TestClient(app) as game_client:
+        def connect(uid):
+            token = signed(uid=uid, instance='duel', channel='other-channel')
+            return game_client.websocket_connect(f'/activity/karaoke/ws?t={token}&instance_id={room}')
+
+        with connect('123') as host:
+            host.receive_json()
+            host.receive_json()
+            host.send_json({'type': 'choose_game', 'game': 'connect_four'})
+            assert host.receive_json()['connect_four']['phase'] == 'lobby'
+            host.send_json({'type': 'c4_join'})
+            assert host.receive_json()['connect_four']['seats'][0]['id'] == '123'
+
+            with connect('456') as guest:
+                assert guest.receive_json()['connect_four']['spectators'] == 1
+                host.receive_json()
+                with connect('789') as spectator:
+                    guest.receive_json()
+                    host.receive_json()
+                    assert spectator.receive_json()['connect_four']['spectators'] == 2
+
+                    def receive_all():
+                        states = [ws.receive_json() for ws in (host, guest, spectator)]
+                        assert states[0] == states[1] == states[2]
+                        return states[0]['connect_four']
+
+                    guest.send_json({'type': 'c4_join'})
+                    assert len(receive_all()['seats']) == 2
+                    spectator.send_json({'type': 'c4_join'})
+                    assert spectator.receive_json()['type'] == 'c4_error'
+                    guest.send_json({'type': 'c4_start'})
+                    assert guest.receive_json()['type'] == 'c4_error'
+                    host.send_json({'type': 'c4_start'})
+                    state = receive_all()
+                    assert state['turn'] == 1
+                    action = {'type': 'c4_drop', 'round_id': state['round_id'], 'column': 0, 'ply': 0}
+                    for ws in (guest, spectator):
+                        ws.send_json(action)
+                        assert ws.receive_json()['type'] == 'c4_error'
+                    for index in range(7):
+                        ws = host if index % 2 == 0 else guest
+                        ws.send_json({**action, 'column': index % 2, 'ply': index})
+                        state = receive_all()
+                    assert state['phase'] == 'finished'
+                    assert state['score'] == [1, 0] and len(state['result']['line']) == 4
+
+                    host.send_json({'type': 'c4_rematch', 'round_id': state['round_id']})
+                    assert receive_all()['ready'] == ['123']
+                    guest.send_json({'type': 'c4_rematch', 'round_id': state['round_id']})
+                    state = receive_all()
+                    assert state['phase'] == 'playing' and state['turn'] == 2 and state['score'] == [1, 0]
+                    guest.send_json(action)
+                    assert guest.receive_json()['type'] == 'c4_error'
