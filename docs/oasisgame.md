@@ -36,11 +36,12 @@ Dans `/home/iris/app/.env`, ajouter :
 ```dotenv
 OASISGAME_DISCORD_CLIENT_ID=IDENTIFIANT_PUBLIC_OASISGAME
 OASISGAME_DISCORD_CLIENT_SECRET=SECRET_OAUTH_OASISGAME
+OASISGAME_DISCORD_BOT_TOKEN=TOKEN_DU_BOT_OASISGAME
 ```
 
 Conserver `ACTIVITY_DISCORD_CLIENT_ID` et `ACTIVITY_DISCORD_CLIENT_SECRET` pour CinéStream. OasisGame réutilise le récepteur vocal OasisLink existant.
 
-Pour activer les invitations automatiques, ajouter `OASISGAME_DISCORD_BOT_TOKEN` dans le `.env` avec le token du bot de l’application **OasisGame**, depuis **Bot** dans le portail Discord. Installer ce bot sur L’Oasis et lui donner accès au salon de lancement, avec les permissions **Envoyer des messages** et **Voir les anciens messages**. Dans les fils, autoriser aussi l’envoi de messages dans les fils. La permission **Créer une invitation** permet un lien direct dans les salons vocaux. Le bouton **Inviter** dans l’Activity ouvre également la boîte d’invitation Discord.
+Le token de l’onglet **Bot** de l’application **OasisGame** permet au backend de vérifier l’instance Discord avant d’annoncer la recherche de joueurs. OasisGame publie dans le salon confirmé par Discord. Si Discord lui refuse l’envoi, OasisLink prend le relais s’il a accès au salon. Le bot qui publie doit avoir la permission **Envoyer des messages**, ou **Envoyer des messages dans les fils** selon le salon. **Voir les anciens messages** permet de retrouver le message de lancement et **Créer une invitation** permet un lien direct dans les salons vocaux. Le bouton **Inviter** dans l’Activity ouvre la boîte d’invitation Discord.
 
 Après publication du commit :
 

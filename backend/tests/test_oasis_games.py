@@ -230,13 +230,14 @@ def test_tic_tac_toe_plays_a_diagonal_and_switches_back_to_connect_four():
                 assert updated['connect_four']['board'] == [[0] * 7 for _ in range(6)]
 
 
+@pytest.mark.parametrize("fallback", [False, True])
 @pytest.mark.parametrize("mode, channel_type, expected_label", [
     ("connect_four", 2, "Rejoindre la partie"),
     ("tic_tac_toe", 0, "Ouvrir l’invitation Discord"),
     ("karaoke", 2, "Rejoindre la partie"),
     ("blindtest_setup", 0, "Ouvrir l’invitation Discord"),
 ])
-def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, channel_type, expected_label):
+def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, channel_type, expected_label, fallback):
     import json
     from services import oasis_game_invites as invites
 
@@ -244,7 +245,7 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
         "111111111111111111", "222222222222222222", "333333333333333333", "444444444444444444",
     )
     instance = "oasis-discord-instance"
-    player = NS(uid="player", plays=True, game_claims={"discord_instance_id": instance, "channel_id": channel})
+    player = NS(uid="555555555555555555", plays=True, game_claims={"discord_instance_id": instance})
     room = karaoke.KRoom()
     room.mode = mode
     room.clients = {"socket": player}
@@ -254,14 +255,16 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
 
     monkeypatch.setenv("OASISGAME_DISCORD_CLIENT_ID", app_id)
     monkeypatch.setenv("OASISGAME_DISCORD_BOT_TOKEN", "fake-oasis-bot")
+    monkeypatch.setattr(invites, "DISCORD_BOT_TOKEN", "fake-oasislink-bot")
     monkeypatch.setattr(invites, "_cooldowns", type(invites._cooldowns)())
     messages = []
     requested_channels = []
 
     def handler(request):
-        assert request.headers["Authorization"] == "Bot fake-oasis-bot"
+        sender = request.headers["Authorization"]
         path = request.url.path
         if "/activity-instances/" in path:
+            assert sender == "Bot fake-oasis-bot"
             return httpx.Response(200, json={
                 "application_id": app_id, "instance_id": instance, "launch_id": launch,
                 "location": {"guild_id": str(activity.DISCORD_GUILD_ID), "channel_id": channel},
@@ -278,6 +281,9 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
                 "id": launch_message, "application_id": app_id, "interaction_metadata": {"id": launch},
             }])
         if path.endswith("/messages"):
+            if fallback and sender == "Bot fake-oasis-bot":
+                return httpx.Response(403)
+            assert sender == ("Bot fake-oasislink-bot" if fallback else "Bot fake-oasis-bot")
             messages.append(json.loads(request.content))
         return httpx.Response(200, json={"type": channel_type})
 
@@ -285,6 +291,7 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
     monkeypatch.setattr(invites, "httpx", NS(
         AsyncClient=lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs),
         HTTPError=httpx.HTTPError,
+        HTTPStatusError=httpx.HTTPStatusError,
     ))
 
     async def run():
@@ -306,6 +313,9 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
     asyncio.run(run())
     assert requested_channels and len(messages) == 1
     assert messages[0]["allowed_mentions"] == {"parse": []}
+    assert f"<@{player.uid}>" in messages[0]["content"]
+    if room.board_match is not None:
+        assert "cherche un adversaire" in messages[0]["content"]
     button = messages[0]["components"][0]["components"][0]
     assert button["label"] == expected_label
     assert button["url"].endswith("native-invite" if channel_type == 2 else launch_message)

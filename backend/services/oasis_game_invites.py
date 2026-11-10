@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import httpx
 
+from config import DISCORD_BOT_TOKEN
 from routers import activity
 
 logger = logging.getLogger(__name__)
@@ -24,9 +25,11 @@ SNOWFLAKE = re.compile(r"[0-9]{17,20}")
 INVITE_CODE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _tasks = set()
 _cooldowns = OrderedDict()
+_missing_token_logged = False
 
 
 def schedule(room, player):
+    global _missing_token_logged
     token = os.getenv("OASISGAME_DISCORD_BOT_TOKEN", "").strip()
     app_id = os.getenv("OASISGAME_DISCORD_CLIENT_ID", "").strip()
     claims = getattr(player, "game_claims", None) or {}
@@ -34,30 +37,46 @@ def schedule(room, player):
     channel_id = claims.get("channel_id") or ""
     game = GAME_NAMES.get(room.mode)
     match = room.board_match
-    if not token or not SNOWFLAKE.fullmatch(app_id) or not SNOWFLAKE.fullmatch(channel_id) or not instance_id or not game:
+    if not SNOWFLAKE.fullmatch(app_id) or (channel_id and not SNOWFLAKE.fullmatch(channel_id)) or not instance_id or not game:
         return
 
     def waiting():
         if player not in room.clients.values() or GAME_NAMES.get(room.mode) != game or room.board_match is not match:
             return False
         if match is not None:
-            return match.phase == "lobby" and match.settings["opponent"] == "duel" and len(match.seats) == 1
+            return (match.phase == "lobby" and match.settings["opponent"] == "duel"
+                    and len(match.seats) == 1 and match.seats[0]["id"] == player.uid)
         if room.mode == "blindtest" and (room.game is None or room.game.phase == "final"):
             return False
         return len({client.uid for client in room.clients.values() if client.plays}) < 2
 
-    channel_key = (channel_id, game)
+    if not waiting():
+        return
+    if not token:
+        if not _missing_token_logged:
+            logger.warning("Invitation OasisGame indisponible : OASISGAME_DISCORD_BOT_TOKEN absent du backend.")
+            _missing_token_logged = True
+        return
+
+    channel_key = (channel_id or instance_id, game)
     member_key = player.uid
     now = time.monotonic()
-    if not waiting() or max(_cooldowns.get(channel_key, 0), _cooldowns.get(member_key, 0)) > now:
+    if max(_cooldowns.get(channel_key, 0), _cooldowns.get(member_key, 0)) > now:
         return
-    for key, seconds in ((channel_key, 180), (member_key, 15)):
-        _cooldowns[key] = now + seconds
+
+    async def announce():
+        if await publish(token, app_id, instance_id, channel_id, player.uid, game, waiting):
+            if channel_key in _cooldowns:
+                _cooldowns[channel_key] = time.monotonic() + 180
+                _cooldowns.move_to_end(channel_key)
+
+    for key in (channel_key, member_key):
+        _cooldowns[key] = now + 30
         _cooldowns.move_to_end(key)
     while len(_cooldowns) > 512:
         _cooldowns.popitem(last=False)
 
-    task = asyncio.create_task(publish(token, app_id, instance_id, channel_id, player.uid, game, waiting))
+    task = asyncio.create_task(announce())
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
     return task
@@ -98,26 +117,46 @@ async def publish(token, app_id, instance_id, channel_id, user_id, game, waiting
             response.raise_for_status()
             instance = response.json()
             location = instance.get("location") or {}
+            verified_channel_id = location.get("channel_id") or ""
             if (
                 instance.get("application_id") != app_id
                 or instance.get("instance_id") != instance_id
                 or location.get("guild_id") != guild_id
-                or location.get("channel_id") != channel_id
+                or not SNOWFLAKE.fullmatch(verified_channel_id)
+                or (channel_id and channel_id != verified_channel_id)
                 or user_id not in instance.get("users", [])
-                or not waiting()
             ):
+                logger.warning("Invitation OasisGame ignorée : instance, salon ou joueur non confirmé par Discord.")
                 return
-            channel_url = f"{activity.DISCORD_API}/channels/{channel_id}"
-            url, label = await join_link(client, channel_url, app_id, channel_id, guild_id, instance.get("launch_id") or "")
-            if not waiting():
-                return
-            content = f"🎮 **{game} sur OasisGame**\nUne place est libre. Viens jouer !"
-            if label == "Ouvrir le salon":
-                content += "\nOuvre OasisGame dans ce salon pour rejoindre la session."
-            await send(client, channel_url, content, url, label)
+            channel_url = f"{activity.DISCORD_API}/channels/{verified_channel_id}"
+            launch_id = instance.get("launch_id") or ""
+            try:
+                return await post_invite(client, channel_url, app_id, verified_channel_id, guild_id, launch_id, user_id, game, waiting)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code not in (403, 404) or not DISCORD_BOT_TOKEN or DISCORD_BOT_TOKEN == token:
+                    raise
+                # The OasisGame token verifies the instance. OasisLink can post if it has access to the channel.
+                client.headers["Authorization"] = f"Bot {DISCORD_BOT_TOKEN}"
+                return await post_invite(client, channel_url, app_id, verified_channel_id, guild_id, launch_id, user_id, game, waiting)
     except (httpx.HTTPError, ValueError) as exc:
         # A missing Discord permission or a stale instance cannot interrupt a match.
         logger.warning("Invitation OasisGame indisponible (%s)", exc)
+
+
+async def post_invite(client, channel_url, app_id, channel_id, guild_id, launch_id, user_id, game, waiting):
+    if not waiting():
+        return False
+    url, label = await join_link(client, channel_url, app_id, channel_id, guild_id, launch_id)
+    if not waiting():
+        return False
+    if game in ("Puissance 4", "Morpion"):
+        content = f"🎮 <@{user_id}> joue au **{game}** et cherche un adversaire !"
+    else:
+        content = f"🎮 <@{user_id}> lance une partie de **{game}** et cherche des joueurs !"
+    if label == "Ouvrir le salon":
+        content += "\nOuvre OasisGame dans ce salon pour rejoindre la session."
+    await send(client, channel_url, content, url, label)
+    return True
 
 
 async def send(client, channel_url, content, url, label):
