@@ -175,8 +175,8 @@ async def apply_event(key):
     raise RuntimeError('Compte XP occupé, l’événement sera repris en arrière-plan.')
 
 
-def read_seed(path):
-    """Validate the entire export before applying any balance."""
+def read_seed(path, variable='bg_leveling_xp'):
+    """Validate the entire BotGhost export before applying any data."""
     with Path(path).open(encoding='utf-8-sig', newline='') as stream:
         reader = csv.DictReader(stream)
         if not {'variable', 'member_id', 'server_id', 'value'} <= set(reader.fieldnames or []):
@@ -186,7 +186,7 @@ def read_seed(path):
     for row in rows:
         if not row.get('member_id') and not row.get('server_id'):
             continue  # BotGhost's default value is not a member balance.
-        if row.get('variable') != 'bg_leveling_xp' or row['server_id'] != str(config.DISCORD_GUILD_ID):
+        if row.get('variable') != variable or row['server_id'] != str(config.DISCORD_GUILD_ID):
             raise ValueError('Export XP d’un autre serveur ou variable inattendue.')
         user_id = row['member_id']
         if not re.fullmatch(r'[0-9]{17,20}', user_id) or user_id in balances:
@@ -198,15 +198,53 @@ def read_seed(path):
     return balances
 
 
+def converted_balance(level, remaining):
+    """Preserve BotGhost's level and progress under its 3000*(level+1) cost.
+
+    A negative remaining balance carries into subsequent levels before mapping
+    the fraction onto the new curve. Round down by less than one XP.
+    """
+    if type(level) is not int or not 0 <= level <= 1000:
+        raise ValueError('Niveau BotGhost invalide.')
+    cost = 3000 * (level + 1)
+    if type(remaining) is not int or remaining > cost:
+        raise ValueError('XP restante incohérente avec le niveau BotGhost.')
+    while remaining <= 0:
+        level += 1
+        cost = 3000 * (level + 1)
+        remaining += cost
+    earned = cost - remaining
+    return threshold(level) + earned * (threshold(level + 1) - threshold(level)) // cost
+
+
 async def import_seed():
     if str(config.DISCORD_GUILD_ID) != '1081957992188088391':
         return
     path = ASSETS / 'botghost.csv'
-    marker = 'botghost-snapshot-' + hashlib.sha256(path.read_bytes()).hexdigest()
+    levels_path = ASSETS / 'botghost-levels.csv'
+    digest = hashlib.sha256(levels_path.read_bytes() + b'\0' + path.read_bytes()).hexdigest()
+    marker = 'botghost-level-progress-v1-' + digest
     if await db.leveling_imports.find_one({'_id': marker}):
         return
-    balances = read_seed(path)
-    for user_id, xp in balances.items():
+    remaining = read_seed(path)
+    levels = read_seed(levels_path, 'bg_leveling_level')
+    balances = {}
+    for user_id in remaining.keys() | levels.keys():
+        level = levels.get(user_id, 0)
+        old_cost = 3000 * (level + 1)
+        balances[user_id] = converted_balance(level, remaining.get(user_id, old_cost))
+    # Complete old imports before replacing their false "total XP" interpretation.
+    pending = await db.leveling_events.find({'guild_id': str(config.DISCORD_GUILD_ID),
+        'source': 'botghost_import', 'status': 'pending'}).to_list(None)
+    for event in pending:
+        await apply_event(event['_id'])
+    previous = await db.leveling_accounts.find({'guild_id': str(config.DISCORD_GUILD_ID),
+        'imported_xp': {'$exists': True}}, {'user_id': 1}).to_list(None)
+    legacy_accounts = await db.leveling_events.find({'guild_id': str(config.DISCORD_GUILD_ID),
+        'source': 'botghost_import', 'external_id': 'initial-export'}, {'user_id': 1}).to_list(None)
+    for row in [*previous, *legacy_accounts]:
+        balances.setdefault(row['user_id'], 0)
+    for user_id, balance in balances.items():
         # Recover accounts created by the first importer before replacing its snapshot.
         account_id = f'{config.DISCORD_GUILD_ID}:{user_id}'
         legacy_key = hashlib.sha256(f'{account_id}:botghost_import:initial-export'.encode()).hexdigest()
@@ -215,11 +253,12 @@ async def import_seed():
             await apply_event(legacy_key)
             await db.leveling_accounts.update_one({'_id': account_id, 'imported_xp': {'$exists': False}},
                 {'$set': {'imported_xp': legacy['base_amount']}})
-        await grant(user_id, 0, source='botghost_import', event_id=marker, imported_balance=xp)
+        await grant(user_id, 0, source='botghost_import', event_id=marker, imported_balance=balance)
     await db.leveling_imports.update_one({'_id': marker}, {'$set': {
-        'members': len(balances), 'completed_at': datetime.now(timezone.utc),
+        'members': len(balances), 'explicit_levels': len(levels), 'conversion': 'level-and-percentage',
+        'completed_at': datetime.now(timezone.utc),
     }}, upsert=True)
-    logger.info('Leveling : %s soldes BotGhost importés.', len(balances))
+    logger.info('Leveling : %s comptes repris depuis les niveaux et la progression BotGhost (%s niveaux explicites).', len(balances), len(levels))
 
 
 async def leaderboard(page=0, size=10):

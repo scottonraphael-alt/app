@@ -104,6 +104,8 @@ def test_import_preserves_every_balance_and_can_resume(monkeypatch):
     assert len(balances) == 1081
     assert min(balances.values()) == -57901
     assert max(balances.values()) == 107205
+    levels = xp.read_seed(xp.ASSETS / 'botghost-levels.csv', 'bg_leveling_level')
+    assert len(levels) == 430
 
     async def run():
         uid = next(iter(balances))
@@ -113,7 +115,8 @@ def test_import_preserves_every_balance_and_can_resume(monkeypatch):
         await xp.import_seed()
         assert await h.db.leveling_accounts.count_documents({}) == 1081
         for user_id, amount in balances.items():
-            assert (await xp.account(user_id))['xp'] == amount + (50 if user_id == uid else 0)
+            expected = xp.converted_balance(levels.get(user_id, 0), amount)
+            assert (await xp.account(user_id))['xp'] == expected + (50 if user_id == uid else 0)
     h.run(run())
 
 
@@ -123,28 +126,66 @@ def test_new_snapshot_applies_only_delta_and_keeps_iris_rewards(tmp_path, monkey
     monkeypatch.setattr(xp, 'ASSETS', tmp_path)
     first, second, third = ('111111111111111111', '222222222222222222', '333333333333333333')
 
-    def snapshot(balances):
-        with (tmp_path / 'botghost.csv').open('w', newline='') as stream:
-            writer = csv.DictWriter(stream, fieldnames=['variable', 'member_id', 'server_id', 'value'])
-            writer.writeheader()
-            for uid, amount in balances.items():
-                writer.writerow({'variable': 'bg_leveling_xp', 'member_id': uid,
-                    'server_id': '1081957992188088391', 'value': amount})
+    def snapshot(values):
+        for filename, variable, index in (('botghost.csv', 'bg_leveling_xp', 1),
+                ('botghost-levels.csv', 'bg_leveling_level', 0)):
+            with (tmp_path / filename).open('w', newline='') as stream:
+                writer = csv.DictWriter(stream, fieldnames=['variable', 'member_id', 'server_id', 'value'])
+                writer.writeheader()
+                for uid, pair in values.items():
+                    writer.writerow({'variable': variable, 'member_id': uid,
+                        'server_id': '1081957992188088391', 'value': pair[index]})
 
     async def run():
-        snapshot({first: 100, second: 500})
+        snapshot({first: (1, 5000), second: (5, 10000)})
         await xp.import_seed()
         await xp.grant(first, 75, source='quest', event_id='iris-reward')
-        snapshot({first: 130, second: 200, third: 50})
+        snapshot({first: (2, 7000), second: (4, 8000), third: (0, 1500)})
         await xp.import_seed()
         await xp.import_seed()
-        assert (await xp.account(first))['xp'] == 205
-        assert (await xp.account(second))['xp'] == 200
+        assert (await xp.account(first))['xp'] == xp.converted_balance(2, 7000) + 75
+        assert (await xp.account(second))['xp'] == xp.converted_balance(4, 8000)
         assert (await xp.account(third))['xp'] == 50
-        snapshot({first: 150, second: 210, third: 55})
+        snapshot({first: (2, 5000), second: (4, 7000), third: (0, 1300)})
         await xp.import_seed()
-        assert (await xp.account(first))['xp'] == 225
-        assert (await xp.account(second))['xp'] == 210
+        assert (await xp.account(first))['xp'] == xp.converted_balance(2, 5000) + 75
+        assert (await xp.account(second))['xp'] == xp.converted_balance(4, 7000)
+    h.run(run())
+
+
+def test_old_remaining_xp_preserves_level_percentage_and_overflow():
+    assert xp.converted_balance(0, 3000) == 0
+    assert xp.converted_balance(0, 1500) == 50
+    assert xp.converted_balance(29, 45000) == xp.threshold(29) + (xp.threshold(30) - xp.threshold(29)) // 2
+    assert xp.converted_balance(3, 0) == xp.threshold(4)
+    values = xp.progress(xp.converted_balance(33, 96970))
+    assert values['level'] == 33
+    assert values['percent'] == pytest.approx(5030 / 102000 * 100, abs=0.03)
+    overflow = xp.progress(xp.converted_balance(60, -57901))
+    assert overflow['level'] == 61
+    assert overflow['percent'] == pytest.approx(57901 / 186000 * 100, abs=0.01)
+    with pytest.raises(ValueError):
+        xp.converted_balance(0, 3001)
+
+
+def test_correction_removes_false_import_only_accounts_and_preserves_rewards(monkeypatch):
+    monkeypatch.setattr(xp.config, 'DISCORD_GUILD_ID', '1081957992188088391')
+
+    async def run():
+        uid = '999999999999999999'
+        await xp.grant(uid, 0, source='botghost_import', event_id='old-wrong-snapshot', imported_balance=10000)
+        await xp.grant(uid, 25, source='quest', event_id='keep-this')
+        original = xp.settle
+        monkeypatch.setattr(xp, 'settle', AsyncMock(side_effect=RuntimeError('old import stopped')))
+        with pytest.raises(RuntimeError):
+            await xp.grant(uid, 0, source='botghost_import', event_id='old-interrupted', imported_balance=20000)
+        monkeypatch.setattr(xp, 'settle', original)
+        await xp.import_seed()
+        assert (await xp.account(uid))['xp'] == 25
+        assert (await xp.account(uid))['imported_xp'] == 0
+        await xp.import_seed()
+        assert (await xp.account(uid))['xp'] == 25
+        assert await h.db.leveling_events.count_documents({'status': 'pending'}) == 0
     h.run(run())
 
 
