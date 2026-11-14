@@ -259,23 +259,42 @@ def check(interaction):
 
 def card_panel(member, values, position):
     name = safe_name(member.display_name)
-    filled = min(10, int(values['percent'] // 10))
-    bar = '▰' * filled + '▱' * (10 - filled)
-    boost = {'F': ' · Bonus d’activité ×2', 'E': ' · Bonus d’activité ×1,5'}.get(values['rank'], '')
+    filled = min(20, int(values['percent'] // 5))
+    bar = '█' * filled + '░' * (20 - filled)
+    percent = f"{values['percent']:.1f}".replace('.', ',')
+    bonuses = []
+    rank_bonus = {'F': 'Rang F ×2', 'E': 'Rang E ×1,5'}.get(values['rank'])
+    if rank_bonus:
+        bonuses.append(rank_bonus)
     if member.premium_since is not None:
-        boost += ' · 💎 Boost serveur ×2'
-    text = (f"## {name}\n**Rang {values['rank']} · Niveau {values['level']}**{boost}\n"
-            f"{bar} **{values['percent']:.1f} %**\n"
-            f"**{number(values['remaining'])} XP** avant le niveau {values['level'] + 1}\n"
-            f"Total · **{number(values['xp'])} XP**\nClassement · **#{position}**")
-    view = discord.ui.LayoutView(timeout=300)
-    view.add_item(discord.ui.Container(
-        discord.ui.TextDisplay('# 📜 Carte d’aventurier de L’Oasis'),
-        discord.ui.Section(discord.ui.TextDisplay(text), accessory=discord.ui.Thumbnail(str(member.display_avatar.url))),
+        bonuses.append('💎 Booster ×2')
+    accent = {
+        'F': 0xD8BC8B, 'E': 0xB66C89, 'D': 0x9CA3AF, 'C': 0xCD916A,
+        'B': 0xCAD5E2, 'A': 0xE8C46C, 'S': 0xA5E2F5, 'SS': 0xEE80AC, 'SSS': 0xC5A1F3,
+    }[values['rank']]
+    identity = (f"## {name}\n"
+                f"⚔️ **Rang {values['rank']}**  ·  🏆 **#{position} au classement**\n\n"
+                f"### Niveau {values['level']}")
+    progression = (f"### ✨ En route vers le niveau {values['level'] + 1}\n"
+                   f"`{bar}` **{percent} %**\n\n"
+                   f"**{number(values['earned'])}** / **{number(values['required'])} XP**\n"
+                   f"Encore **{number(values['remaining'])} XP** pour franchir ce niveau.")
+    box = discord.ui.Container(
+        discord.ui.TextDisplay('-# GUILDE DES AVENTURIERS · L’OASIS'),
+        discord.ui.Section(discord.ui.TextDisplay(identity), accessory=discord.ui.Thumbnail(str(member.display_avatar.url))),
         discord.ui.Separator(),
-        discord.ui.MediaGallery(discord.MediaGalleryItem(f"attachment://{values['rank']}.jpg", description=f"Carte du rang {values['rank']}")),
-        accent_colour=0xD7B777,
-    ))
+        discord.ui.TextDisplay(progression),
+        discord.ui.TextDisplay(f"💠 **{number(values['xp'])} XP** cumulés"),
+        accent_colour=accent,
+    )
+    if bonuses:
+        box.add_item(discord.ui.TextDisplay('-# ⚡ Bonus d’activité · ' + ' · '.join(bonuses)))
+    box.add_item(discord.ui.Separator())
+    box.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(
+        f"attachment://{values['rank']}.jpg", description=f"Carte du rang {values['rank']}",
+    )))
+    view = discord.ui.LayoutView(timeout=300)
+    view.add_item(box)
     return view
 
 
