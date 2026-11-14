@@ -34,7 +34,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 
 from routers import activity
-from services import board_games, connect_four, oasis_game_invites, tic_tac_toe, scrabble
+from services import board_games, connect_four, oasis_game_invites, tic_tac_toe, scrabble, minesweeper
 from services import karaoke_catalog as catalog
 from services import karaoke_game as game_rules
 from services.karaoke_game import BlindTest, Track
@@ -42,7 +42,7 @@ from services.karaoke_text import LRCLIB_USER_AGENT, build_lines, fetch_lrclib
 
 logger = logging.getLogger("activity.karaoke")
 
-BOARD_GAMES = {"connect_four": connect_four.Match, "tic_tac_toe": tic_tac_toe.Match, "scrabble": scrabble.Match}
+BOARD_GAMES = {"connect_four": connect_four.Match, "tic_tac_toe": tic_tac_toe.Match, "scrabble": scrabble.Match, "minesweeper": minesweeper.Match}
 
 KARAOKE_DIR = Path(os.environ.get("KARAOKE_DIR", "/data/karaoke"))
 # Cache des paroles téléchargées : doit être inscriptible (le dossier de musique peut être en :ro).

@@ -18,6 +18,7 @@ export default function OasisGameMenu({session,state,canControl,send,notice,onIn
     <button disabled={!canControl} onClick={() => send({ type: 'choose_game', game: 'tic_tac_toe' })}>Jouer au morpion →</button>
    </article>
    <article className="og-game og-scrabble"><span aria-hidden="true">A₁</span><small>À VOUS DE TROUVER LES MOTS</small><h2>Scrabble</h2><p>Une table, sept lettres et toutes vos idées. Composez vos mots et défiez vos amis à 2, 3 ou 4 joueurs.</p><button disabled={!canControl} onClick={()=>send({type:'choose_game',game:'scrabble'})}>Jouer avec les mots →</button></article>
+   <article className="og-game og-minesweeper"><span aria-hidden="true">◇</span><small>À VOUS D’EXPLORER</small><h2>Démineur</h2><p>Un peu de logique, quelques drapeaux et une grille à apprivoiser. Joue en solo ou explore avec tes amis.</p><button disabled={!canControl} onClick={()=>send({type:'choose_game',game:'minesweeper'})}>Explorer la grille →</button></article>
   </div>}
  </main>;
 }

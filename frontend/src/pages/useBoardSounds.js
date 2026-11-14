@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 const SOUND_PREFERENCE = "oasisgame.board-sounds";
 const SOUNDS = {
+  minesweeper: [[0, 0.05, 540, 430, 0.025, "sine"], [0.03, 0.06, 760, 610, 0.018, "triangle"]],
   scrabble: [[0, 0.07, 610, 390, 0.035, "triangle"], [0.07, 0.09, 820, 600, 0.025, "sine"]],
   connect_four: [
     [0, 0.065, 480, 220, 0.035, "sine"],

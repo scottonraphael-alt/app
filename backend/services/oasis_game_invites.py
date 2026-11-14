@@ -18,6 +18,7 @@ GAME_NAMES = {
     "connect_four": "Puissance 4",
     "tic_tac_toe": "Morpion",
     "scrabble": "Scrabble",
+    "minesweeper": "Démineur",
     "karaoke": "Karaoké",
     "blindtest_setup": "Blind test",
     "blindtest": "Blind test",
@@ -26,6 +27,7 @@ GAME_CARDS = {
     'Puissance 4': ('🟠', 0xFFCE91, 'Un duel, quatre jetons, à toi de jouer.', '2 joueurs', 'Aligne quatre jetons avant ton adversaire.'),
     'Morpion': ('✕', 0x83EAD1, 'Une petite grille, un vrai défi.', '2 joueurs', 'Trois symboles alignés pour remporter la manche.'),
     'Scrabble': ('🔠', 0xC9A8EE, 'Sept lettres. Toutes vos idées.', '2 à 4 joueurs', 'Compose tes mots, trouve les bonus et fais parler ton chevalet.'),
+    'Démineur': ('💎', 0x98D5D3, 'Un peu de logique, beaucoup d’esprit d’équipe.', '1 à 8 joueurs', 'Explore la grille et repère les mines, ensemble et sans précipitation.'),
     'Karaoké': ('🎤', 0xE69DC5, 'La scène est à vous.', 'À chanter ensemble', 'Choisis un morceau, rejoins les voix et profite du moment.'),
     'Blind test': ('🎧', 0x98D5D3, 'Ce morceau te dit quelque chose ?', 'À deviner ensemble', 'Écoute l’extrait et trouve le titre avant les autres.'),
 }
@@ -52,6 +54,8 @@ def schedule(room, player):
         if player not in room.clients.values() or GAME_NAMES.get(room.mode) != game or room.board_match is not match:
             return False
         if match is not None:
+            if hasattr(match, 'invitation_open'):
+                return match.invitation_open(player.uid)
             return (match.phase == "lobby" and match.settings["opponent"] == "duel"
                     and len(match.seats) == 1 and match.seats[0]["id"] == player.uid)
         if room.mode == "blindtest" and (room.game is None or room.game.phase == "final"):
