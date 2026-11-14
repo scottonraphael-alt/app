@@ -90,7 +90,7 @@ async def run_checks(client):
         scope = discord.Object(id=int(config.DISCORD_GUILD_ID))
         tree = client.sanction_tree
         remote = {c.name for c in await tree.fetch_commands(guild=scope)}
-        expected = {'sanction','infos-troubles','crise','panel','panel-vérification','convocation','bulle','dossier','purgatoire','iris-oasis','anonyme','suggestion','règlement'}
+        expected = {'sanction','infos-troubles','crise','panel','panel-vérification','convocation','bulle','dossier','purgatoire','iris-oasis','anonyme','suggestion','règlement','recrutement'}
         missing = sorted(name for name in expected if name not in remote or tree.get_command(name,guild=scope) is None)
         return ('error','Commandes absentes : '+', '.join(missing)) if missing else ('ok','Commandes présentes sur Discord et dans le bot.')
     add('Commandes natives', commands)

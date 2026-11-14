@@ -61,7 +61,7 @@ async def audit(row, event, actor_id, revision=None):
 
 def kind_label(row):
     return {'suggestion': 'Suggestion', 'staff_suggestion': 'Suggestion Staff',
-            'permanent_ban': 'Bannissement définitif'}.get(row['source_kind'], 'Demande')
+            'permanent_ban': 'Bannissement définitif', 'recruitment': 'Candidature'}.get(row['source_kind'], 'Demande')
 
 
 def execution_text(row):

@@ -6,7 +6,7 @@ import {Modal} from '../components/projects/ProjectUI';
 import '../Casier.css';
 import '../Casework.css';
 import '../Resolutions.css';
-const KINDS={suggestion:'Suggestion',staff_suggestion:'Suggestion Staff',permanent_ban:'Bannissement définitif'};
+const KINDS={suggestion:'Suggestion',staff_suggestion:'Suggestion Staff',permanent_ban:'Bannissement définitif',recruitment:'Candidature'};
 const EXECUTION={pending:'Bannissement en attente d’application',applied:'Bannissement exécuté et enregistré au casier',recording:'Bannissement confirmé · finalisation du casier ou des logs',blocked:'Bannissement non appliqué',uncertain:'Exécution à vérifier · aucun nouvel envoi automatique'};
 const LABELS={open:'En attente de décision',approved:'Approuvée',rejected:'Rejetée'};
 const date=v=>v?new Date(v).toLocaleString('fr-FR',{timeZone:'Europe/Paris',dateStyle:'medium',timeStyle:'short'}):'—';
