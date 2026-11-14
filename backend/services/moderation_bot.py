@@ -66,7 +66,7 @@ from services.casier_service import add_sanction
 
 # ai_moderation.py est dans le même dossier (services/). Importé APRÈS config, qui
 # charge le .env (load_dotenv) dont ai_moderation lit les variables.
-from services import ai_moderation, server_statistics, statistics_members
+from services import ai_moderation, server_statistics, statistics_members, leveling_discord
 
 logger = logging.getLogger("moderation_bot")
 
@@ -125,8 +125,9 @@ async def install_member_commands(client):
     from services.server_rules import install as install_rules
     from services.suggestions import install as install_suggestions
     from services.iris_diagnostics import install as install_diagnostics
+    from services.leveling_discord import install as install_leveling
     await workflow_settings.apply()
-    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered'),('anonyme',install_anonymous,'anonymous_registered'),('suggestion',install_suggestions,'suggestions_registered'),('règlement',install_rules,'rules_registered'),('resolutions',install_resolutions,'resolutions_registered'),('diagnostic',install_diagnostics,'iris_diagnostics_registered')]:
+    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered'),('anonyme',install_anonymous,'anonymous_registered'),('suggestion',install_suggestions,'suggestions_registered'),('règlement',install_rules,'rules_registered'),('resolutions',install_resolutions,'resolutions_registered'),('diagnostic',install_diagnostics,'iris_diagnostics_registered'),('leveling',install_leveling,'leveling_registered')]:
         if getattr(client,registered,False):continue
         try:await installer(client)
         except Exception:logger.exception('Enregistrement des commandes %s à reprendre.',name)
@@ -288,6 +289,7 @@ async def on_ready():
     await install_member_commands(moderation_client)
     server_statistics.start(moderation_client)
     ai_moderation.start(moderation_client)
+    leveling_discord.start(moderation_client)
 
 
 @moderation_client.event
@@ -298,6 +300,7 @@ async def on_message(message: discord.Message):
         server_statistics.safely(server_statistics.record_message, message),
         handle_application_message(message),
         server_statistics.safely(message_activity, message),
+        server_statistics.safely(leveling_discord.message_activity, message),
     )
 
 
@@ -343,6 +346,7 @@ async def on_guild_channel_update(before, after):
 @moderation_client.event
 async def on_voice_state_update(member, before, after):
     from services.voice_logs import record
+    leveling_discord.voice_changed(member, before, after)
     await record(member, before, after, moderation_client)
 
 
@@ -354,15 +358,18 @@ async def on_member_join(member):
         await assign(member)
     except Exception:
         logger.exception("Attribution des rôles d’arrivée interrompue (membre %s).", member.id)
+    await server_statistics.safely(leveling_discord.joined, member)
 
 
 @moderation_client.event
 async def on_raw_member_remove(payload):
     await server_statistics.safely(statistics_members.record_remove, payload)
+    await server_statistics.safely(leveling_discord.departed, payload)
 
 
 @moderation_client.event
 async def on_disconnect():
+    leveling_discord.disconnected()
     await server_statistics.safely(server_statistics.disconnected)
 
 
@@ -527,6 +534,7 @@ async def start_moderation_bot() -> None:
 
 
 async def stop_moderation_bot() -> None:
+    await server_statistics.safely(leveling_discord.stop)
     await server_statistics.safely(server_statistics.stop)
     try:
         await ai_moderation.stop()
