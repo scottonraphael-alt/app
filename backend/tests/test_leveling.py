@@ -369,7 +369,7 @@ def test_role_sync_changes_only_rank_roles_and_keeps_concurrent_award_dirty():
 
 def test_v2_card_assets_and_pagination_build_without_image_dependencies():
     async def run():
-        member = NS(display_name='Aventurier', display_avatar=NS(url='https://cdn.discordapp.com/embed/avatars/0.png'), premium_since=None)
+        member = NS(id=123, display_name='Aventurier', display_avatar=NS(url='https://cdn.discordapp.com/embed/avatars/0.png'), premium_since=None)
         for rank, level, _ in xp.RANKS:
             values = xp.progress(xp.threshold(level))
             payload = runtime.card_panel(member, values, 1).to_components()

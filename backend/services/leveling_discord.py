@@ -26,10 +26,6 @@ def enabled():
     return bool(config.DISCORD_GUILD_ID)
 
 
-def safe_name(name):
-    return discord.utils.escape_markdown(discord.utils.escape_mentions(str(name)))
-
-
 def number(value):
     return f'{value:,}'.replace(',', ' ')
 
@@ -258,7 +254,6 @@ def check(interaction):
 
 
 def card_panel(member, values, position):
-    name = safe_name(member.display_name)
     filled = min(20, int(values['percent'] // 5))
     bar = '█' * filled + '░' * (20 - filled)
     percent = f"{values['percent']:.1f}".replace('.', ',')
@@ -272,15 +267,16 @@ def card_panel(member, values, position):
         'F': 0xD8BC8B, 'E': 0xB66C89, 'D': 0x9CA3AF, 'C': 0xCD916A,
         'B': 0xCAD5E2, 'A': 0xE8C46C, 'S': 0xA5E2F5, 'SS': 0xEE80AC, 'SSS': 0xC5A1F3,
     }[values['rank']]
-    identity = (f"## {name}\n"
-                f"⚔️ **Rang {values['rank']}**  ·  🏆 **#{position} au classement**\n\n"
-                f"### Niveau {values['level']}")
+    identity = (f"# <@{member.id}>\n"
+                f"## ✨ Niveau {values['level']}\n"
+                f"## ⚔️ Rang {values['rank']}\n"
+                f"## 🏆 #{position} au classement")
     progression = (f"### ✨ En route vers le niveau {values['level'] + 1}\n"
                    f"`{bar}` **{percent} %**\n\n"
                    f"**{number(values['earned'])}** / **{number(values['required'])} XP**\n"
                    f"Encore **{number(values['remaining'])} XP** pour franchir ce niveau.")
     box = discord.ui.Container(
-        discord.ui.TextDisplay('-# GUILDE DES AVENTURIERS · L’OASIS'),
+        discord.ui.TextDisplay('# GUILDE DES AVENTURIERS · L’OASIS'),
         discord.ui.Section(discord.ui.TextDisplay(identity), accessory=discord.ui.Thumbnail(str(member.display_avatar.url))),
         discord.ui.Separator(),
         discord.ui.TextDisplay(progression),
@@ -315,7 +311,8 @@ async def carte(interaction: discord.Interaction, membre: discord.Member | None 
         })
         values = xp.progress(row['xp'])
         await interaction.followup.send(view=card_panel(member, values, position),
-            file=discord.File(xp.ASSETS / f"{values['rank']}.jpg"), allowed_mentions=NONE)
+            file=discord.File(xp.ASSETS / f"{values['rank']}.jpg"),
+            allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False, replied_user=False))
     except Exception as exc:
         await error(interaction, exc)
 
