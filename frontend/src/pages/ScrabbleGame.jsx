@@ -5,6 +5,7 @@ import './ScrabbleGame.css';
 
 const VALUES = Object.fromEntries([[1,'AEILNORSTU'],[2,'DGM'],[3,'BCP'],[4,'FHV'],[8,'JQ'],[10,'KWXYZ'],[0,'?']].flatMap(([v, letters])=>[...letters].map(l=>[l,v])));
 const BONUS = { TW: 'MOT TRIPLE', DW: 'MOT DOUBLE', TL: 'LETTRE TRIPLE', DL: 'LETTRE DOUBLE' };
+const SHORT_BONUS = {TW:'M×3',DW:'M×2',TL:'L×3',DL:'L×2'};
 const REASONS = { empty_rack: 'Le sac est vide et un chevalet a été terminé.', scoreless: 'Six tours consécutifs sans points.', resign: 'Fin de partie après un abandon.', disconnect: 'Délai de reconnexion dépassé.', cancelled: 'Tous les joueurs ont quitté la partie.' };
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function Tile({letter, blank=false}) {
@@ -130,16 +131,18 @@ export default function ScrabbleGame({state,userId,canControl,connected,send,err
               tabIndex={focusedCell===row*15+column?0:-1} onFocus={()=>setFocusedCell(row*15+column)}
               className={`sg-cell sg-${bonus||'normal'}${pending?' sg-pending':''}${latest?' sg-latest':''}`}
               aria-label={`${String.fromCharCode(65+column)}${row+1}, ${letter||BONUS[bonus]||'case vide'}${pending?', lettre en préparation':''}`}
+              title={!letter?BONUS[bonus]:undefined}
               aria-disabled={!playable||Boolean(tile)||exchange}
               onClick={()=>place(row,column)}
               onDragOver={e=>{if(playable&&!tile&&!exchange)e.preventDefault();}}
               onDrop={e=>{e.preventDefault();const raw=e.dataTransfer.getData('application/oasis-tile');if(raw!=='')place(row,column,Number(raw));}}>
               {letter?<Tile letter={letter} blank={tile?.blank||(pending&&rack[pending.index]==='?')}/>:
-                row===7&&column===7?<span className="sg-star" aria-hidden="true">✦</span>:<span className="sg-bonus" aria-hidden="true">{BONUS[bonus]}</span>}
+                row===7&&column===7?<span className="sg-star" aria-hidden="true">✦</span>:bonus&&<span className="sg-bonus" aria-hidden="true"><span className="sg-bonus-full">{BONUS[bonus].split(' ').map(word=><span key={word}>{word}</span>)}</span><span className="sg-bonus-short">{SHORT_BONUS[bonus]}</span></span>}
               {column===0&&<span className="sg-row-number" aria-hidden="true">{row+1}</span>}
             </button>;
           }))}
         </div>
+        <p className="sg-board-key">M×2 / M×3 : mot double / triple · L×2 / L×3 : lettre double / triple</p>
       </div>
       {game.phase==='lobby'?<div className="sg-panel sg-lobby"><h2>Une partie entre amis</h2><p>De 2 à 4 joueurs. Les autres membres peuvent suivre la partie en spectateurs.</p>
         {!seat?<button className="sg-primary" disabled={!connected||game.seats.length>=4} onClick={()=>action('join')}>Prendre une place</button>:

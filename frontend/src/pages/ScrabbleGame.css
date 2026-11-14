@@ -9,4 +9,37 @@
 @media(max-width:480px){.sg-side{grid-template-columns:1fr}.sg-bag{min-height:85px}.sg-title h1 span{max-width:230px;line-height:1.5}.sg-status{align-items:flex-start;line-height:1.5}.sg-rack{gap:4px}.sg-page .sg-rack>button{width:calc((100vw - 82px)/7)!important}.sg-rack .sg-tile b{font-size:26px}}
 
 .og-root .sg-cell{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-@media(min-width:961px){.sg-page{max-width:calc(clamp(480px,calc(100dvh - 450px),760px) + 386px)}}
+
+
+/* The activity width drives the board size; short windows must not shrink it. */
+.sg-page { max-width: 1560px; padding: clamp(12px, 1.8vw, 24px); }
+.sg-layout { grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; }
+.sg-title { margin: 14px 0 12px; }
+.sg-title h1 { font-size: clamp(28px, 3vw, 40px); }
+.sg-title h1 span { margin-top: 5px; }
+.sg-title small { font-size: 9px; }
+.sg-status { margin-bottom: 14px; padding: 10px 14px; }
+.og-root .sg-cell { container-type: inline-size; }
+.sg-bonus {
+  width: 100%; max-width: none; min-width: 0; padding: 1px;
+  font-family: system-ui, sans-serif; font-size: clamp(6px, 17cqi, 12px);
+  font-weight: 750; line-height: 1.15; letter-spacing: 0; white-space: normal;
+}
+.sg-bonus-full { display: flex; flex-direction: column; align-items: center; }
+.sg-bonus-full > span { display: block; max-width: 100%; }
+.sg-bonus-short { display: none; }
+@container (max-width: 30px) {
+  .sg-bonus-full { display: none; }
+  .sg-bonus-short { display: block; font-size: clamp(7px, 32cqi, 11px); line-height: 1; }
+}
+@media (max-width: 960px) {
+  .sg-layout { grid-template-columns: minmax(0, 1fr) 230px; gap: 14px; }
+}
+@media (max-width: 730px) {
+  .sg-layout { grid-template-columns: 1fr; }
+  .sg-title { margin-top: 12px; }
+  .sg-title h1 { font-size: 30px; }
+}
+
+.sg-board-key { display: none; }
+@media (max-width:730px) { .sg-board-key { display: block; margin: 9px 0 0; color: #d6c6e2; font-size: 9px; line-height: 1.5; text-align: center; } }
