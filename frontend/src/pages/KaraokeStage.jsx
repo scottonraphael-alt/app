@@ -11,6 +11,7 @@ import BoardGame from "./BoardGame";
 import ScrabbleGame from "./ScrabbleGame";
 import MinesweeperGame from "./MinesweeperGame";
 import UnoGame from "./UnoGame";
+import PetitBacGame from "./PetitBacGame";
 import CodenamesGame from "./CodenamesGame";
 import "./OasisGame.css";
 import KaraokeNotes from "./KaraokeNotes";
@@ -467,7 +468,7 @@ export default function KaraokeStage({ session }) {
           setFeedback({ ...message, key: Date.now() });
         } else if (message.type === 'scr_preview') {
           setScrabblePreview(message);
-        } else if (["c4_error", "ttt_error", "scr_error", "ms_error", "uno_error", "cn_error"].includes(message.type)) {
+        } else if (["c4_error", "ttt_error", "scr_error", "ms_error", "uno_error", "cn_error", "pb_error"].includes(message.type)) {
           setNotice(message.detail);
         } else if (message.type === "catalog_loading") {
           setStarting(true);
@@ -651,6 +652,9 @@ export default function KaraokeStage({ session }) {
     idle: "Choisis un morceau pour commencer.",
   }[lyrics.status];
 
+  if (session.games && mode === 'petit_bac' && state.petit_bac) {
+    return <div className="og-root">{audioElement}<PetitBacGame {...{state,userId,canControl,connected,send}} error={notice} onInvite={openInvite}/></div>;
+  }
   if (session.games && mode === 'codenames' && state.codenames) {
     return <div className="og-root">{audioElement}<CodenamesGame {...{state,userId,canControl,connected,send}} error={notice} onInvite={openInvite}/></div>;
   }
