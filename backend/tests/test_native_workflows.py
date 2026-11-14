@@ -97,12 +97,71 @@ def opened(world,kind='contact_staff',actor=MEMBER,**kw):
     row=reserve(kind,actor=actor,**kw);done=h.run(native.create(row['_id'],world[1]));return h.run(service.load(done['case_id'],h.GUILD_ID))
 
 
+@pytest.mark.parametrize('confidential',[False,True])
+@pytest.mark.parametrize('pending',[False,True])
+def test_contact_staff_does_not_block_summons(world,confidential,pending):
+    if pending:
+        contact=reserve('contact_staff',source='contact-staff',confidential=confidential)
+    else:
+        contact=opened(world,kind='contact_staff',source='contact-staff',confidential=confidential)
+    summons=opened(world,kind='summons',actor=STAFF,source='summons')
+    assert summons['kind']=='summons'
+    if pending:
+        assert h.run(native.create(contact['_id'],world[1]))['status']=='open'
+    else:
+        assert summons['channel_id']!=contact['channel_id']
+        assert h.run(service.load(contact['_id'],h.GUILD_ID))['status']!='archived'
+
+
+@pytest.mark.parametrize('kind',['summons','bubble'])
+@pytest.mark.parametrize('restricted',[False,True])
+def test_summons_conflict_identifies_blocking_family_without_leaking_private_channel(kind,restricted):
+    channel_id='600000000000000099'
+    h.run(h.db.case_tickets.insert_one({'_id':'blocking-case','guild_id':h.GUILD_ID,
+        'kind':kind,'member':{'id':MEMBER},'channel_id':channel_id,'status':'open',
+        'visibility':'restricted' if restricted else 'staff'}))
+    with pytest.raises(HTTPException) as error:
+        reserve('summons',actor=STAFF)
+    assert error.value.status_code==409
+    assert native.TITLES[kind] in error.value.detail
+    assert (channel_id in error.value.detail) is (not restricted)
+
+
 def menu_interaction(world,case,actor=STAFF,ident=777):
     state={'done':False}
     response=SimpleNamespace(is_done=lambda:state['done'],send_modal=AsyncMock(),send_message=AsyncMock(),
         defer=AsyncMock(side_effect=lambda **kwargs:state.update(done=True)))
     return SimpleNamespace(id=ident,guild_id=int(h.GUILD_ID),channel_id=int(case['channel_id']),user=SimpleNamespace(id=int(actor)),
         client=world[1],response=response,followup=SimpleNamespace(send=AsyncMock()))
+
+
+@pytest.mark.parametrize('confidential',[False,True])
+def test_moderation_panel_can_summon_member_with_contact_staff(world,confidential):
+    contact=opened(world,confidential=confidential)
+
+    async def exercise():
+        panel=commands.StaffMenu()
+        select=next(child for child in panel.walk_children() if isinstance(child,discord.ui.UserSelect))
+        select._values=[world[0].members[int(MEMBER)]]
+        chosen=menu_interaction(world,contact)
+        await select.callback(chosen)
+        actions=chosen.followup.send.await_args.kwargs['view']
+        button=next(child for child in actions.walk_children()
+                    if isinstance(child,discord.ui.Button) and child.label=='Préparer une convocation')
+        clicked=menu_interaction(world,contact,ident=778)
+        await button.callback(clicked)
+        modal=clicked.response.send_modal.await_args.args[0]
+        assert modal.kind=='summons' and modal.member_id==MEMBER
+        modal.reason._value='Un échange est nécessaire pour clarifier la situation.'
+        submitted=menu_interaction(world,contact,ident=779)
+        await modal.on_submit(submitted)
+        row=await h.db.case_requests.find_one({'kind':'summons','member_id':MEMBER})
+        assert row is not None and row['status']=='pending'
+        return row
+
+    row=h.run(exercise())
+    result=h.run(native.create(row['_id'],world[1]))
+    assert result['status']=='open' and result['channel_id']!=contact['channel_id']
 
 
 def test_room_panel_has_persistent_selector_and_is_registered_at_creation(world):

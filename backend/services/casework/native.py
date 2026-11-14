@@ -48,7 +48,17 @@ async def reserve(kind,member_id,actor_id,reason,source,*,confidential=False,tri
     kinds=['summons','bubble'] if kind in ('summons','bubble') else [kind]
     existing=await db.case_tickets.find_one({'guild_id':str(config.DISCORD_GUILD_ID),'kind':{'$in':kinds},'member.id':str(member_id),'status':{'$ne':'archived'}})
     if kind=='support' and not existing:existing=await db.tickets.find_one({'member.id':str(member_id),'status':'active'})
-    if existing:raise HTTPException(409,'Un dossier de cette famille existe déjà. Il doit être clôturé avant une nouvelle demande.')
+    if existing:
+        title=TITLES.get(existing.get('kind'),TITLES[kind])
+        detail=f'Un dossier « {title} » existe déjà pour ce membre.'
+        # Do not reveal the channel of a restricted dossier to an unauthorized actor.
+        can_link=(kind in ('contact_staff','support') or policy.can_read(roles,existing))
+        if existing.get('channel_id') and can_link:
+            detail+=f' Salon concerné : <#{existing["channel_id"]}>.'
+        if kind in ('summons','bubble'):
+            detail+=' Un Contact Staff ne bloque pas les convocations ; ce refus concerne une convocation ou une bulle enregistrée dans Iris.'
+        detail+=' Ce dossier doit être clôturé avant une nouvelle demande.'
+        raise HTTPException(409,detail)
     recent=await db.case_requests.find_one({'guild_id':str(config.DISCORD_GUILD_ID),'member_id':str(member_id),'kind':kind,
         'created_at':{'$gt':(datetime.now(timezone.utc)-timedelta(seconds=int(os.getenv('CASEWORK_REQUEST_COOLDOWN_SECONDS','300')))).isoformat()}})
     if recent:raise HTTPException(429,'Patiente quelques minutes avant de refaire une demande.')
