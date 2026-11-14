@@ -10,6 +10,7 @@ import OasisGameMenu from "./OasisGameMenu";
 import BoardGame from "./BoardGame";
 import ScrabbleGame from "./ScrabbleGame";
 import MinesweeperGame from "./MinesweeperGame";
+import UnoGame from "./UnoGame";
 import "./OasisGame.css";
 import KaraokeNotes from "./KaraokeNotes";
 import { useKaraokeAnalysis } from "./useKaraokeAnalysis";
@@ -465,7 +466,7 @@ export default function KaraokeStage({ session }) {
           setFeedback({ ...message, key: Date.now() });
         } else if (message.type === 'scr_preview') {
           setScrabblePreview(message);
-        } else if (["c4_error", "ttt_error", "scr_error", "ms_error"].includes(message.type)) {
+        } else if (["c4_error", "ttt_error", "scr_error", "ms_error", "uno_error"].includes(message.type)) {
           setNotice(message.detail);
         } else if (message.type === "catalog_loading") {
           setStarting(true);
@@ -649,6 +650,9 @@ export default function KaraokeStage({ session }) {
     idle: "Choisis un morceau pour commencer.",
   }[lyrics.status];
 
+  if (session.games && mode === 'uno' && state.uno) {
+    return <div className="og-root">{audioElement}<UnoGame {...{state,userId,canControl,connected,send}} error={notice} onInvite={openInvite}/></div>;
+  }
   if (session.games && mode === 'minesweeper' && state.minesweeper) {
     return <div className="og-root">{audioElement}<MinesweeperGame {...{state,userId,canControl,connected,send}} error={notice} onInvite={openInvite}/></div>;
   }

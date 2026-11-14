@@ -19,6 +19,7 @@ GAME_NAMES = {
     "tic_tac_toe": "Morpion",
     "scrabble": "Scrabble",
     "minesweeper": "Démineur",
+    "uno": "UNO",
     "karaoke": "Karaoké",
     "blindtest_setup": "Blind test",
     "blindtest": "Blind test",
@@ -28,6 +29,7 @@ GAME_CARDS = {
     'Morpion': ('✕', 0x83EAD1, 'Une petite grille, un vrai défi.', '2 joueurs', 'Trois symboles alignés pour remporter la manche.'),
     'Scrabble': ('🔠', 0xC9A8EE, 'Sept lettres. Toutes vos idées.', '2 à 4 joueurs', 'Compose tes mots, trouve les bonus et fais parler ton chevalet.'),
     'Démineur': ('💎', 0x98D5D3, 'Un peu de logique, beaucoup d’esprit d’équipe.', '1 à 8 joueurs', 'Explore la grille et repère les mines, ensemble et sans précipitation.'),
+    'UNO': ('🃏', 0xF0A6BC, 'Toutes les couleurs, tous les rebondissements.', '2 à 8 joueurs', 'Pose tes cartes, garde tes jokers au bon moment et n’oublie pas de dire UNO !'),
     'Karaoké': ('🎤', 0xE69DC5, 'La scène est à vous.', 'À chanter ensemble', 'Choisis un morceau, rejoins les voix et profite du moment.'),
     'Blind test': ('🎧', 0x98D5D3, 'Ce morceau te dit quelque chose ?', 'À deviner ensemble', 'Écoute l’extrait et trouve le titre avant les autres.'),
 }

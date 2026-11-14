@@ -236,6 +236,7 @@ def test_tic_tac_toe_plays_a_diagonal_and_switches_back_to_connect_four():
     ("tic_tac_toe", 0, "Ouvrir l’invitation Discord"),
     ("scrabble", 2, "Rejoindre la partie"),
     ("minesweeper", 2, "Rejoindre la partie"),
+    ("uno", 2, "Rejoindre la partie"),
     ("karaoke", 2, "Rejoindre la partie"),
     ("blindtest_setup", 0, "Ouvrir l’invitation Discord"),
 ])
@@ -299,9 +300,15 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
     async def run():
         if room.board_match is not None:
             field='mode' if mode=='minesweeper' else 'opponent'
-            room.board_match.settings[field] = 'solo' if mode=='minesweeper' else 'bot'
+            if mode=='uno':
+                room.board_match.phase='playing'
+            else:
+                room.board_match.settings[field] = 'solo' if mode=='minesweeper' else 'bot'
             assert invites.schedule(room, player) is None
-            room.board_match.settings[field] = 'coop' if mode=='minesweeper' else 'duel'
+            if mode=='uno':
+                room.board_match.phase='lobby'
+            else:
+                room.board_match.settings[field] = 'coop' if mode=='minesweeper' else 'duel'
         else:
             room.clients["guest"] = NS(uid="guest", plays=True)
             assert invites.schedule(room, player) is None

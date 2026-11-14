@@ -12,6 +12,7 @@ Le menu propose :
 - **Morpion** : grille 3 × 3, duel entre membres ou contre l’ordinateur à trois niveaux. Le jeu propose un chrono facultatif, des spectateurs, des revanches et la relecture de la dernière manche.
 - **Scrabble** : plateau 15 × 15, de 2 à 4 joueurs, chevalets privés, jokers et lexique français local. Voir [les règles et le déploiement](oasisgame-scrabble.md).
 - **Démineur** : solo ou coopération jusqu’à 8 joueurs, trois difficultés, premier clic protégé et chronomètre. Voir [les règles et le déploiement](oasisgame-minesweeper.md).
+- **UNO** : 2 à 8 joueurs, cartes et mains privées, jokers, contestation du +4, annonce UNO, points et revanches. Voir [les règles et le déploiement](oasisgame-uno.md).
 
 ## Créer l’application
 
