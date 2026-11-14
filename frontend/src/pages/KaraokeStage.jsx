@@ -370,6 +370,8 @@ export default function KaraokeStage({ session }) {
   const [favorites, setFavorites] = useState([]);
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(null);
+  // A private preview is a response to a draft, not part of periodic room snapshots.
+  const [scrabblePreview, setScrabblePreview] = useState(null);
   const canControl=session.games ? state?.host_id===String(userId) : sessionCanControl;
   const [library, setLibrary] = useState([]);
   const localTracks = library.filter((item) => item.prepared === true && !item.preview); // les extraits de 30 s ne servent qu'au blind test
@@ -439,6 +441,7 @@ export default function KaraokeStage({ session }) {
       let latestState = 0;
       socket.onopen = () => {
         retries = 0;
+        setScrabblePreview(null);
         setConnected(true);
       };
       socket.onmessage = (event) => {
@@ -460,7 +463,7 @@ export default function KaraokeStage({ session }) {
         } else if (message.type === "guess_result") {
           setFeedback({ ...message, key: Date.now() });
         } else if (message.type === 'scr_preview') {
-          setState(current => current ? {...current, scrabble_preview: message} : current);
+          setScrabblePreview(message);
         } else if (["c4_error", "ttt_error", "scr_error"].includes(message.type)) {
           setNotice(message.detail);
         } else if (message.type === "catalog_loading") {
@@ -471,6 +474,7 @@ export default function KaraokeStage({ session }) {
         }
       };
       socket.onclose = () => {
+        setScrabblePreview(null);
         setConnected(false);
         setStarting(false);
         if (!closed) {
@@ -645,7 +649,7 @@ export default function KaraokeStage({ session }) {
   }[lyrics.status];
 
   if (session.games && mode === 'scrabble' && state.scrabble) {
-    return <div className="og-root">{audioElement}<ScrabbleGame {...{state,userId,canControl,connected,send}} error={notice} onInvite={openInvite}/></div>;
+    return <div className="og-root">{audioElement}<ScrabbleGame {...{state,userId,canControl,connected,send}} preview={scrabblePreview} error={notice} onInvite={openInvite}/></div>;
   }
   if (session.games && ["connect_four", "tic_tac_toe"].includes(mode)) {
     return (

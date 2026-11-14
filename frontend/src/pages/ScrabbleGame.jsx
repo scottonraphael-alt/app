@@ -12,7 +12,7 @@ function Tile({letter, blank=false}) {
   return <span className={'sg-tile'+(blank?' sg-blank':'')}><b>{letter==='?'?'◇':letter}</b><small>{blank?0:VALUES[letter]}</small></span>;
 }
 
-export default function ScrabbleGame({state,userId,canControl,connected,send,error,onInvite}) {
+export default function ScrabbleGame({state,preview,userId,canControl,connected,send,error,onInvite}) {
   const game=state.scrabble;
   const [draft,setDraft]=useState([]), [selected,setSelected]=useState(null), [exchange,setExchange]=useState(false);
   const [swaps,setSwaps]=useState([]), [order,setOrder]=useState([]), [joker,setJoker]=useState(null);
@@ -27,7 +27,6 @@ export default function ScrabbleGame({state,userId,canControl,connected,send,err
   const playable=connected&&playing&&seat===game.turn&&!game.paused&&!me?.retired;
   const context=`${game.round_id}:${game.ply}:${rack.join('')}`;
   const sounds=useBoardSounds('scrabble',game.round_id,game.ply,connected);
-  const preview=state.scrabble_preview;
   const draftKey=JSON.stringify(draft);
   const validPreview=preview&&preview.request_id===previewRequest.current?.id&&previewRequest.current?.draft===draftKey&&preview.round_id===game.round_id&&preview.ply===game.ply&&draft.length>0;
   const visibleOrder=order.length===rack.length?order:rack.map((_,i)=>i);

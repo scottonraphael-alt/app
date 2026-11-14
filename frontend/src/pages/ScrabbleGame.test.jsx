@@ -2,10 +2,15 @@ import {act} from 'react';
 import {createRoot} from 'react-dom/client';
 import ScrabbleGame from './ScrabbleGame';
 import Menu from './OasisGameMenu';
+import KaraokeStage from './KaraokeStage';
+jest.mock('./useKaraokeAnalysis',()=>({useKaraokeAnalysis:()=>({data:null,status:'idle',error:'',reload:jest.fn()})}));
+jest.mock('./useKaraokeVoice',()=>({useKaraokeVoice:()=>({voice:null,busy:false,error:'',toggle:jest.fn()})}));
+jest.mock('./karaokeAudio',()=>({useKaraokeAudio:()=>({graphRef:{current:null},mix:jest.fn()})}));
+jest.mock('./useKaraokeChrome',()=>({useKaraokeChrome:()=>({visible:true,wake:jest.fn()})}));
 global.IS_REACT_ACT_ENVIRONMENT=true;
 let host,root;
 beforeEach(()=>{host=document.createElement('div');document.body.appendChild(host);root=createRoot(host);jest.useFakeTimers();});
-afterEach(async()=>{await act(async()=>root.unmount());host.remove();jest.useRealTimers();});
+afterEach(async()=>{if(root)await act(async()=>root.unmount());host.remove();jest.useRealTimers();});
 function state(phase='playing'){
  return {mode:'scrabble',at:performance.now(),scrabble:{phase,board:Array.from({length:15},()=>Array(15).fill(null)),premiums:Array.from({length:15},()=>Array(15).fill('')),
   seats:[{id:'a',name:'Alice',connected:true,tiles:7},{id:'b',name:'Bob',connected:true,tiles:7}],score:[0,0],turn:1,
@@ -22,7 +27,7 @@ test('menu opens the game with the normal host guard',async()=>{
 
 test('rack placement asks the server for a preview and commits only its current validation',async()=>{
  const send=jest.fn(),data=state();
- const render=()=>root.render(<ScrabbleGame state={data} userId="a" connected send={send}/>);
+ const render=()=>root.render(<ScrabbleGame state={data} preview={data.scrabble_preview} userId="a" connected send={send}/>);
  await act(async()=>render());
  await act(async()=>host.querySelector('[aria-label="Lettre A, 1 point"]').click());
  await act(async()=>host.querySelector('[data-cell="112"]').click());
@@ -97,4 +102,49 @@ test('disconnection blocks moves, keeps the existing rack and shows reconnection
  expect(host.textContent).toContain('Reconnexion à OasisGame');
  expect(button('Valider le mot').disabled).toBe(true);
  expect(host.querySelector('.sg-rack').children).toHaveLength(7);
+});
+
+test.each([true,false])('private word verification survives periodic WebSocket snapshots (valid=%s)',async(valid)=>{
+ const original=global.WebSocket;
+ let socket;
+ class Socket {
+  static OPEN=1;
+  readyState=1;
+  send=jest.fn();close=jest.fn();
+  constructor(){socket=this;}
+ }
+ global.WebSocket=Socket;
+ try{
+  const session={games:true,videoToken:'test',instanceId:'room',userId:'a',userName:'Alice',apiRoot:'/api'};
+  await act(async()=>root.render(<KaraokeStage session={session}/>));
+  await act(async()=>socket.onopen());
+  const data=state();
+  const sync=sequence=>socket.onmessage({data:JSON.stringify({...data,type:'kstate',sequence,host_id:'a'})});
+  await act(async()=>sync(1));
+  await act(async()=>host.querySelector('[aria-label="Lettre A, 1 point"]').click());
+  await act(async()=>host.querySelector('[data-cell="112"]').click());
+  await act(async()=>host.querySelector('[aria-label="Lettre M, 2 points"]').click());
+  await act(async()=>host.querySelector('[data-cell="113"]').click());
+  await act(async()=>jest.advanceTimersByTime(200));
+  const packet=socket.send.mock.calls.map(([raw])=>JSON.parse(raw)).findLast(m=>m.type==='scr_preview');
+  expect(packet).toBeDefined();
+  await act(async()=>socket.onmessage({data:JSON.stringify({type:'scr_preview',request_id:packet.request_id,
+   round_id:'round',ply:0,valid,score:6,words:[{word:'AM',score:6}],detail:'Mot absent du lexique français : AM'})}));
+  expect(button('Valider le mot').disabled).toBe(!valid);
+  for(let sequence=2;sequence<=4;sequence++){
+   await act(async()=>jest.advanceTimersByTime(5000));
+   await act(async()=>sync(sequence));
+   expect(host.textContent).not.toContain('Vérification du mot…');
+   expect(button('Valider le mot').disabled).toBe(!valid);
+   expect(host.textContent).toContain(valid?'+ 6 points':'Mot absent du lexique français : AM');
+  }
+  if(valid){
+   await act(async()=>button('Valider le mot').click());
+   expect(JSON.parse(socket.send.mock.calls.at(-1)[0])).toEqual({type:'scr_play',round_id:'round',ply:0,placements:packet.placements});
+  }
+ }finally{
+  await act(async()=>root.unmount());
+  root=null;
+  global.WebSocket=original;
+ }
 });
