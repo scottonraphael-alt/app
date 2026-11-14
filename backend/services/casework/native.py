@@ -21,8 +21,14 @@ logger=logging.getLogger(__name__)
 
 
 def slot_key(kind, member_id):
-    family='invitation' if kind in ('summons','bubble') else kind
-    return f'{config.DISCORD_GUILD_ID}:{family}:{member_id}'
+    return f'{config.DISCORD_GUILD_ID}:{kind}:{member_id}'
+
+
+def slot_keys(kind, member_id):
+    keys=[slot_key(kind,member_id)]
+    if kind in ('summons','bubble'):
+        keys.append(f'{config.DISCORD_GUILD_ID}:invitation:{member_id}')
+    return keys
 
 
 async def reserve(kind,member_id,actor_id,reason,source,*,confidential=False,triggers='',consent=False,training=False):
@@ -45,7 +51,7 @@ async def reserve(kind,member_id,actor_id,reason,source,*,confidential=False,tri
     ident=hashlib.sha256(f'{config.DISCORD_GUILD_ID}:{source}'.encode()).hexdigest()[:32]
     old=await db.case_requests.find_one({'_id':ident})
     if old:return old
-    kinds=['summons','bubble'] if kind in ('summons','bubble') else [kind]
+    kinds=[kind]
     existing=await db.case_tickets.find_one({'guild_id':str(config.DISCORD_GUILD_ID),'kind':{'$in':kinds},'member.id':str(member_id),'status':{'$ne':'archived'}})
     if kind=='support' and not existing:existing=await db.tickets.find_one({'member.id':str(member_id),'status':'active'})
     if existing:
@@ -55,14 +61,22 @@ async def reserve(kind,member_id,actor_id,reason,source,*,confidential=False,tri
         can_link=(kind in ('contact_staff','support') or policy.can_read(roles,existing))
         if existing.get('channel_id') and can_link:
             detail+=f' Salon concerné : <#{existing["channel_id"]}>.'
-        if kind in ('summons','bubble'):
-            detail+=' Un Contact Staff ne bloque pas les convocations ; ce refus concerne une convocation ou une bulle enregistrée dans Iris.'
         detail+=' Ce dossier doit être clôturé avant une nouvelle demande.'
         raise HTTPException(409,detail)
     recent=await db.case_requests.find_one({'guild_id':str(config.DISCORD_GUILD_ID),'member_id':str(member_id),'kind':kind,
         'created_at':{'$gt':(datetime.now(timezone.utc)-timedelta(seconds=int(os.getenv('CASEWORK_REQUEST_COOLDOWN_SECONDS','300')))).isoformat()}})
     if recent:raise HTTPException(429,'Patiente quelques minutes avant de refaire une demande.')
     slot=slot_key(kind,member_id)
+    # Keep in-flight reservations from the shared invitation slot valid, but only
+    # let them block another request of the same kind.
+    for legacy_key in slot_keys(kind,member_id)[1:]:
+        legacy=await db.case_open_slots.find_one({'_id':legacy_key})
+        if legacy:
+            prior=await db.case_requests.find_one({'_id':legacy['request_id'],'kind':kind})
+            if prior and prior.get('status') not in ('refused','closed'):
+                archived=await db.case_tickets.find_one({'request_id':prior['_id'],'status':'archived'}) if prior.get('status')=='open' else None
+                if not archived:
+                    raise HTTPException(409,'Une demande ou un salon est déjà en cours pour ce membre.')
     previous=await db.case_open_slots.find_one({'_id':slot})
     if previous:
         prior=await db.case_requests.find_one({'_id':previous['request_id']})
@@ -131,7 +145,7 @@ async def create(request_id,client):
             if member.bot or member.id==server.owner_id:raise HTTPException(403,'Cette cible est protégée.')
             if str(config.DISCORD_STAFF_ROLE_ID or '') in {str(role.id) for role in member.roles} and policy.admin_role() not in roles:
                 raise HTTPException(403,'Seul un Administrateur peut convoquer un membre du Staff.')
-        slot=await db.case_open_slots.find_one({'_id':slot_key(row['kind'],row['member_id']),'request_id':request_id})
+        slot=await db.case_open_slots.find_one({'_id':{'$in':slot_keys(row['kind'],row['member_id'])},'request_id':request_id})
         if not slot:raise HTTPException(409,'La réservation de ce dossier n’est plus active.')
         marker='iris-workflow:'+request_id
         channels=await server.fetch_channels()

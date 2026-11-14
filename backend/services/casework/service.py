@@ -262,9 +262,9 @@ async def mark_deleted(case_id, settings, *, expected=False):
         try:
             saved=await save(row, changed)
             if row.get('request_id'):
-                from services.casework.native import slot_key
+                from services.casework.native import slot_keys
                 await db.case_requests.update_one({'_id':row['request_id']},{'$set':{'status':'closed'}})
-                await db.case_open_slots.delete_one({'_id':slot_key(row['kind'],row['member']['id']),'request_id':row['request_id']})
+                await db.case_open_slots.delete_many({'_id':{'$in':slot_keys(row['kind'],row['member']['id'])},'request_id':row['request_id']})
             if row['kind']=='support':
                 await db.tickets.update_many({'channel_id':row['channel_id']},{'$set':{'status':'archived','assigned_helper':None}})
             return saved

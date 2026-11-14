@@ -121,10 +121,43 @@ def test_summons_conflict_identifies_blocking_family_without_leaking_private_cha
         'kind':kind,'member':{'id':MEMBER},'channel_id':channel_id,'status':'open',
         'visibility':'restricted' if restricted else 'staff'}))
     with pytest.raises(HTTPException) as error:
-        reserve('summons',actor=STAFF)
+        reserve(kind,actor=STAFF)
     assert error.value.status_code==409
     assert native.TITLES[kind] in error.value.detail
     assert (channel_id in error.value.detail) is (not restricted)
+
+
+@pytest.mark.parametrize('first_kind,second_kind',[('bubble','summons'),('summons','bubble')])
+@pytest.mark.parametrize('legacy',[False,True])
+@pytest.mark.parametrize('pending',[False,True])
+def test_bubble_and_summons_have_independent_slots(world,first_kind,second_kind,legacy,pending):
+    first=reserve(first_kind,actor=STAFF,source='first')
+    if legacy:
+        h.run(h.db.case_open_slots.delete_one({'_id':native.slot_key(first_kind,MEMBER)}))
+        h.run(h.db.case_open_slots.insert_one({'_id':f'{h.GUILD_ID}:invitation:{MEMBER}','request_id':first['_id']}))
+    if not pending:
+        h.run(native.create(first['_id'],world[1]))
+    second=opened(world,kind=second_kind,actor=STAFF,source='second')
+    if pending:
+        h.run(native.create(first['_id'],world[1]))
+    original=h.run(h.db.case_requests.find_one({'_id':first['_id']}))
+    assert original['status']=='open' and original['channel_id']!=second['channel_id']
+    h.run(service.mark_deleted(original['case_id'],policy.Settings()))
+    assert not h.run(h.db.case_open_slots.find_one({'request_id':first['_id']}))
+    assert h.run(h.db.case_open_slots.find_one({'request_id':second['request_id']}))
+
+
+@pytest.mark.parametrize('kind',['summons','bubble'])
+@pytest.mark.parametrize('legacy',[False,True])
+def test_pending_invitation_still_blocks_same_kind(kind,legacy,monkeypatch):
+    first=reserve(kind,actor=STAFF)
+    if legacy:
+        h.run(h.db.case_open_slots.delete_one({'_id':native.slot_key(kind,MEMBER)}))
+        h.run(h.db.case_open_slots.insert_one({'_id':f'{h.GUILD_ID}:invitation:{MEMBER}','request_id':first['_id']}))
+    monkeypatch.setenv('CASEWORK_REQUEST_COOLDOWN_SECONDS','0')
+    with pytest.raises(HTTPException) as error:
+        reserve(kind,actor=STAFF,source='duplicate')
+    assert error.value.status_code==409
 
 
 def menu_interaction(world,case,actor=STAFF,ident=777):
