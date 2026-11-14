@@ -4,6 +4,7 @@ import {Client,GatewayIntentBits,ChannelType} from 'discord.js';
 import {joinVoiceChannel,entersState,VoiceConnectionStatus,EndBehaviorType} from '@discordjs/voice';
 import prism from 'prism-media';
 import {features,FRAME_BYTES,HOP_BYTES} from './dsp.mjs';
+import {vocalNotice} from './messages.mjs';
 
 const secret=process.env.KARAOKE_VOICE_SECRET||(process.env.APP_SESSION_SECRET?crypto.createHmac('sha256',process.env.APP_SESSION_SECRET).update('iris-karaoke-voice-v1').digest('hex'):'');
 if(secret.length<32)throw new Error('KARAOKE_VOICE_SECRET doit contenir au moins 32 caractères.');
@@ -11,7 +12,6 @@ const token=process.env.KARAOKE_BOT_TOKEN||process.env.DISCORD_BOT_TOKEN;
 const backend=process.env.KARAOKE_BACKEND_URL||'http://backend:8000/api/activity/karaoke';
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildVoiceStates]});
 let active=null,starting=false;
-const notice='🎤 **Karaoké · analyse vocale**\nOasisLink peut analyser le rythme et la hauteur de la voix des joueurs qui l’activent dans le karaoké. Aucun enregistrement vocal n’est conservé. Tu peux refuser ou retirer ton accord à tout moment dans « Score vocal ». Porte un casque pour éviter que la musique entre dans ton micro.';
 
 function stopStreams(){
   if(!active)return;
@@ -70,7 +70,7 @@ client.on('voiceStateUpdate',async(before,after)=>{
   if(!active)return;
   if(before.id===client.user.id&&after.channelId!==active.channel.id){stop();return;}
   if(after.channelId===active.channel.id&&before.channelId!==after.channelId&&!after.member.user.bot){
-    try{await active.channel.send({content:`<@${after.id}>\n`+notice,allowedMentions:{parse:[],users:[after.id]}});}catch(error){stop();}
+    try{await active.channel.send(vocalNotice(after.id));}catch(error){stop();}
   }
 });
 const server=http.createServer(async(req,res)=>{
@@ -94,7 +94,7 @@ const server=http.createServer(async(req,res)=>{
     if(channel?.type!==ChannelType.GuildVoice||!channel.members.has(body.actor_id))throw new Error('Rejoins ce salon vocal avant de connecter le bot.');
     if(guild.members.me.voice.channelId)throw new Error('OasisLink est déjà utilisé dans un salon vocal.');
     // Notice must be delivered BEFORE joining/receiving any participant audio.
-    await channel.send({content:notice,allowedMentions:{parse:[]}});
+    await channel.send(vocalNotice());
     const connection=joinVoiceChannel({channelId:channel.id,guildId:guild.id,adapterCreator:guild.voiceAdapterCreator,selfDeaf:false,selfMute:true});
     try{await entersState(connection,VoiceConnectionStatus.Ready,20000);}catch(error){connection.destroy();throw error;}
     active={id:body.id,channel,connection,streams:new Map(),frames:[],sequence:new Map(),allowed:new Set(),generation:null};

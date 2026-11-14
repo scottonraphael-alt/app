@@ -44,6 +44,15 @@ Conserver `ACTIVITY_DISCORD_CLIENT_ID` et `ACTIVITY_DISCORD_CLIENT_SECRET` pour 
 
 Le token de l’onglet **Bot** de l’application **OasisGame** permet au backend de vérifier l’instance Discord avant d’annoncer la recherche de joueurs. OasisGame publie dans le salon confirmé par Discord. Si Discord lui refuse l’envoi, OasisLink prend le relais s’il a accès au salon. Le bot qui publie doit avoir la permission **Envoyer des messages**, ou **Envoyer des messages dans les fils** selon le salon. **Voir les anciens messages** permet de retrouver le message de lancement et **Créer une invitation** permet un lien direct dans les salons vocaux. Le bouton **Inviter** dans l’Activity ouvre la boîte d’invitation Discord.
 
+Les invitations sont publiées sous forme de panneaux Components V2 : couleur
+pastel par jeu, accroche, mention de l’hôte sans notification, nombre de joueurs
+et bouton vers le lien Discord vérifié. Le message d’information sur l’analyse
+vocale utilise aussi un panneau, avec les explications du score, le consentement
+facultatif, les boutons réels de l’activité et le conseil du casque. Les messages
+déjà envoyés ne sont pas modifiés ; seuls les prochains envois utilisent ce rendu.
+Pour mettre à jour ces deux types de messages, reconstruire `backend` et
+`karaoke-voice` (profil `karaoke`). Aucune reconstruction frontend n’est nécessaire.
+
 Après publication du commit :
 
 ```bash

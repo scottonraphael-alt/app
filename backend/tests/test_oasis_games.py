@@ -234,6 +234,7 @@ def test_tic_tac_toe_plays_a_diagonal_and_switches_back_to_connect_four():
 @pytest.mark.parametrize("mode, channel_type, expected_label", [
     ("connect_four", 2, "Rejoindre la partie"),
     ("tic_tac_toe", 0, "Ouvrir l’invitation Discord"),
+    ("scrabble", 2, "Rejoindre la partie"),
     ("karaoke", 2, "Rejoindre la partie"),
     ("blindtest_setup", 0, "Ouvrir l’invitation Discord"),
 ])
@@ -313,9 +314,15 @@ def test_waiting_room_announces_to_verified_discord_channel(monkeypatch, mode, c
     asyncio.run(run())
     assert requested_channels and len(messages) == 1
     assert messages[0]["allowed_mentions"] == {"parse": []}
-    assert f"<@{player.uid}>" in messages[0]["content"]
-    if room.board_match is not None:
-        assert "cherche un adversaire" in messages[0]["content"]
-    button = messages[0]["components"][0]["components"][0]
+    assert messages[0]['flags']==32768 and 'content' not in messages[0]
+    card=messages[0]['components'][0]
+    assert card['type']==17
+    text='\n'.join(component.get('content','') for component in card['components'])
+    assert f"<@{player.uid}>" in text
+    if mode in ('connect_four','tic_tac_toe'):
+        assert 'cherche un adversaire' in text
+    if mode=='scrabble':
+        assert '2 à 4 joueurs' in text and 'Une place t’attend' in text
+    button=next(component for component in card['components'] if component['type']==1)['components'][0]
     assert button["label"] == expected_label
     assert button["url"].endswith("native-invite" if channel_type == 2 else launch_message)

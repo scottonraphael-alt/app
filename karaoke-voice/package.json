@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test dsp.test.mjs"
+    "test": "node --test dsp.test.mjs messages.test.mjs"
   },
   "engines": {
     "node": ">=22.12.0"

@@ -22,6 +22,13 @@ GAME_NAMES = {
     "blindtest_setup": "Blind test",
     "blindtest": "Blind test",
 }
+GAME_CARDS = {
+    'Puissance 4': ('🟠', 0xFFCE91, 'Un duel, quatre jetons, à toi de jouer.', '2 joueurs', 'Aligne quatre jetons avant ton adversaire.'),
+    'Morpion': ('✕', 0x83EAD1, 'Une petite grille, un vrai défi.', '2 joueurs', 'Trois symboles alignés pour remporter la manche.'),
+    'Scrabble': ('🔠', 0xC9A8EE, 'Sept lettres. Toutes vos idées.', '2 à 4 joueurs', 'Compose tes mots, trouve les bonus et fais parler ton chevalet.'),
+    'Karaoké': ('🎤', 0xE69DC5, 'La scène est à vous.', 'À chanter ensemble', 'Choisis un morceau, rejoins les voix et profite du moment.'),
+    'Blind test': ('🎧', 0x98D5D3, 'Ce morceau te dit quelque chose ?', 'À deviner ensemble', 'Écoute l’extrait et trouve le titre avant les autres.'),
+}
 SNOWFLAKE = re.compile(r"[0-9]{17,20}")
 INVITE_CODE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _tasks = set()
@@ -150,20 +157,31 @@ async def post_invite(client, channel_url, app_id, channel_id, guild_id, launch_
     url, label = await join_link(client, channel_url, app_id, channel_id, guild_id, launch_id)
     if not waiting():
         return False
-    if game in ("Puissance 4", "Morpion"):
-        content = f"🎮 <@{user_id}> joue au **{game}** et cherche un adversaire !"
-    else:
-        content = f"🎮 <@{user_id}> lance une partie de **{game}** et cherche des joueurs !"
-    if label == "Ouvrir le salon":
-        content += "\nOuvre OasisGame dans ce salon pour rejoindre la session."
-    await send(client, channel_url, content, url, label)
+    await send(client, channel_url, invitation_card(user_id, game, url, label))
     return True
 
 
-async def send(client, channel_url, content, url, label):
-    response = await client.post(channel_url + "/messages", json={
-        "content": content,
+def invitation_card(user_id, game, url, label):
+    emoji, colour, tagline, players, description = GAME_CARDS[game]
+    duel = game in ('Puissance 4', 'Morpion')
+    invitation = f'<@{user_id}> cherche un adversaire. **Et si c’était toi ?**' if duel else f'<@{user_id}> ouvre la partie. **Une place t’attend !**'
+    instructions = 'Ouvre **OasisGame** dans ce salon pour retrouver la table.' if label == 'Ouvrir le salon' else 'Rejoins l’activité et installe-toi avec les autres.'
+    return {
+        'flags': 32768,
         "allowed_mentions": {"parse": []},
-        "components": [{"type": 1, "components": [{"type": 2, "style": 5, "label": label, "url": url}]}],
-    })
+        'components': [{'type': 17, 'accent_color': colour, 'components': [
+            {'type': 10, 'content': f'# {emoji} {game}\n### {tagline}'},
+            {'type': 10, 'content': invitation},
+            {'type': 14, 'divider': True, 'spacing': 1},
+            {'type': 10, 'content': f'**{players}** · Partie entre amis\n{description}'},
+            {'type': 10, 'content': instructions},
+            {'type': 1, 'components': [{'type': 2, 'style': 5, 'label': label, 'url': url,
+                                       'emoji': {'name': '🎮'}}]},
+            {'type': 10, 'content': '-# ✦ OasisGame · Les bons moments se jouent ensemble.'},
+        ]}],
+    }
+
+
+async def send(client, channel_url, payload):
+    response = await client.post(channel_url + "/messages", json=payload)
     response.raise_for_status()
