@@ -15,6 +15,7 @@ Le menu propose :
 - **UNO** : 2 à 8 joueurs, cartes et mains privées, jokers, contestation du +4, annonce UNO, points et revanches. Voir [les règles et le déploiement](oasisgame-uno.md).
 - **Codenames** : 4 à 16 joueurs, deux équipes, maîtres-espions avec clé privée, 493 mots français et chrono facultatif. Voir [les règles et le déploiement](oasisgame-codenames.md).
 - **Petit Bac** : 2 à 12 joueurs, catégories configurables, réponses privées, STOP et correction collective. Voir [les règles et le déploiement](oasisgame-petit-bac.md).
+- **Solitaire et Sudoku** : parties individuelles par compte, sauvegarde locale, annulation, indices et pause. Solitaire à 1 ou 3 cartes ; Sudoku à trois niveaux. Voir [les règles et le déploiement](oasisgame-solo.md).
 
 ## Créer l’application
 

@@ -11,6 +11,7 @@ import BoardGame from "./BoardGame";
 import ScrabbleGame from "./ScrabbleGame";
 import MinesweeperGame from "./MinesweeperGame";
 import UnoGame from "./UnoGame";
+import SoloGames from "./SoloGames";
 import PetitBacGame from "./PetitBacGame";
 import CodenamesGame from "./CodenamesGame";
 import "./OasisGame.css";
@@ -652,6 +653,9 @@ export default function KaraokeStage({ session }) {
     idle: "Choisis un morceau pour commencer.",
   }[lyrics.status];
 
+  if (session.games && ['solitaire','sudoku'].includes(mode)) {
+    return <div className="og-root">{audioElement}<SoloGames key={mode+userId} {...{mode,userId,canControl,send}}/></div>;
+  }
   if (session.games && mode === 'petit_bac' && state.petit_bac) {
     return <div className="og-root">{audioElement}<PetitBacGame {...{state,userId,canControl,connected,send}} error={notice} onInvite={openInvite}/></div>;
   }
