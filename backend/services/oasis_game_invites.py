@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 GAME_NAMES = {
     "connect_four": "Puissance 4",
     "tic_tac_toe": "Morpion",
+    "scrabble": "Scrabble",
     "karaoke": "Karaoké",
     "blindtest_setup": "Blind test",
     "blindtest": "Blind test",

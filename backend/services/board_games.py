@@ -252,7 +252,14 @@ async def tick(room, match, due, bot_due, broadcast):
 async def handle(room, websocket, client, kind, message, broadcast):
     match = room.board_match
     presence_changed = refresh(room)
-    accepted = match.action(client, kind, message, online_ids(room), time.monotonic())
+    try:
+        accepted = match.action(client, kind, message, online_ids(room), time.monotonic())
+    except ValueError as exc:
+        if presence_changed:
+            schedule(room, broadcast)
+            await broadcast(room)
+        await websocket.send_json({'type': match.message_prefix + 'error', 'detail': str(exc)})
+        return False
     if presence_changed or accepted:
         schedule(room, broadcast)
         await broadcast(room)

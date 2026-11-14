@@ -17,6 +17,7 @@ export default function OasisGameMenu({session,state,canControl,send,notice,onIn
     <p>Aligne trois croix ou trois ronds sur une grille de 3 × 3. Joue à deux ou contre l’ordinateur.</p>
     <button disabled={!canControl} onClick={() => send({ type: 'choose_game', game: 'tic_tac_toe' })}>Jouer au morpion →</button>
    </article>
+   <article className="og-game og-scrabble"><span aria-hidden="true">A₁</span><small>À VOUS DE TROUVER LES MOTS</small><h2>Scrabble</h2><p>Une table, sept lettres et toutes vos idées. Composez vos mots et défiez vos amis à 2, 3 ou 4 joueurs.</p><button disabled={!canControl} onClick={()=>send({type:'choose_game',game:'scrabble'})}>Jouer avec les mots →</button></article>
   </div>}
  </main>;
 }

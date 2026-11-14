@@ -10,6 +10,7 @@ Le menu propose :
 - **Blind test** : page de préparation dédiée, avec styles et décennies Deezer, nombre de manches et durée, puis bouton « Lancer la partie ». Aucun rôle staff n’est requis pour l’hôte OasisGame. Le blind test n’est pas limité au salon karaoké.
 - **Puissance 4** : duel en direct ou contre l’ordinateur, trois tailles de grille, chrono facultatif et spectateurs. L’hôte ouvre le plateau depuis le menu. Les joueurs prennent une place avant de lancer la manche. Le score est conservé entre les revanches du même duel.
 - **Morpion** : grille 3 × 3, duel entre membres ou contre l’ordinateur à trois niveaux. Le jeu propose un chrono facultatif, des spectateurs, des revanches et la relecture de la dernière manche.
+- **Scrabble** : plateau 15 × 15, de 2 à 4 joueurs, chevalets privés, jokers et lexique français local. Voir [les règles et le déploiement](oasisgame-scrabble.md).
 
 ## Créer l’application
 

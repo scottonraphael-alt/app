@@ -34,7 +34,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import Response, StreamingResponse
 
 from routers import activity
-from services import board_games, connect_four, oasis_game_invites, tic_tac_toe
+from services import board_games, connect_four, oasis_game_invites, tic_tac_toe, scrabble
 from services import karaoke_catalog as catalog
 from services import karaoke_game as game_rules
 from services.karaoke_game import BlindTest, Track
@@ -42,7 +42,7 @@ from services.karaoke_text import LRCLIB_USER_AGENT, build_lines, fetch_lrclib
 
 logger = logging.getLogger("activity.karaoke")
 
-BOARD_GAMES = {"connect_four": connect_four.Match, "tic_tac_toe": tic_tac_toe.Match}
+BOARD_GAMES = {"connect_four": connect_four.Match, "tic_tac_toe": tic_tac_toe.Match, "scrabble": scrabble.Match}
 
 KARAOKE_DIR = Path(os.environ.get("KARAOKE_DIR", "/data/karaoke"))
 # Cache des paroles téléchargées : doit être inscriptible (le dossier de musique peut être en :ro).
@@ -489,12 +489,13 @@ def _cancel_timer(room: KRoom) -> None:
         room.timer = None
 
 
-def snapshot(room: KRoom) -> dict:
+def snapshot(room: KRoom, viewer: str | None = None) -> dict:
     room.sequence += 1
     if room.board_match is not None:
         return {
             "type": "kstate", "mode": room.mode, "host_id": room.host_id, "sequence": room.sequence,
-            room.mode: room.board_match.public(board_games.online_ids(room), time.monotonic()),
+            room.mode: {**room.board_match.public(board_games.online_ids(room), time.monotonic()),
+                        **(room.board_match.private(viewer) if isinstance(room.board_match, scrabble.Match) else {})},
         }
     from services.karaoke_intermission import public as intermission_state
     tracks = library()
@@ -535,7 +536,10 @@ async def broadcast(room: KRoom, message: dict | None = None) -> None:
     payload = message or snapshot(room)
     for websocket in list(room.clients):
         try:
-            await websocket.send_json(payload)
+            personal = payload
+            if payload.get('mode') == 'scrabble' and isinstance(room.board_match, scrabble.Match) and 'scrabble' in payload:
+                personal = {**payload, 'scrabble': {**payload['scrabble'], **room.board_match.private(room.clients[websocket].uid)}}
+            await websocket.send_json(personal)
         except Exception:  # noqa: BLE001 - client déjà parti
             room.clients.pop(websocket, None)
 
@@ -751,6 +755,14 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
             room.clock.set_playing(False)
             room.mode = target
             if target in BOARD_GAMES:
+                if target == 'scrabble':
+                    try:
+                        await asyncio.to_thread(scrabble.lexicon)
+                    except (OSError, RuntimeError):
+                        room.mode = 'menu'
+                        await websocket.send_json({'type': 'error', 'detail': 'Le lexique français est indisponible.'})
+                        await broadcast(room)
+                        return
                 room.board_match = BOARD_GAMES[target]()
             if target == 'karaoke':
                 room.needs_welcome = True
@@ -759,11 +771,31 @@ async def handle_message(room: KRoom, websocket: WebSocket, client: Client, mess
             await broadcast(room)
             return
         if room.board_match is not None:
+            if kind == 'scr_preview' and isinstance(room.board_match, scrabble.Match):
+                match = room.board_match
+                if board_games.refresh(room):
+                    board_games.schedule(room, broadcast)
+                    await broadcast(room)
+                request_id = message.get('request_id')
+                if type(request_id) is not int:
+                    return
+                reply = {'type': 'scr_preview', 'request_id': request_id, 'round_id': match.round_id,
+                         'ply': len(match.history)}
+                try:
+                    if (match.phase != 'playing' or match.seat(client.uid) != match.turn or match.absent
+                            or message.get('round_id') != match.round_id or message.get('ply') != len(match.history)):
+                        raise scrabble.InvalidMove('Ce n’est pas ton tour.')
+                    result, _, _ = match.evaluate(client.uid, message.get('placements'))
+                    reply.update(result, valid=True)
+                except scrabble.InvalidMove as exc:
+                    reply.update(valid=False, detail=str(exc))
+                await websocket.send_json(reply)
+                return
             if isinstance(kind, str) and kind.startswith(room.board_match.message_prefix):
                 if await board_games.handle(room, websocket, client, kind, message, broadcast):
                     oasis_game_invites.schedule(room, client)
             elif kind == "sync":
-                await websocket.send_json(snapshot(room))
+                await websocket.send_json(snapshot(room, client.uid))
             elif kind == "hello":
                 client.name = game_rules.clean_name(message.get("name"))
                 client.plays = message.get("plays") is not False
