@@ -137,3 +137,40 @@ it('refuse un fichier vide ou non affichable sans remplacer le média',async()=>
   expect(container.querySelector('.an-preview-gallery img')).toBeNull();
   expect(toast.error.mock.calls.at(-1)[0]).toContain('bloc Fichier joint');
 });
+
+it('publie un modèle via une copie sans désactiver Publier ni modifier le modèle enregistré',async()=>{
+  await destination();
+  const model=[...container.querySelectorAll('label')].find(el=>el.textContent==='Enregistrer comme modèle réutilisable');
+  await act(async()=>model.querySelector('input').click());
+  await click('Enregistrer');
+  expect(api.post.mock.calls.find(([url])=>url.endsWith('/drafts'))[1].is_template).toBe(true);
+  expect(getButton('Publier').disabled).toBe(false);
+  expect(container.textContent).toContain('le modèle enregistré sera conservé');
+  const original=api.post.getMockImplementation();
+  api.post.mockImplementation(async(url,body)=>{const response=await original(url,body);if(url.endsWith('/drafts'))response.data.id='copied';return response;});
+  await click('Publier');
+  const creations=api.post.mock.calls.filter(([url])=>url.endsWith('/drafts'));
+  expect(creations).toHaveLength(2);
+  expect(creations[1][1]).toMatchObject({is_template:false,expected_revision:null,channel_id:channel});
+  expect(api.put).not.toHaveBeenCalled();
+  expect(publications()).toHaveLength(0);
+  const dialog=document.querySelector('[role="dialog"]');
+  expect(dialog).not.toBeNull();
+  await act(async()=>getButton('Envoyer sur Discord',dialog).click());
+  expect(publications()).toHaveLength(1);
+  expect(publications()[0][0]).toContain('/drafts/copied/publish');
+});
+
+it('garde le modèle et ses modifications si la création de la copie échoue',async()=>{
+  await destination();
+  const model=[...container.querySelectorAll('label')].find(el=>el.textContent==='Enregistrer comme modèle réutilisable');
+  await act(async()=>model.querySelector('input').click());
+  const original=api.post.getMockImplementation();
+  api.post.mockImplementation(async(url,body)=>{if(url.endsWith('/drafts'))throw new Error('Unavailable');return original(url,body);});
+  await click('Publier');
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(publications()).toHaveLength(0);
+  expect(model.querySelector('input').checked).toBe(true);
+  expect(getButton('Publier').disabled).toBe(false);
+  expect(container.textContent).toContain('Modifications non enregistrées');
+});

@@ -266,17 +266,17 @@ export default function DiscordAnnouncementsPage({
     });
     setTab('compose');
   };
-  const save = async () => {
+  const save = async ({asNewDraft = false} = {}) => {
     setBusy(true);
     try {
       const body = {
         name: meta.name,
         channel_id: meta.channel_id || null,
-        is_template: meta.is_template,
+        is_template: asNewDraft ? false : meta.is_template,
         document: doc,
-        expected_revision: meta.revision
+        expected_revision: asNewDraft ? null : meta.revision
       };
-      const r = meta.id ? await api.put(`${BASE}/drafts/${meta.id}`, body) : await api.post(`${BASE}/drafts`, body);
+      const r = meta.id && !asNewDraft ? await api.put(`${BASE}/drafts/${meta.id}`, body) : await api.post(`${BASE}/drafts`, body);
       setMeta(metadata(r.data));
       setDirty(false);
       setParams({
@@ -359,10 +359,6 @@ export default function DiscordAnnouncementsPage({
     }
   };
   const openPublish = async (mode = 'create', target = null) => {
-    if (meta.is_template) {
-      toast.error('Utilisez ce modèle comme nouveau brouillon avant de publier.');
-      return;
-    }
     if (result.errors.length) {
       toast.error('Corrigez les points signalés avant de publier.');
       return;
@@ -377,7 +373,7 @@ export default function DiscordAnnouncementsPage({
       toast.error('Choisissez le salon d’origine pour modifier cette annonce.');
       return;
     }
-    const draft = dirty || !meta.id ? await save() : {
+    const draft = dirty || !meta.id || meta.is_template ? await save({asNewDraft: meta.is_template}) : {
       ...meta,
       document: doc
     };
@@ -465,7 +461,8 @@ export default function DiscordAnnouncementsPage({
   };
   return <section className="cz-page an-page"><header className="cz-header"><div className="cz-header-copy"><p className="cz-eyebrow">ESPACE RESPONSABLE · COMMUNICATION</p><h1>Les annonces, bien composées.</h1><p className="cz-intro">Structurez votre message Discord V2, vérifiez son aperçu puis choisissez quand et où le publier.</p></div><div className="cz-header-actions"><Link to="/" className="cz-home" onClick={e => {
           if (!confirmDiscard()) e.preventDefault();
-        }}>Accueil <ArrowRight size={17} /></Link><button className="an-button" disabled={busy || uploading} onClick={save}><Save size={16} /> Enregistrer</button><button className="an-button an-primary" disabled={busy || uploading || meta.is_template} onClick={() => openPublish()}><Send size={16} /> Publier</button></div></header>
+        }}>Accueil <ArrowRight size={17} /></Link><button className="an-button" disabled={busy || uploading} onClick={save}><Save size={16} /> Enregistrer</button><button className="an-button an-primary" disabled={busy || uploading} onClick={() => openPublish()}><Send size={16} /> Publier</button></div></header>
+    {meta.is_template && <div className="an-notice" role="status"><p>Vous composez un modèle réutilisable. Publier créera un nouveau brouillon pour l’envoi ; le modèle enregistré sera conservé.</p></div>}
     {recovery && <div className="an-notice"><p>Un brouillon local non enregistré est disponible sur ce navigateur.</p><button className="an-button" onClick={async () => {
         setBusy(true);
         try {
