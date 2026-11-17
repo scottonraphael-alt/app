@@ -1,5 +1,7 @@
 # Iris — palette et motion validés
 
+Les règles à suivre pour les prochaines évolutions sont regroupées dans la [charte graphique et UX d’Iris](charte-graphique-iris.md).
+
 L’accueil garde sa structure actuelle, ses données et ses contrôles de rôles. La barre latérale n’est pas réintroduite. Les prototypes et leurs données fictives restent hors du code livré.
 
 ## Présentation
@@ -30,3 +32,13 @@ docker compose up -d --build --no-deps frontend
 ```
 
 Recharger Iris après le déploiement. Aucune migration, dépendance ou variable d’environnement supplémentaire.
+
+## Extension aux pages métier
+
+`IrisPages.css` reprend les tokens du dashboard sur les pages de dossiers, tickets, agenda, projets, équipe, bien-être, profil, ressources, tâches, notifications, statistiques et outils responsable. Le périmètre est limité à `AppShell.iris-ui` et aux portails de fenêtres ouverts dans cette interface. OasisGame garde sa présentation propre.
+
+Les anciennes variables de chaque famille sont reliées à la palette commune sur leur racine, pour rester cohérentes même lorsque leur feuille de style est chargée par une route différée. Les cartes, titres, champs, onglets, tableaux et boutons utilisent des surfaces neutres et des accents ponctuels. Les catégories du calendrier et les états urgents, erreurs et suppressions gardent une couleur sémantique distincte. Les actions pastel utilisent une encre sombre dans le thème sombre pour garder un contraste lisible.
+
+Les animations d’arrivée durent 220 ms, les transitions de contrôle 140 à 180 ms. Le déplacement au survol concerne uniquement les cartes navigables. Le déplacement des widgets, les positions du calendrier, les graphiques et les rendus Discord restent gérés par leur fonctionnalité. Les préférences de réduction des animations continuent de s’appliquer.
+
+La connexion reprend le logo typographique et les surfaces communes. Le parcours OAuth reste inchangé. Vérification visuelle locale des véritables composants avec données fictives : projets, fenêtre de création, agenda, ressources, notifications et connexion ; desktop et mobile, thèmes clair et sombre. Cet aperçu ne se connecte pas au serveur.

@@ -1,5 +1,9 @@
 # Here are your Instructions
 
+### Charte graphique et UX d’Iris
+
+Pour toute évolution de l’interface, consulter la [charte graphique et UX](docs/charte-graphique-iris.md) : palette, logo, typographie, cartes, composants, responsive, thème sombre et motion design.
+
 ### Tickets : synthèses Claude et actualisation quotidienne
 
 La branche `security/audit-fixes` utilise directement l’API Anthropic pour les synthèses des tickets.

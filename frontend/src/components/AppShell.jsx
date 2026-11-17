@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Topbar from "./topbar/Topbar";
 import CommandPalette from "./command/CommandPalette";
 import AnnouncementBanner from "./responsable/AnnouncementBanner";
@@ -17,10 +18,14 @@ export default function AppShell({
   children, helper, tickets, onLogout,
   isAdmin, isStaff, isResponsable, isAnimateur, isOperateur, isHelper,
 }) {
+  useEffect(() => {
+    document.body.classList.add("iris-ux-active");
+    return () => document.body.classList.remove("iris-ux-active");
+  }, []);
   const roleLabel = highestRoleLabel({ isAdmin, isStaff, isOperateur, isResponsable, isAnimateur, isHelper });
 
   return (
-    <div className="app-shell" data-testid="iris-application">
+    <div className="app-shell iris-ui" data-testid="iris-application">
       <main className="app-main">
         <Topbar helper={helper} roleLabel={roleLabel} onLogout={onLogout} />
         <AnnouncementBanner />

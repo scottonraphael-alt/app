@@ -1,0 +1,237 @@
+/* Shared Iris page skin. Geometry, role checks, data, charts and editor behavior stay in their feature modules.
+   Family tokens are bridged at the page/portal itself so lazy-loaded legacy declarations cannot drift.
+   This scope excludes Discord Activities/OasisGame and does not depend on generated class-name substrings. */
+.app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tw-desk,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page,.aw-page,.tx-kanban),
+:root body.iris-ux-active :is(.cz-dialog-root,.pj-modal,.ag-dialog-overlay,.ag-popover,.cmd-dialog) {
+  --cz-ink:var(--iris-text);
+  --cz-muted:var(--iris-text-muted);
+  --cz-sage:var(--iris-sage);
+  --cz-sage-hover:var(--iris-accent-strong);
+  --cz-sage-soft:var(--iris-sage-soft);
+  --cz-sage-line:var(--iris-border-strong);
+  --cz-line:var(--iris-border);
+  --cz-surface:var(--iris-surface);
+  --cz-canvas:var(--iris-bg);
+  --cz-subtle:var(--iris-surface-2);
+  --cz-field-line:var(--iris-border);
+  --cz-field-bg:var(--iris-surface);
+  --cz-field-focus:var(--iris-violet);
+  --cz-placeholder:var(--iris-text-soft);
+  --cz-red:var(--iris-raspberry);
+  --cz-red-soft:var(--iris-raspberry-soft);
+  --cz-red-line:var(--iris-border);
+  --cz-blue:var(--iris-info);
+  --cz-blue-soft:var(--iris-info-soft);
+  --cz-blue-line:var(--iris-border);
+  --cz-violet:var(--iris-violet);
+  --cz-violet-soft:var(--iris-violet-soft);
+  --cz-violet-line:var(--iris-border);
+  --cz-gold:var(--iris-warn);
+  --cz-gold-ink:var(--iris-warn);
+  --cz-gold-soft:var(--iris-warn-soft);
+  --cz-gold-line:var(--iris-border);
+  --cz-clay:var(--iris-clay);
+  --cz-clay-soft:var(--iris-clay-soft);
+  --cz-danger:var(--iris-danger);
+  --cz-danger-soft:var(--iris-danger-soft);
+  --cz-danger-line:var(--iris-danger);
+  --ag-ink:var(--iris-text);
+  --ag-muted:var(--iris-text-muted);
+  --ag-faint:var(--iris-text-soft);
+  --ag-sage:var(--iris-sage);
+  --ag-sage-strong:var(--iris-accent-strong);
+  --ag-sage-soft:var(--iris-sage-soft);
+  --ag-sage-line:var(--iris-border-strong);
+  --ag-line:var(--iris-border);
+  --ag-line-strong:var(--iris-border-strong);
+  --ag-canvas:var(--iris-bg);
+  --ag-surface:var(--iris-surface);
+  --ag-hover:var(--iris-surface-2);
+  --ag-chip:var(--iris-surface-2);
+  --ag-field:var(--iris-surface);
+  --ag-field-line:var(--iris-border);
+  --ag-field-focus:var(--iris-violet);
+  --ag-skeleton:var(--iris-surface-3);
+  --ag-danger-bg:var(--iris-danger-soft);
+  --ag-danger-line:var(--iris-danger);
+  --ag-danger-ink:var(--iris-danger);
+  --ag-clay-bg:var(--iris-clay-soft);
+  --ag-clay-line:var(--iris-border);
+  --ag-clay-ink:var(--iris-clay);
+  --ag-amber-bg:var(--iris-warn-soft);
+  --ag-amber-line:var(--iris-border);
+  --ag-amber-ink:var(--iris-warn);
+  --ag-blue-bg:var(--iris-info-soft);
+  --ag-blue-line:var(--iris-border);
+  --ag-blue-ink:var(--iris-info);
+  --ag-absence-ink:var(--iris-clay);
+  --ag-absence-bg:var(--iris-clay-soft);
+  --ag-absence-line:var(--iris-border);
+  --ag-reunion-ink:var(--iris-info);
+  --ag-reunion-bg:var(--iris-info-soft);
+  --ag-reunion-line:var(--iris-border);
+  --ag-evenement-ink:var(--iris-violet);
+  --ag-evenement-bg:var(--iris-violet-soft);
+  --ag-evenement-line:var(--iris-border);
+  --ag-echeance-ink:var(--iris-raspberry);
+  --ag-echeance-bg:var(--iris-raspberry-soft);
+  --ag-echeance-line:var(--iris-border);
+  --ag-taches-ink:var(--iris-info);
+  --ag-taches-bg:var(--iris-info-soft);
+  --ag-taches-line:var(--iris-border);
+  --ag-rappel-ink:var(--iris-warn);
+  --ag-rappel-bg:var(--iris-warn-soft);
+  --ag-rappel-line:var(--iris-border);
+  --ag-permanence-ink:var(--iris-sage);
+  --ag-permanence-bg:var(--iris-sage-soft);
+  --ag-permanence-line:var(--iris-border);
+  --ag-autre-ink:var(--iris-text-muted);
+  --ag-autre-bg:var(--iris-surface-2);
+  --ag-autre-line:var(--iris-border);
+  --pj-green:var(--iris-accent);
+  --pj-soft:var(--iris-accent-soft);
+  --pj-ink:var(--iris-text);
+  --pj-muted:var(--iris-text-muted);
+  --pj-line:var(--iris-border);
+  --pj-purple:var(--iris-violet);
+  --pj-gold:var(--iris-warn);
+  --tm-ink:var(--iris-text);
+  --tm-muted:var(--iris-text-muted);
+  --tm-line:var(--iris-border);
+  --tm-surface:var(--iris-surface);
+  --tm-surface-2:var(--iris-surface-2);
+  --tm-accent:var(--iris-accent);
+  --tm-accent-soft:var(--iris-accent-soft);
+  --wb-ink:var(--iris-text);
+  --wb-muted:var(--iris-text-muted);
+  --wb-line:var(--iris-border);
+  --wb-surface:var(--iris-surface);
+  --wb-surface-2:var(--iris-surface-2);
+  --wb-accent:var(--iris-accent);
+  --wb-accent-soft:var(--iris-accent-soft);
+  --tw-ink:var(--iris-text);
+  --tw-muted:var(--iris-text-muted);
+  --tw-line:var(--iris-border);
+  --tw-sage:var(--iris-sage);
+  --tw-soft:var(--iris-sage-soft);
+  --tw-paper:var(--iris-surface);
+  --qt-ink:var(--iris-text);
+  --qt-muted:var(--iris-text-muted);
+  --qt-line:var(--iris-border);
+  --qt-sage:var(--iris-sage);
+  --ss-line:var(--iris-border);
+  --ss-muted:var(--iris-text-muted);
+  --ss-accent:var(--iris-violet);
+  --ss-accent-soft:var(--iris-violet-soft);
+  --ss-accent-line:var(--iris-border-strong);
+  --iris-editor-ink:var(--iris-text);
+  --iris-editor-muted:var(--iris-text-muted);
+  --iris-editor-sage:var(--iris-accent);
+  --iris-editor-sage-soft:var(--iris-accent-soft);
+  --iris-editor-line:var(--iris-border);
+  --iris-editor-placeholder-color:var(--iris-text-soft);
+  --ui-accent:var(--iris-violet);--ui-soft:var(--iris-violet-soft);
+  --cz-radius-card:14px;--cz-radius-field:9px;--ag-radius-card:14px;--ag-radius-control:9px;
+  --ag-radius-icon:9px;--ag-radius-dialog:16px;--ag-shadow-pop:var(--iris-shadow);
+}
+/* Contextual accents. Warnings and destructive actions keep independent semantic colors. */
+.app-shell.iris-ui .app-main :is(.ag-page,.ss-page,.aw-page){--ui-accent:var(--iris-info);--ui-soft:var(--iris-info-soft)}
+.app-shell.iris-ui .app-main :is(.cw-page,.tl-page,.tw-desk,.tm-page,.wb-page){--ui-accent:var(--iris-sage);--ui-soft:var(--iris-sage-soft)}
+.app-shell.iris-ui .app-main :is(.rl-page,.qt-page){--ui-accent:var(--iris-clay);--ui-soft:var(--iris-clay-soft)}
+.app-shell.iris-ui .app-main .cz-page:not(.cw-page,.pj-page,.an-page,.wf-page,.ss-page,.sl-page,.mr-page,.m3-page,.ral-page,.rca-page,.sa-page){--ui-accent:var(--iris-raspberry);--ui-soft:var(--iris-raspberry-soft)}
+/* Page rhythm: the existing dashboard remains the reference and keeps its own block grid. */
+.app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page,.tx-kanban){width:100%;max-width:1440px;margin-inline:auto;padding:40px clamp(20px,3vw,48px) 60px;background:var(--iris-bg);color:var(--iris-text);font-family:'IBM Plex Sans',sans-serif;min-width:0;animation:iris-page-arrive 220ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.tw-desk,.aw-page){background:var(--iris-bg);color:var(--iris-text);animation:iris-page-arrive 220ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header,.tx-k-header){align-items:flex-start;gap:20px 24px;margin-bottom:30px}
+.app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header,.tx-k-header) h1{font-family:Manrope,sans-serif;font-size:clamp(30px,3.4vw,44px);font-weight:500;line-height:1.2;letter-spacing:-.04em;color:var(--iris-text);text-wrap:balance}
+.app-shell.iris-ui .app-main :is(.cz-eyebrow,.ag-eyebrow,.tm-eyebrow,.wb-eyebrow,.tl-eyebrow,.tar-eyebrow,.hp-eyebrow,.rl-eyebrow,.qt-eyebrow,.nt-eyebrow,.ta-eyebrow,.rs-eyebrow,.ho-eyebrow){color:var(--iris-text-muted);font-size:10px;letter-spacing:.12em;font-weight:500}
+.app-shell.iris-ui .app-main :is(.cz-intro,.ag-intro,.tm-intro,.wb-intro,.tl-intro,.tar-intro,.hp-intro,.rl-intro,.qt-intro,.nt-intro,.ta-intro,.rs-intro,.ho-intro,.tx-k-intro){color:var(--iris-text-muted);font-size:14px;line-height:1.8;max-width:70ch;text-wrap:pretty}
+/* Neutral surfaces, soft borders, purposeful color only on a heading icon or small badge. */
+.app-shell.iris-ui .app-main :is(.cz-card,.cz-panel,.ag-panel,.pj-card,.pj-summary,.pj-personal,.pj-panel,.tm-card,.tm-panel,.wb-panel,.wb-subcard,.hp-card,.hp-extra-card,.hp-preferences-card,.rl-card,.rl-form-card,.qt-task,.qt-period,.qt-overview,.nt-list-card,.nt-form-card,.ta-panel,.ta-card,.rs-card,.ho-panel,.ho-card,.ss-filters,.ss-chart,.an-library,.an-editor,.an-preview-pane,.cw-card,.vf-card,.sl-panel,.sl-panel-main){background:var(--iris-surface);border-color:var(--iris-border);border-radius:14px;box-shadow:none;color:var(--iris-text);min-width:0}
+.app-shell.iris-ui .app-main :is(.cz-panel-header,.ag-panel-header,.hp-extra-header,.tm-card-head,.wb-panel-head,.rs-card-header){background:var(--iris-surface);border-color:var(--iris-border);color:var(--iris-text)}
+.app-shell.iris-ui .app-main :is(.cz-panel-icon,.ag-panel-icon,.hp-card-icon,.rl-resource-icon,.tm-icon){background:var(--ui-soft);color:var(--ui-accent);border-color:transparent;border-radius:10px}
+.app-shell.iris-ui .app-main :is(.cz-card,.cz-panel,.ag-panel,.tm-panel,.wb-panel,.hp-extra-card,.rs-card,.ho-panel,.an-editor) h2{color:var(--iris-text);font-family:Manrope,sans-serif;font-weight:500;letter-spacing:-.025em}
+.app-shell.iris-ui .app-main :is(.cw-guide,.cw-strip,.vf-guide,.wf-notice,.pj-notice,.rl-guide,.qt-notice,.ho-guide){background:var(--ui-soft);color:var(--ui-accent);border:1px solid var(--iris-border);border-radius:12px}
+/* Controls stay large enough to touch; no blanket width, transform or hover on arbitrary cards. */
+.app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.ss-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.ta-secondary-button,.rl-button,.hp-secondary-button,.hp-outline-button,.tw-button,.tl-button,.tar-button,.sa-button,.wf-button){font-family:'IBM Plex Sans',sans-serif;font-weight:500;font-size:13px;min-height:40px;border-radius:8px;border-color:var(--iris-border);color:var(--iris-text-muted);background:var(--iris-surface);box-shadow:none;transition:background-color 160ms ease,border-color 160ms ease,box-shadow 180ms ease,transform 160ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.ss-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.ta-secondary-button,.rl-button,.hp-secondary-button,.hp-outline-button,.tw-button,.tl-button,.tar-button,.sa-button,.wf-button):hover:not(:disabled){background:var(--iris-surface-2);border-color:var(--iris-border-strong);box-shadow:0 3px 10px #4937540b}
+.app-shell.iris-ui .app-main :is(.cz-button--primary,.ag-button:not(.ag-button--secondary,.ag-button--danger,.ag-button--ghost),.pj-btn.pj-primary,.tm-btn--primary,.wb-btn--primary,.cw-button.cw-primary,.vf-button.vf-primary,.an-button.an-primary,.qt-button--primary,.nt-button--primary,.ho-btn--primary,.rs-btn-primary,.tw-button-primary,.rl-button--primary,.hp-save-button){background:var(--ui-accent,var(--iris-violet));border-color:var(--ui-accent,var(--iris-violet));color:var(--iris-on-accent,#fff)}
+.app-shell.iris-ui .app-main :is(.cz-button--primary,.ag-button:not(.ag-button--secondary,.ag-button--danger,.ag-button--ghost),.pj-btn.pj-primary,.tm-btn--primary,.wb-btn--primary,.cw-button.cw-primary,.vf-button.vf-primary,.an-button.an-primary,.qt-button--primary,.nt-button--primary,.ho-btn--primary,.rs-btn-primary,.tw-button-primary,.rl-button--primary,.hp-save-button):hover:not(:disabled){background:var(--ui-accent,var(--iris-violet));border-color:var(--ui-accent,var(--iris-violet));color:var(--iris-on-accent,#fff);box-shadow:0 4px 12px #49375420}
+.app-shell.iris-ui .app-main :is(.cz-button--danger,.ag-button--danger,.pj-btn.pj-danger,.tm-btn--danger,.wb-btn--danger,.cw-button.cw-danger,.vf-button.vf-danger,.an-button.an-danger,.qt-button--danger,.nt-button--danger,.ho-btn--danger,.rs-btn-danger,.tw-danger){color:var(--iris-danger);background:var(--iris-danger-soft);border-color:var(--iris-danger)}
+.app-shell.iris-ui .app-main :is(.cz-home,.ag-home,.tm-home,.wb-home,.tl-home,.tar-home,.hp-home,.rl-home,.qt-home,.nt-home,.ta-home-button,.rs-home,.ho-home,.tx-k-home){background:var(--iris-surface);border:1px solid var(--iris-border);border-radius:8px;padding:10px 14px;color:var(--iris-text-muted);font-size:12px;transition:background-color 160ms,border-color 160ms,transform 160ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.cz-tab,.pj-tabs>button,.an-tabs>button,.cw-tabs>button,.vf-tabs>button,.ss-periods>button,.qt-tabs>button){transition:background-color 160ms ease,border-color 160ms ease,color 160ms ease}
+.app-shell.iris-ui .app-main :is(.cz-tab,.pj-tabs>button,.an-tabs>button,.ss-periods>button,.qt-tabs>button):is([aria-selected=true],[aria-pressed=true],[aria-current=page],.is-active,.active){background:var(--ui-soft);color:var(--ui-accent);border-color:var(--iris-border)}
+/* Inputs: preserve sizing, native widgets, validation, disabled state and editor geometry. */
+.app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tw-desk,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page) :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=file]),textarea,select){background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border);border-radius:9px;caret-color:var(--ui-accent);transition:border-color 160ms ease,box-shadow 160ms ease,background-color 160ms ease}
+.app-shell.iris-ui .app-main :is(input,textarea)::placeholder{color:var(--iris-text-soft);opacity:1}
+.app-shell.iris-ui .app-main :is(input,textarea,select):focus-visible{outline:3px solid var(--iris-violet);outline-offset:2px;border-color:var(--iris-violet)}
+.app-shell.iris-ui .app-main :is(input,textarea,select):is([aria-invalid=true],[data-motion-invalid=true]){border-color:var(--iris-danger);outline-color:var(--iris-danger)}
+.app-shell.iris-ui .app-main :is(input[type=checkbox],input[type=radio],input[type=range]){accent-color:var(--ui-accent,var(--iris-violet))}
+.app-shell.iris-ui .app-main :is(.iris-editor,.tiptap-editor,.summary-reader){--iris-editor-ink:var(--iris-text);--iris-editor-muted:var(--iris-text-muted);--iris-editor-sage:var(--ui-accent);--iris-editor-sage-soft:var(--ui-soft);--iris-editor-line:var(--iris-border);background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border)}
+/* Tables retain horizontal scrolling and column semantics; only visual hierarchy changes. */
+.app-shell.iris-ui .app-main :is(.cz-table,.cw-table,.vf-table,.tl-table,.tar-table,.rs-table,.ta-table,.ag-table,.ss-table) :is(th,td){border-color:var(--iris-border)}
+.app-shell.iris-ui .app-main :is(.cz-table,.cw-table,.vf-table,.tl-table,.tar-table,.rs-table,.ta-table,.ag-table,.ss-table) th{background:var(--iris-surface-2);color:var(--iris-text-muted);font-weight:500;font-size:11px;letter-spacing:.06em}
+.app-shell.iris-ui .app-main :is(.cz-table,.cw-table,.vf-table,.tl-table,.tar-table,.rs-table,.ta-table,.ag-table,.ss-table) tbody tr{transition:background-color 140ms ease}
+.app-shell.iris-ui .app-main :is(.cz-table,.cw-table,.vf-table,.tl-table,.tar-table,.rs-table,.ta-table,.ag-table,.ss-table) tbody tr:hover{background:var(--iris-surface-2)}
+.app-shell.iris-ui .app-main :is(.cz-count,.ag-count,.qt-pill,.tm-chip,.wb-chip,.nt-type){font-variant-numeric:tabular-nums}
+/* Lift only real navigable cards. Do not alter draggable positions, charts or calendar slots. */
+.app-shell.iris-ui .app-main :is(a.pj-project-row,a.rl-card,a.tm-card,a.wb-card,a.tx-k-card,.rl-resource-link,.cz-card-link){transition:transform 180ms var(--iris-ease),border-color 160ms,box-shadow 180ms}
+.app-shell.iris-ui .app-main :is(a.pj-project-row,a.rl-card,a.tm-card,a.wb-card,a.tx-k-card,.rl-resource-link,.cz-card-link):hover{transform:translateY(-2px);border-color:var(--iris-border-strong);box-shadow:0 5px 16px #4937540c}
+/* Portals remain on body, with their existing traps, exit timers, save guards and z-index. */
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog,.cmd-dialog,.cz-dialog,.cw-modal,.vf-modal){background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border);border-radius:16px;box-shadow:var(--iris-shadow)}
+:root body.iris-ux-active .iris-drawer-overlay .pj-modal{border-radius:16px 0 0 16px}
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog,.cmd-dialog) :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=file]),textarea,select){background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border);border-radius:9px}
+:root body.iris-ux-active .pj-modal>header{background:var(--iris-surface);border-color:var(--iris-border)}
+:root body.iris-ux-active .pj-modal h2{color:var(--iris-text);font-weight:500;letter-spacing:-.03em}
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.an-button,.cw-button,.vf-button){border-radius:8px;border-color:var(--iris-border);background:var(--iris-surface);color:var(--iris-text-muted)}
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-primary,.an-primary,.cw-primary,.vf-primary){background:var(--iris-violet);border-color:var(--iris-violet);color:var(--iris-on-accent,#fff)}
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-danger,.an-danger,.cw-danger,.vf-danger){color:var(--iris-danger);border-color:var(--iris-danger)}
+/* Preview embeds intentionally keep their Discord appearance. Print layouts keep feature styles. */
+@media(max-width:760px){
+ .app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page,.tx-kanban){padding:28px 18px 44px}
+ .app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header,.tx-k-header){gap:16px;flex-wrap:wrap;margin-bottom:25px}
+ .app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header,.tx-k-header) h1{font-size:30px}
+ .app-shell.iris-ui .app-main :is(.cz-intro,.ag-intro,.tm-intro,.wb-intro,.tl-intro,.tar-intro,.hp-intro,.rl-intro,.qt-intro,.nt-intro,.ta-intro,.rs-intro,.ho-intro){font-size:13px}
+ .app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.tw-button){min-height:42px}
+ .app-shell.iris-ui .app-main :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=file]),textarea,select){font-size:16px}
+ :root body.iris-ux-active .iris-drawer-overlay .pj-modal{border-radius:0}
+}
+@media(prefers-reduced-motion:reduce){.app-shell.iris-ui .app-main :is(a.pj-project-row,a.rl-card,a.tm-card,a.wb-card,a.tx-k-card,.rl-resource-link,.cz-card-link):hover{transform:none}}
+html[data-motion=reduced] .app-shell.iris-ui .app-main :is(a.pj-project-row,a.rl-card,a.tm-card,a.wb-card,a.tx-k-card,.rl-resource-link,.cz-card-link):hover{transform:none}
+@media print{.app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page){max-width:none;margin:0;padding:0;animation:none}}
+/* Remaining feature surfaces and explicit exceptions for semantic alerts. */
+.app-shell.iris-ui .app-main :is(.hp-identity-card,.tl-panel,.tar-panel,.qt-panel,.ral-panel,.rca-card,.rca-create-panel,.ss-panel,.wb-card){background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border);border-radius:14px;box-shadow:none;min-width:0}
+.app-shell.iris-ui .app-main :is(.ho-card--urgent,.nt-urgent,.cz-card.cz-empty--error,.cz-panel.cz-empty--error){background:var(--iris-danger-soft);border-color:var(--iris-danger);color:var(--iris-danger)}
+.app-shell.iris-ui .app-main .ho-card--important{background:var(--iris-warn-soft);border-color:var(--iris-warn);color:var(--iris-text)}
+.app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.ss-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.tw-button):disabled{cursor:not-allowed;box-shadow:none;transform:none}
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog,.cmd-dialog) :is(a,button,input,textarea,select,summary):focus-visible{outline:3px solid var(--iris-violet);outline-offset:3px}
+@media print{.app-shell.iris-ui{--iris-bg:#fff;--iris-surface:#fff;--iris-surface-2:#f4f4f4;--iris-text:#171717;--iris-text-muted:#424242;--iris-border:#ccc;--iris-shadow:none}}
+/* Public login uses the same wordmark and calm surfaces; OAuth behavior stays unchanged. */
+html .lg-page[data-testid=login-page]{background:var(--iris-bg);color:var(--iris-text)}
+html .lg-page .lg-card{border-radius:18px;border-color:var(--iris-border);background:var(--iris-surface);box-shadow:0 8px 36px #4937540a;animation:iris-page-arrive 220ms var(--iris-ease)}
+html .lg-page .lg-logo{display:flex;justify-content:center;align-items:center;width:auto;height:auto;margin:0 auto 24px;background:none}
+html .lg-page .lg-logo .iris-wordmark-text{font-size:46px}
+html .lg-page h1{font-family:Manrope,sans-serif;font-weight:500;letter-spacing:-.04em;color:var(--iris-text)}
+html .lg-page :is(.lg-lead,.lg-note,.lg-footer){color:var(--iris-text-muted)}
+html .lg-page .lg-button{background:var(--iris-violet);border-color:var(--iris-violet);border-radius:9px;color:var(--iris-on-accent,#fff);transition:background-color 160ms,box-shadow 160ms,transform 160ms var(--iris-ease)}
+html .lg-page .lg-button:hover{background:var(--iris-accent-strong);box-shadow:0 5px 15px #49375420}
+html .lg-page .lg-button:active{transform:scale(.98)}
+html .lg-page .lg-button:focus-visible{outline:3px solid var(--iris-violet);outline-offset:4px}
+html[data-motion=reduced] .lg-page *,html[data-motion=reduced] body.iris-ux-active :is(.ag-popover,.cmd-dialog){animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){html .lg-page *{animation:none!important;transition:none!important}html .lg-page .lg-button:active{transform:none}}
+
+/* Pastel accents in dark mode need dark ink, including portal actions. */
+:root[data-theme=dark] :is(.iris-ui,body.iris-ux-active,.lg-page){--iris-on-accent:#141a17}
+.app-shell.iris-ui .ag-page .ag-segmented>button:is([aria-checked=true],.is-selected),
+:root body.iris-ux-active :is(.ag-dialog,.ag-popover) .ag-segmented>button:is([aria-checked=true],.is-selected){background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border)}
+:root[data-theme=dark] .lg-page .lg-button{background:var(--iris-violet);border-color:var(--iris-violet);color:var(--iris-on-accent)}
+:root[data-theme=dark] .lg-page .lg-button:hover{background:var(--iris-violet);border-color:var(--iris-violet)}
+@media(max-width:760px){:root body.iris-ux-active :is(.pj-modal,.ag-dialog,.cmd-dialog) :is(input:not([type=checkbox],[type=radio],[type=range],[type=color],[type=hidden],[type=file]),textarea,select){font-size:16px}}
+/* Resource library predates the family-prefixed tokens. */
+.app-shell.iris-ui .app-main .rl-page{--canvas:var(--iris-bg);--ink:var(--iris-text);--muted:var(--iris-text-muted);--line:var(--iris-border);--sage:var(--ui-accent);--sage-soft:var(--ui-soft)}
+.app-shell.iris-ui .rl-page :is(.rl-upload,.rl-state){background:var(--iris-surface);border-color:var(--iris-border);border-radius:14px;color:var(--iris-text)}
+.app-shell.iris-ui .rl-page .rl-upload-icon{background:var(--ui-soft);color:var(--ui-accent)}
+.app-shell.iris-ui .rl-page :is(.rl-primary-button,.rl-ghost-button,.rl-empty-button){border-radius:8px;min-height:42px;transition:background-color 160ms,border-color 160ms,box-shadow 160ms}
+.app-shell.iris-ui .rl-page .rl-ghost-button{background:var(--iris-surface);border-color:var(--iris-border);color:var(--iris-text-muted)}
+.app-shell.iris-ui .rl-page .rl-primary-button{background:var(--ui-accent);border-color:var(--ui-accent);color:var(--iris-on-accent,#fff)}
+.app-shell.iris-ui .rl-page .rl-primary-button:disabled{cursor:not-allowed;box-shadow:none}

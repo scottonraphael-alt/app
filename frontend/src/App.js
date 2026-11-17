@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState, Suspense, lazy } from "react";
 import "./App.css";
 import "./MentalHealth.css";
 import "./IrisRefresh.css";
+import "./IrisPages.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

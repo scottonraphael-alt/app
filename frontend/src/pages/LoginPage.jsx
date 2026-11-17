@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowUpRight, ShieldCheck } from "lucide-react";
-import logo from "../assets/logo.png";
+import IrisBrand from "../components/brand/IrisBrand";
 import "./Login.css";
 
 // Le backend ne renvoie qu'un code : le texte affiché vient toujours d'ici.
@@ -34,7 +34,7 @@ export default function LoginPage() {
   return (
     <main className="lg-page" data-testid="login-page">
       <section className="lg-card">
-        <img className="lg-logo" src={logo} alt="Iris" data-testid="login-iris-logo" />
+        <div className="lg-logo" data-testid="login-iris-logo"><IrisBrand /></div>
         <p className="lg-eyebrow">Iris · Espace de gestion</p>
         <h1>Bienvenue sur Iris</h1>
         <p className="lg-lead">
