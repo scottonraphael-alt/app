@@ -1,3 +1,4 @@
+import useMotionPreference from "../../hooks/useMotionPreference";
 import { useEffect } from "react";
 import "../motion/Motion.css";
 import { useNavigate } from "react-router-dom";
@@ -22,6 +23,7 @@ export default function UxLayer() {
     };
   }, []);
   useDisplayPrefs();
+  useMotionPreference();
   useShortcuts(navigate);
   return (<><ShortcutsHelp /><FocusIndicator /></>);
 }

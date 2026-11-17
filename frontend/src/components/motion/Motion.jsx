@@ -1,15 +1,18 @@
 import { Children, cloneElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './Motion.css';
+import {MOTION_EVENT} from '../../hooks/useMotionPreference';
 
-export const motionAllowed = () => !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+export const motionAllowed = () => document.documentElement.dataset.motion !== 'reduced' && !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
 
 export function useReducedMotion() {
   const [reduced, setReduced] = useState(() => !motionAllowed());
   useEffect(() => {
     const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    const update = () => setReduced(Boolean(query?.matches));
+    const update = () => setReduced(!motionAllowed());
+    update();
+    window.addEventListener(MOTION_EVENT, update);
     query?.addEventListener?.('change', update);
-    return () => query?.removeEventListener?.('change', update);
+    return () => {query?.removeEventListener?.('change', update);window.removeEventListener(MOTION_EVENT, update);};
   }, []);
   return reduced;
 }

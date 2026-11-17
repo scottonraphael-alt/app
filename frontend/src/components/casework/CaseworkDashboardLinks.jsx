@@ -4,10 +4,10 @@ import { ArrowRight, ClipboardList, FileCheck2, MessagesSquare, ShieldCheck, Spa
 export default function CaseworkDashboardLinks({ isStaff = false, isResponsable = false, isServerAdmin = false }) {
   if (!(isStaff || isResponsable || isServerAdmin)) return null;
   const links = [
-    ['/staff/resolutions','Résolutions','Consulter les votes du Conseil, les décisions et la numérotation.',ClipboardList,'clay'],
+    ['/staff/resolutions','Résolutions','Consulter les votes du Conseil, les décisions et la numérotation.',ClipboardList,'raspberry'],
     ['/staff/messages-anonymes','Messages anonymes','Consulter les propositions, les décisions et les publications.',MessagesSquare,'blue'],
     ['/staff/dossiers/verification','Tickets de vérification','Retrouver les échanges complémentaires aux formulaires.',FileCheck2,'sage'],
-    ['/staff/dossiers/summons','Convocations','Suivre les échanges demandés par l’équipe de modération.',ShieldCheck,'clay'],
+    ['/staff/dossiers/summons','Convocations','Suivre les échanges demandés par l’équipe de modération.',ShieldCheck,'raspberry'],
     ['/staff/dossiers/contact_staff','Contacts Staff','Lire les questions, signalements et demandes des membres.',MessagesSquare,'sage'],
     ['/staff/dossiers/bubble','Bulles d’échange','Retrouver les discussions privées sans motif disciplinaire.',Sparkles,'blue'],
     ['/staff/verifications','Formulaires d’admission','Prendre en charge les candidatures et consulter leurs archives.',ClipboardList,'clay'],

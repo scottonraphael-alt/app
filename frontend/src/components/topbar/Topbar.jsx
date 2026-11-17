@@ -1,7 +1,9 @@
+import IrisBrand from "../brand/IrisBrand";
+import useMotionPreference from "../../hooks/useMotionPreference";
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Bell, BookOpenCheck, GraduationCap, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
+import { Accessibility, ArrowLeft, ArrowRight, Bell, BookOpenCheck, GraduationCap, Check, CheckCheck, LogOut, Pencil, Monitor, Moon, Plus, Radio, Search, Star, Sun, X } from "lucide-react";
 
 import { api } from "../../api/client";
 import useTheme from "../../hooks/useTheme";
@@ -212,8 +214,10 @@ function ThemeToggle() {
 }
 
 export default function Topbar({ helper, roleLabel, onLogout }) {
+  const motion=useMotionPreference();
   return (
     <header className="tb-bar" data-testid="topbar">
+      <Link to="/" className="iris-home-link" aria-label="Revenir à l’accueil Iris"><IrisBrand /></Link>
       <FavoritesBar />
       <div className="tb-right">
         <button
@@ -224,6 +228,7 @@ export default function Topbar({ helper, roleLabel, onLogout }) {
         </button>
         <StatusPicker />
         <ThemeToggle />
+        <button type="button" className="tb-icon-btn" aria-pressed={motion.reduced} aria-label={motion.reduced?"Rétablir les animations selon le système":"Réduire les animations"} title={motion.reduced?"Animations réduites · rétablir":"Réduire les animations"} onClick={motion.toggle}><Accessibility size={17}/></button>
         <LearningLinks />
         <NotificationBell />
         {(helper || onLogout) && (
