@@ -1,0 +1,50 @@
+import {useEffect,useRef,useState} from 'react';
+import {useQuery,useQueryClient} from '@tanstack/react-query';
+import {ArrowDown,ArrowUp,Check,ChevronDown,ChevronUp,Grip,LayoutGrid,Plus,RotateCcw,Settings2,X} from 'lucide-react';
+import {api,getErrorMessage} from '../../api/client';
+import {useReducedMotion} from '../motion/Motion';
+import './DashboardBoard.css';
+
+export function defaultLayout(widgets){return widgets.map(w=>({id:w.id,width:w.width||12,hidden:false,collapsed:false}));}
+export function reconcileLayout(layout,widgets){const known=new Map(widgets.map(w=>[w.id,w]));const seen=new Set();const valid=(layout||[]).filter(w=>known.has(w.id)&&!seen.has(w.id)&&seen.add(w.id)).map(w=>({...w,width:[4,6,8,12].includes(w.width)?w.width:known.get(w.id).width||12}));return [...valid,...defaultLayout(widgets.filter(w=>!seen.has(w.id)))];}
+export function moveWidget(layout,id,target){const next=[...layout],from=next.findIndex(w=>w.id===id),to=next.findIndex(w=>w.id===target);if(from<0||to<0||from===to)return layout;next.splice(to,0,next.splice(from,1)[0]);return next;}
+
+export default function DashboardBoard({userId,widgets}){
+ const qc=useQueryClient(),key=['profile','dashboard-layout',userId];
+ const query=useQuery({queryKey:key,enabled:Boolean(userId),queryFn:async({signal})=>(await api.get('/profile/me/dashboard-layout',{signal})).data,staleTime:60000,retry:false});
+ const [editing,setEditing]=useState(false),[draft,setDraft]=useState(null),[adding,setAdding]=useState(false),[saving,setSaving]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[drag,setDrag]=useState(null);
+ const root=useRef(null),gesture=useRef(null),longPress=useRef(null),previous=useRef(new Map()),active=useRef(null),editorButton=useRef(null),reduced=useReducedMotion();
+ const layout=reconcileLayout(editing&&draft?draft:query.data?.widgets,widgets),visible=layout.filter(w=>!w.hidden),byId=new Map(widgets.map(w=>[w.id,w]));
+ const signature=visible.map(w=>`${w.id}:${w.width}:${w.collapsed}`).join('|');
+ useEffect(()=>()=>{clearTimeout(longPress.current);gesture.current=null;},[]);
+ useEffect(()=>{
+  const next=new Map(),animations=[];
+  for(const el of root.current?.querySelectorAll('[data-widget-id]')||[]){const rect=el.getBoundingClientRect(),old=previous.current.get(el.dataset.widgetId);next.set(el.dataset.widgetId,{left:rect.left+window.scrollX,top:rect.top+window.scrollY});if(old&&!reduced&&el.animate){const dx=old.left-(rect.left+window.scrollX),dy=old.top-(rect.top+window.scrollY);if(dx||dy)animations.push(el.animate([{transform:`translate(${dx}px,${dy}px)`},{transform:'translate(0,0)'}],{duration:220,easing:'cubic-bezier(.22,1,.36,1)'}));}}
+  previous.current=next;return()=>animations.forEach(a=>a.cancel());
+ },[signature,reduced]);
+ function begin(){if(!query.isSuccess||saving)return;setDraft(layout.map(w=>({...w})));setEditing(true);setError('');setMessage('Mode édition. Déplacez les blocs avec la poignée ou les flèches.');}
+ function patch(id,changes){setDraft(old=>old.map(w=>w.id===id?{...w,...changes}:w));}
+ function reorder(id,target){setDraft(old=>moveWidget(old,id,target));setMessage(`${byId.get(id)?.label} déplacé.`);}
+ function cancel(){gesture.current=null;setDrag(null);setEditing(false);setDraft(null);setAdding(false);setError('');setMessage('Modifications annulées.');editorButton.current?.focus();}
+ async function save(){setSaving(true);setError('');try{const response=await api.put('/profile/me/dashboard-layout',{widgets:layout});qc.setQueryData(key,response.data);setEditing(false);setDraft(null);setAdding(false);setMessage('Votre accueil est enregistré sur votre compte.');editorButton.current?.focus();}catch(e){setError(getErrorMessage(e));}finally{setSaving(false);}}
+ function down(e,id){if(!editing||saving||e.button!==0||e.isPrimary===false)return;e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);gesture.current={id,target:id,pointer:e.pointerId,startX:e.clientX,startY:e.clientY};setDrag({id,target:id,x:e.clientX,y:e.clientY});}
+ function moving(e){const g=gesture.current;if(!g||g.pointer!==e.pointerId)return;const node=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-widget-id]');if(node&&node.closest('.db-grid')===root.current)g.target=node.dataset.widgetId;setDrag({id:g.id,target:g.target,x:e.clientX,y:e.clientY});if(e.clientY>window.innerHeight-65)window.scrollBy(0,14);else if(e.clientY<80)window.scrollBy(0,-14);}
+ function drop(e,cancelled=false){const g=gesture.current;if(!g||g.pointer!==e.pointerId)return;gesture.current=null;setDrag(null);if(!cancelled)reorder(g.id,g.target);}
+ function hold(e){if(editing||!query.isSuccess||e.button!==0||e.target.closest('a,button,input,textarea,select,[role="button"],summary'))return;const x=e.clientX,y=e.clientY;clearTimeout(longPress.current);active.current={x,y};longPress.current=setTimeout(()=>{begin();longPress.current=null;},550);}
+ function stopHold(e){if(!active.current||!e||Math.abs(e.clientX-active.current.x)>8||Math.abs(e.clientY-active.current.y)>8){clearTimeout(longPress.current);active.current=null;}}
+ return <section className={'db-board '+(editing?'is-editing':'')} aria-label="Mon accueil personnalisable">
+  <header className="db-toolbar"><div><LayoutGrid size={17}/><span>{editing?'Organisez votre accueil':'Votre espace, à votre rythme'}</span></div>{editing?<div className="db-toolbar-actions"><button disabled={saving} onClick={()=>setAdding(!adding)} aria-expanded={adding}><Plus size={15}/>Ajouter un bloc</button><button disabled={saving} onClick={()=>{setDraft(defaultLayout(widgets));setMessage('Disposition par défaut rétablie. Enregistrez pour la conserver.');}}><RotateCcw size={15}/>Réinitialiser</button><button disabled={saving} onClick={cancel}><X size={15}/>Annuler</button><button className="db-primary" disabled={saving||Boolean(drag)} onClick={save}><Check size={15}/>{saving?'Enregistrement…':'Terminer'}</button></div>:<button ref={editorButton} disabled={!query.isSuccess||!userId} onClick={begin}><Settings2 size={15}/>Personnaliser</button>}</header>
+  {query.isError&&<p className="db-error" role="alert">La disposition n’a pas pu être chargée. Vos blocs restent accessibles. <button onClick={()=>query.refetch()}>Réessayer</button></p>}
+  {error&&<p className="db-error" role="alert">Enregistrement impossible : {error} Vos modifications restent ouvertes.</p>}
+  {editing&&<p className="db-help">Glissez la poignée pour déplacer un bloc. Choisissez sa largeur, repliez-le ou rangez-le. Sur mobile, les blocs s’affichent sur une colonne.</p>}
+  {editing&&adding&&<div className="db-library" aria-label="Bibliothèque de blocs">{layout.map(w=><button key={w.id} disabled={saving||!w.hidden} onClick={()=>{patch(w.id,{hidden:false});setMessage(`${byId.get(w.id).label} ajouté.`);}}>{w.hidden?<Plus size={15}/>:<Check size={15}/>} {byId.get(w.id).label}<small>{w.hidden?'Ajouter':'Déjà présent'}</small></button>)}</div>}
+  <div className="db-grid" ref={root}>{visible.map((w,index)=>{const widget=byId.get(w.id);return <section key={w.id} className={'db-widget '+(drag?.id===w.id?'db-dragging ':'')+(drag?.target===w.id&&drag?.id!==w.id?'db-target':'')} style={{'--db-width':w.width}} data-widget-id={w.id} data-size={w.width} onPointerDown={hold} onPointerMove={stopHold} onPointerUp={()=>{clearTimeout(longPress.current);active.current=null;}} onPointerCancel={()=>clearTimeout(longPress.current)}>
+   {editing&&<header className="db-widget-tools"><button className="db-grip" disabled={saving} aria-label={`Déplacer ${widget.label}`} onPointerDown={e=>down(e,w.id)} onPointerMove={moving} onPointerUp={e=>drop(e)} onPointerCancel={e=>drop(e,true)} onLostPointerCapture={e=>drop(e,true)} onKeyDown={e=>{if(e.key==='Escape'){gesture.current=null;setDrag(null);}else if(['ArrowUp','ArrowLeft','ArrowDown','ArrowRight'].includes(e.key)){e.preventDefault();const target=visible[index+(['ArrowUp','ArrowLeft'].includes(e.key)?-1:1)];if(target)reorder(w.id,target.id);}}}><Grip size={17}/></button><strong>{widget.label}</strong><div><button aria-label={`Monter ${widget.label}`} disabled={saving||index===0} onClick={()=>reorder(w.id,visible[index-1].id)}><ArrowUp size={14}/></button><button aria-label={`Descendre ${widget.label}`} disabled={saving||index===visible.length-1} onClick={()=>reorder(w.id,visible[index+1].id)}><ArrowDown size={14}/></button><select aria-label={`Largeur de ${widget.label}`} disabled={saving} value={w.width} onChange={e=>patch(w.id,{width:Number(e.target.value)})}><option value={4}>Petite</option><option value={6}>Moyenne</option><option value={8}>Large</option><option value={12}>Pleine</option></select><button aria-label={`${w.collapsed?'Déplier':'Replier'} ${widget.label}`} disabled={saving} onClick={()=>patch(w.id,{collapsed:!w.collapsed})}>{w.collapsed?<ChevronDown size={15}/>:<ChevronUp size={15}/>}</button><button aria-label={`Masquer ${widget.label}`} disabled={saving} onClick={()=>{patch(w.id,{hidden:true});setAdding(true);setMessage(`${widget.label} rangé dans la bibliothèque.`);}}><X size={15}/></button></div></header>}
+   {!editing&&w.collapsed&&<button className="db-collapsed" onClick={()=>{begin();setDraft(layout.map(item=>item.id===w.id?{...item,collapsed:false}:item));setMessage('Bloc déplié. Terminez pour conserver cette disposition.');}}><ChevronDown size={17}/>{widget.label}</button>}
+   <div className="db-content" hidden={w.collapsed} inert={editing?true:undefined}>{widget.content}</div>
+  </section>;})}</div>
+  {!visible.length&&<div className="db-empty"><LayoutGrid size={28}/><h2>Un accueil à composer.</h2><p>Retrouvez vos blocs dans « Personnaliser », puis « Ajouter un bloc ».</p></div>}
+  {drag&&<div className="db-ghost" style={{left:drag.x+12,top:drag.y+12}} aria-hidden="true"><Grip size={19}/>{byId.get(drag.id)?.label}</div>}
+  <p className="db-live" role="status" aria-live="polite">{message}</p>
+ </section>;
+}

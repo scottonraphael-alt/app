@@ -1,0 +1,5 @@
+import{groupNotifications}from'./notificationGroups';
+const n=(id,extra={})=>({id,link:'/tickets/1',created_at:'2026-11-17T10:00:00Z',type:'mention',read_at:null,...extra});
+test('groups a loaded page by exact dossier and day, with latest activity and true unread count',()=>{const groups=groupNotifications([n('a'),n('b',{created_at:'2026-11-17T12:00:00Z',read_at:'read'}),n('c',{link:'/tickets/2'})]);expect(groups).toHaveLength(2);expect(groups[0].latest.id).toBe('b');expect(groups[0].unread).toBe(1);expect(groups[0].items).toHaveLength(2);});
+test('urgent events are never merged or hidden by a general group',()=>{const groups=groupNotifications([n('a'),n('b',{type:'ticket_crisis'}),n('c',{type:'handoff_urgent'}),n('d',{priority:'urgent'})]);expect(groups).toHaveLength(4);});
+test('dates and exact destinations stay separate, including missing links',()=>{expect(groupNotifications([n('a'),n('b',{created_at:'2026-11-18T10:00:00Z'}),n('c',{link:'/tickets/1?note=2'}),n('d',{link:''}),n('e',{link:''})])).toHaveLength(5);});

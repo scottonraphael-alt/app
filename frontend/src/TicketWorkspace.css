@@ -277,3 +277,4 @@ body.ticket-workspace-no-nav .app-shell > .app-main { margin:0 !important; paddi
 @media (max-width: 760px) {
   .tw-dossier-content { --tw-panel-pad-block: 22px; --tw-panel-pad-inline: 22px; }
 }
+.tw-working-draft{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:18px 24px;margin:0;border-block:1px solid var(--iris-border);background:var(--iris-violet-soft);color:var(--iris-text)}.tw-working-draft>div{flex:1;min-width:240px}.tw-working-draft strong{font-size:13px;font-weight:500}.tw-working-draft p{font-size:12px;line-height:1.7;color:var(--iris-text-muted);margin:5px 0 0}.tw-draft-state{min-height:0;padding:0 24px;margin:0;font-size:11px;color:var(--iris-text-muted);line-height:2}.tw-draft-state:empty{display:none}.tw-draft-state button{font:inherit;background:none;border:0;text-decoration:underline;color:var(--iris-violet);cursor:pointer}

@@ -1,3 +1,5 @@
+from pydantic import BaseModel, Field
+from typing import Literal
 from datetime import date, datetime, timedelta, timezone
 import unicodedata
 from zoneinfo import ZoneInfo
@@ -389,3 +391,41 @@ async def sync_ticket(
     )
     schedule_crisis_analysis(ticket_id)
     return await ticket_or_404(ticket_id, _)
+
+
+# Personal recovery copies are separate from published ticket fields and never enter transcripts or AI inputs.
+class TicketWorkingDraft(BaseModel):
+    owner_id: str = Field(min_length=1,max_length=64)
+    vocal_summary: str = Field(default='', max_length=25000)
+    person_triggers: str = Field(default='', max_length=8000)
+    follow_up_status: Literal['en attente de réponse','en cours','à conclure'] = 'en attente de réponse'
+    base_updated_at: str | None = Field(default=None,max_length=64)
+
+
+def _draft_key(ticket_id, user_id):
+    from hashlib import sha256
+    return sha256(f'{user_id}:{ticket_id}'.encode()).hexdigest()
+
+
+@router.get('/{ticket_id}/working-draft')
+async def get_working_draft(ticket_id: str, helper: AuthenticatedHelper = Depends(current_ticket_helper)):
+    await ticket_or_404(ticket_id,helper,include_transcript=False)
+    draft = await db.ticket_working_drafts.find_one({'_id':_draft_key(ticket_id,helper.id),'user_id':helper.id},{'_id':0,'user_id':0})
+    return {'draft':draft}
+
+
+@router.put('/{ticket_id}/working-draft')
+async def put_working_draft(ticket_id: str, payload: TicketWorkingDraft, helper: AuthenticatedHelper = Depends(current_ticket_helper)):
+    await ticket_or_404(ticket_id,helper,include_transcript=False)
+    if payload.owner_id != helper.id:
+        raise HTTPException(403,'Ce brouillon appartient à une autre session.')
+    draft={**payload.model_dump(exclude={'owner_id'}),'ticket_id':ticket_id,'user_id':helper.id,'updated_at':now_iso()}
+    await db.ticket_working_drafts.update_one({'_id':_draft_key(ticket_id,helper.id),'user_id':helper.id},{'$set':draft},upsert=True)
+    return {'updated_at':draft['updated_at']}
+
+
+@router.delete('/{ticket_id}/working-draft')
+async def delete_working_draft(ticket_id: str, helper: AuthenticatedHelper = Depends(current_ticket_helper)):
+    await ticket_or_404(ticket_id,helper,include_transcript=False)
+    await db.ticket_working_drafts.delete_one({'_id':_draft_key(ticket_id,helper.id),'user_id':helper.id})
+    return {'ok':True}

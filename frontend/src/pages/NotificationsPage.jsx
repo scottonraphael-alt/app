@@ -1,3 +1,4 @@
+import {groupNotifications,isUrgentNotification} from "../utils/notificationGroups";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -201,6 +202,64 @@ export default function NotificationsPage() {
     }
   };
 
+  const renderNotificationItem = (item) => {
+              const unread = !item.read_at;
+              const content = (
+                <>
+                  <span className="nt-item-top">
+                    <span className="nt-type">{TYPE_LABELS[item.type] || "Notification"}</span>
+                    <time dateTime={item.created_at}>{formatDate(item.created_at)}</time>
+                  </span>
+                  <span className="nt-title">{item.title}</span>
+                  {item.body && <span className="nt-body">{item.body}</span>}
+                  {item.link && (
+                    <span className="nt-link-hint">
+                      Ouvrir <ArrowRight size={14} aria-hidden="true" />
+                    </span>
+                  )}
+                </>
+              );
+
+              return (
+                <li key={item.id} className={`nt-item ${unread ? "is-unread" : ""} ${isUrgentNotification(item)?"nt-urgent":""}`}>
+                  {unread && <span className="nt-dot" aria-hidden="true" />}
+
+                  {item.link ? (
+                    <Link to={item.link} className="nt-item-main" onClick={() => markRead(item)}>
+                      {content}
+                    </Link>
+                  ) : (
+                    <div className="nt-item-main">{content}</div>
+                  )}
+
+                  <div className="nt-item-actions">
+                    {unread && (
+                      <button
+                        type="button"
+                        className="nt-icon-button"
+                        onClick={() => markRead(item)}
+                        aria-label={`Marquer comme lue : ${item.title}`}
+                        title="Marquer comme lue"
+                      >
+                        <CheckCheck size={17} aria-hidden="true" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="nt-icon-button"
+                      onClick={() => removeOne(item)}
+                      disabled={busy}
+                      aria-label={`Supprimer : ${item.title}`}
+                      title="Supprimer"
+                    >
+                      <Trash2 size={17} aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              );
+
+  };
+
   return (
     <section className="nt-page" data-testid="notifications-page">
       <header className="nt-header">
@@ -309,62 +368,7 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <ul className="nt-list">
-            {items.map((item) => {
-              const unread = !item.read_at;
-              const content = (
-                <>
-                  <span className="nt-item-top">
-                    <span className="nt-type">{TYPE_LABELS[item.type] || "Notification"}</span>
-                    <time dateTime={item.created_at}>{formatDate(item.created_at)}</time>
-                  </span>
-                  <span className="nt-title">{item.title}</span>
-                  {item.body && <span className="nt-body">{item.body}</span>}
-                  {item.link && (
-                    <span className="nt-link-hint">
-                      Ouvrir <ArrowRight size={14} aria-hidden="true" />
-                    </span>
-                  )}
-                </>
-              );
-
-              return (
-                <li key={item.id} className={`nt-item ${unread ? "is-unread" : ""}`}>
-                  {unread && <span className="nt-dot" aria-hidden="true" />}
-
-                  {item.link ? (
-                    <Link to={item.link} className="nt-item-main" onClick={() => markRead(item)}>
-                      {content}
-                    </Link>
-                  ) : (
-                    <div className="nt-item-main">{content}</div>
-                  )}
-
-                  <div className="nt-item-actions">
-                    {unread && (
-                      <button
-                        type="button"
-                        className="nt-icon-button"
-                        onClick={() => markRead(item)}
-                        aria-label={`Marquer comme lue : ${item.title}`}
-                        title="Marquer comme lue"
-                      >
-                        <CheckCheck size={17} aria-hidden="true" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="nt-icon-button"
-                      onClick={() => removeOne(item)}
-                      disabled={busy}
-                      aria-label={`Supprimer : ${item.title}`}
-                      title="Supprimer"
-                    >
-                      <Trash2 size={17} aria-hidden="true" />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
+            {groupNotifications(items).map(group=>group.items.length===1?renderNotificationItem(group.items[0]):<li key={group.key} className="nt-group"><details><summary><span><strong>{group.latest.title}</strong><small>{group.items.length} activités sur le même dossier · {group.unread} non lue(s)</small></span><span>Voir les activités</span></summary><ul>{group.items.map(renderNotificationItem)}</ul></details></li>)}
           </ul>
         )}
 

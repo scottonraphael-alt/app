@@ -1,3 +1,4 @@
+import useTicketWorkingDraft from "../hooks/useTicketWorkingDraft";
 import { Archive, ArrowRight, Bot, CalendarDays, Check, ChevronLeft, ChevronRight, ChevronsUpDown, ListFilter, Search, FilePlus2, FileText, HeartHandshake, LoaderCircle, MoreHorizontal, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useEffect, useRef, useState } from "react";
@@ -84,6 +85,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
   const [noteComposerOpen, setNoteComposerOpen] = useState(false);
   const [mobileView, setMobileView] = useState("messages");
   const { viewers, notifyTyping } = usePresence(ticketId);
+  const workingDraft=useTicketWorkingDraft({ticketId,userId:helper?.id,ticket,values:{vocal_summary:vocalSummary,person_triggers:personTriggers,follow_up_status:followUpStatus},onRestore:values=>{setVocalSummary(values.vocal_summary);setPersonTriggers(values.person_triggers);setFollowUpStatus(values.follow_up_status);}});
   useNewMessageMotion(transcriptRef, `${ticketId}:${page}`, messages, !loading && !searchOpen);
 
   useEffect(() => {
@@ -206,6 +208,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       setTicket(response.data);
       onTicketUpdate?.(response.data);
       setSavedTicketId(ticketId);
+      workingDraft.clear({vocal_summary:vocalSummary,person_triggers:personTriggers,follow_up_status:followUpStatus});
       toast.success("Dossier enregistré.");
     } catch (requestError) {
       toast.error(getErrorMessage(requestError));
@@ -365,6 +368,9 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
           {isAdmin && <details className="tw-menu"><summary aria-label="Actions du dossier"><MoreHorizontal size={20} /></summary><div className="tw-menu-content"><button className="tw-danger" onClick={deleteTicket} type="button" data-testid="delete-ticket-button"><Trash2 size={15} /> Supprimer le dossier</button></div></details>}
         </div>
       </header>
+      {workingDraft.recovery&&<section className="tw-working-draft" aria-label="Brouillon récupérable"><div><strong>Un brouillon personnel vous attend.</strong><p>Il ne modifie pas le dossier partagé tant que vous n’enregistrez pas.{workingDraft.recovery.base_updated_at!==ticket.updated_at?' Le dossier a changé depuis sa rédaction : vérifiez les différences.':''}</p></div><button className="tw-button" onClick={workingDraft.recover}>Reprendre le brouillon</button><button className="tw-button" onClick={workingDraft.discard}>Ignorer ce brouillon</button></section>}
+      {helper?.id&&!workingDraft.recovery&&<p className="tw-draft-state" role="status">{workingDraft.status==='saved'?'Brouillon personnel protégé sur Iris.':workingDraft.status==='pending'||workingDraft.status==='saving'?'Protection de votre brouillon…':workingDraft.status==='error'||workingDraft.status==='load-error'?<>La protection du brouillon est indisponible. <button onClick={workingDraft.retry}>Réessayer</button></>:''}</p>}
+
 
       <div className="tw-contextbar" data-testid="ticket-metadata">
         <label className="tw-context-control" htmlFor="follow-up-status">

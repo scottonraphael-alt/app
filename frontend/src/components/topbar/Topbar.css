@@ -114,3 +114,4 @@
 
 .tb-learning { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 @media (max-width: 900px) { .tb-learning span { display: none; } }
+.tb-group-count{display:inline-block;font-size:10px;font-weight:400;margin:5px 0 0 7px;border-radius:5px;padding:2px 6px;background:var(--iris-violet-soft);color:var(--iris-violet)}

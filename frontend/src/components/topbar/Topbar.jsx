@@ -1,3 +1,4 @@
+import {groupNotifications} from "../../utils/notificationGroups";
 import IrisBrand from "../brand/IrisBrand";
 import useMotionPreference from "../../hooks/useMotionPreference";
 import { useEffect, useRef, useState } from "react";
@@ -120,7 +121,7 @@ function NotificationBell() {
     retry: false,
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
-  const readOne = useMutation({ mutationFn: (id) => api.post(`/notifications/${id}/read`), onSettled: refresh });
+  const readOne = useMutation({ mutationFn: (ids) => Promise.all((Array.isArray(ids)?ids:[ids]).map(id=>api.post(`/notifications/${id}/read`))), onSettled: refresh });
   const readAll = useMutation({ mutationFn: () => api.post("/notifications/read-all"), onSettled: refresh });
 
   const items = data?.items || [];
@@ -131,7 +132,8 @@ function NotificationBell() {
     return "";
   };
   const openItem = (item) => {
-    if (!item.read_at) readOne.mutate(item.id);
+    const ids=(item.groupItems||[item]).filter(n=>!n.read_at).map(n=>n.id);
+    if (ids.length) readOne.mutate(ids);
     setOpen(false);
     if (item.link) navigate(item.link);
   };
@@ -158,15 +160,15 @@ function NotificationBell() {
             <p className="tb-empty">Rien de nouveau pour le moment.</p>
           ) : (
             <ul>
-              {items.map((item) => (
+              {groupNotifications(items).map(group => {const item={...group.latest,groupItems:group.items,read_at:group.unread?null:group.latest.read_at};return (
                 <li key={item.id}>
                   <button type="button" className={`tb-note ${item.read_at ? "" : "is-unread"}${noteClass(item)}`} onClick={() => openItem(item)}>
-                    <span className="tb-note-title">{item.title}</span>
+                    <span className="tb-note-title">{item.title}{group.items.length>1&&<span className="tb-group-count">{group.items.length} activités · {group.unread} non lue(s)</span>}</span>
                     {item.body && <span className="tb-note-body">{item.body}</span>}
                     <time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</time>
                   </button>
                 </li>
-              ))}
+              );})}
             </ul>
           )}
           <div className="tb-panel-foot">

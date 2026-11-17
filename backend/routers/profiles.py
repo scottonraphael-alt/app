@@ -128,3 +128,36 @@ async def update_my_favorites(
         upsert=True,
     )
     return await _favorites_payload(helper.id, keys)
+
+
+class DashboardWidgetConfig(BaseModel):
+    id: str = Field(max_length=32)
+    width: int = Field(strict=True)
+    hidden: bool = Field(default=False, strict=True)
+    collapsed: bool = Field(default=False, strict=True)
+
+
+class DashboardLayoutUpdate(BaseModel):
+    widgets: list[DashboardWidgetConfig] = Field(max_length=12)
+
+
+@router.get('/me/dashboard-layout')
+async def get_dashboard_layout(helper: AuthenticatedHelper = Depends(current_helper)):
+    from services.dashboard_layout import available_widgets, layout_payload
+    available = available_widgets(await get_helper_role_flags(helper.id))
+    profile = await db.helper_profiles.find_one({'helper_id':helper.id},{'_id':0,'dashboard_widgets':1})
+    return layout_payload(available, (profile or {}).get('dashboard_widgets'))
+
+
+@router.put('/me/dashboard-layout')
+async def update_dashboard_layout(payload: DashboardLayoutUpdate, helper: AuthenticatedHelper = Depends(current_helper)):
+    from services.dashboard_layout import available_widgets, layout_payload
+    available = available_widgets(await get_helper_role_flags(helper.id))
+    allowed = {w['id'] for w in available}
+    items = [item.model_dump() for item in payload.widgets]
+    if len({item['id'] for item in items}) != len(items):
+        raise HTTPException(422,'Un bloc ne peut apparaître qu’une fois.')
+    if any(item['id'] not in allowed or item['width'] not in (4,6,8,12) for item in items):
+        raise HTTPException(422,'Bloc inaccessible ou taille invalide.')
+    await db.helper_profiles.update_one({'helper_id':helper.id},{'$set':{'dashboard_widgets':items,'updated_at':datetime.now(timezone.utc).isoformat()}},upsert=True)
+    return layout_payload(available,items)

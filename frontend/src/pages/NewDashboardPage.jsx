@@ -1,3 +1,4 @@
+import DashboardBoard from "../components/dashboard/DashboardBoard";
 import ResponsableToolsModule from "../components/responsable/ResponsableToolsModule";
 import CaseworkDashboardLinks from "../components/casework/CaseworkDashboardLinks";
 import { useEffect } from "react";
@@ -7,7 +8,6 @@ import {
   CalendarDays,
   FileText,
   ShieldCheck,
-  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -174,6 +174,43 @@ const pills = [
     },
   ].filter(Boolean);
 
+  const widgets = [
+    canSeeStaff && {id:'day',label:'Ma journée',width:8,content:<MyDayWidget day={myDay}/>},
+    canSeeStaff && {id:'team',label:'Équipe en ligne',width:4,content:<TeamOnlineWidget helperId={helper?.id} enabled={canSeeStaff}/>},
+    (isStaff || isResponsable || isServerAdmin) && {id:'casework',label:'Dossiers des membres',width:12,content:<section className="nd-casework-module" aria-labelledby="member-casework-title"><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>},
+    {id:'music',label:'Karaoké & blind test',width:12,content:<nav className="nd-helper-v2-shortcuts" aria-label="Animations musicales"><Link to="/karaoke" className="nd-helper-v2-shortcut nd-helper-v2-shortcut--clay"><span className="nd-helper-v2-shortcut-copy"><strong>🎤 Karaoké & blind test</strong><small>Chanter ensemble, réserver une chanson et jouer avec OasisLink.</small></span><ArrowRight size={18}/></Link></nav>},
+    isResponsable && {id:'responsable',label:'Outils responsable',width:12,content:<ResponsableToolsModule/>},
+    quickCards.length>0 && {id:'shortcuts',label:'Accès principaux',width:12,content:(        <nav
+          className="nd-shortcuts"
+          aria-label="Accès principaux"
+        >
+          {quickCards.map(
+            ({ to, title, description, tone, Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className={`nd-shortcut nd-shortcut--${tone}`}
+              >
+                <span className="nd-shortcut-icon">
+                  <Icon size={23} aria-hidden="true" />
+                </span>
+
+                <h2>{title}</h2>
+                <p>{description}</p>
+
+                <span className="nd-shortcut-footer">
+                  Ouvrir
+                  <ArrowRight size={18} aria-hidden="true" />
+                </span>
+              </Link>
+            )
+          )}
+        </nav>)},
+    canSeeStaff && {id:'quarterly',label:'Engagements trimestriels',width:12,content:<QuarterlyDashboardModule helper={helper}/>},
+    canSeeHelperModule && {id:'helper',label:'Mon espace helper',width:12,content:<HelperDashboardModule tickets={tickets} helper={helper} isAdmin={isAdmin}/>},
+    canSeeAnimateur && {id:'animateur',label:'Mon espace animateur',width:12,content:<AnimateurDashboardModule helper={helper}/>},
+  ].filter(Boolean);
+
   return (
     <section
       className="nd-page"
@@ -236,66 +273,7 @@ const pills = [
         </div>
       </header>
 
-      {canSeeStaff && (
-        <div className="hm-widgets">
-          <MyDayWidget day={myDay} />
-          <TeamOnlineWidget helperId={helper?.id} enabled={canSeeStaff} />
-        </div>
-      )}
-
-      {(isStaff || isResponsable || isServerAdmin) && <section className="nd-casework-module" aria-labelledby="member-casework-title"><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>}
-      <nav className="nd-helper-v2-shortcuts" aria-label="Animations musicales"><Link to="/karaoke" className="nd-helper-v2-shortcut nd-helper-v2-shortcut--clay"><span className="nd-helper-v2-shortcut-copy"><strong>🎤 Karaoké & blind test</strong><small>Chanter ensemble, réserver une chanson et jouer avec OasisLink.</small></span><ArrowRight size={18}/></Link></nav>
-      {/* Espace réservé aux responsables */}
-      {isResponsable && <ResponsableToolsModule/>}
-
-      {/* Accès principaux selon les rôles */}
-      {quickCards.length > 0 && (
-        <nav
-          className="nd-shortcuts"
-          aria-label="Accès principaux"
-        >
-          {quickCards.map(
-            ({ to, title, description, tone, Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`nd-shortcut nd-shortcut--${tone}`}
-              >
-                <span className="nd-shortcut-icon">
-                  <Icon size={23} aria-hidden="true" />
-                </span>
-
-                <h2>{title}</h2>
-                <p>{description}</p>
-
-                <span className="nd-shortcut-footer">
-                  Ouvrir
-                  <ArrowRight size={18} aria-hidden="true" />
-                </span>
-              </Link>
-            )
-          )}
-        </nav>
-      )}
-
-      {/* Mes engagements trimestriels */}
-      {canSeeStaff && (
-        <QuarterlyDashboardModule helper={helper} />
-      )}
-
-      {/* Suivis et outils d’accompagnement */}
-      {canSeeHelperModule && (
-        <HelperDashboardModule
-          tickets={tickets}
-          helper={helper}
-          isAdmin={isAdmin}
-        />
-      )}
-
-      {/* Projets animateur et tâches personnelles */}
-      {canSeeAnimateur && (
-        <AnimateurDashboardModule helper={helper} />
-      )}
+      <DashboardBoard key={helper?.id || "anonymous"} userId={helper?.id} widgets={widgets}/>
 
       
     </section>
