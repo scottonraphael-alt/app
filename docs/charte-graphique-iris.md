@@ -193,3 +193,16 @@ Les composants de [Refinements.css](../frontend/src/components/ux/Refinements.cs
 - L’en-tête mobile ne doit pas hériter d’une hauteur vide provenant d’un `flex-basis` prévu pour un alignement horizontal.
 
 Ces règles complètent les protections de brouillon existantes ; elles n’introduisent pas de nouvel enregistrement automatique du contenu.
+
+## 13. Repères de changement et hiérarchie du mouvement
+
+[StateMotion.css](../frontend/src/components/ux/StateMotion.css) regroupe les durées et styles de ces interactions : pression 100 ms, retour de contrôle 180 ms, ouverture de section ou surface 220 ms, fermeture de fenêtre 160 ms. Le repère de changement local disparaît sur 400 ms. Le délai JavaScript de démontage de `Modal` doit rester synchronisé avec sa fermeture de 160 ms.
+
+- [ChangeCue](../frontend/src/components/ux/ChangeCue.jsx) marque brièvement une valeur qui change, sans animation au montage ni sur une valeur identique. Ne pas réanimer toute une liste pour un seul changement de statut. Une préférence d’animations réduites annule aussi un effet en cours.
+- À la fermeture d’une fenêtre partagée, un déplacement limité vers son déclencheur conserve le lien spatial avec la page. Les coordonnées sont relues à la fermeture ; le mouvement reste plafonné à 72 px horizontalement et 48 px verticalement. Sans déclencheur encore présent, ou pour une fenêtre plein écran, utiliser un retrait neutre. Conserver la gestion du focus et les protections de fermeture pendant l’envoi.
+- [StableLabel](../frontend/src/components/ux/StableLabel.jsx) réserve la largeur des libellés possibles d’un bouton. La réserve n’ajoute pas de texte au libellé accessible, au texte DOM réel ou aux journaux d’interaction. Les compteurs utilisent des chiffres tabulaires et une place minimale adaptée à leur contexte ; ne pas tronquer un nombre pour tenir dans cette réserve.
+- [ScrollEdges](../frontend/src/components/ux/ScrollEdges.jsx) indique les bords où du contenu reste à lire. Les repères répondent au défilement, au redimensionnement et aux changements de contenu ; ils disparaissent à l’extrémité. Ils ne capturent aucun clic. Un tableau qui déborde horizontalement est accessible au clavier avec un nom de région.
+- [Disclosure](../frontend/src/components/ux/Disclosure.jsx) conserve un déclencheur stable, un état `aria-expanded` et un contenu inactif pendant sa fermeture. Les champs dont la saisie doit survivre au repli gardent leur état dans le composant parent. Les commentaires de tâche conservent leur chargement à l’ouverture.
+- Les blocs du dashboard utilisent une transition de grille, gardent leur contenu monté et rendent le contenu replié inactif et masqué aux technologies d’assistance. Leurs poignées et commandes de réorganisation restent indépendantes de cette animation.
+
+Tous ces mouvements respectent le réglage système et le réglage manuel de réduction. Les ombres de défilement restent de simples repères ; la lecture et la saisie ne déclenchent pas d’animation décorative continue.

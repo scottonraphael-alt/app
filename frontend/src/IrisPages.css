@@ -140,8 +140,8 @@
 .app-shell.iris-ui .app-main :is(.rl-page,.qt-page){--ui-accent:var(--iris-clay);--ui-soft:var(--iris-clay-soft)}
 .app-shell.iris-ui .app-main .cz-page:not(.cw-page,.pj-page,.an-page,.wf-page,.ss-page,.sl-page,.mr-page,.m3-page,.ral-page,.rca-page,.sa-page){--ui-accent:var(--iris-raspberry);--ui-soft:var(--iris-raspberry-soft)}
 /* Page rhythm: the existing dashboard remains the reference and keeps its own block grid. */
-.app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page,.tx-kanban){width:100%;max-width:1440px;margin-inline:auto;padding:40px clamp(20px,3vw,48px) 60px;background:var(--iris-bg);color:var(--iris-text);font-family:'IBM Plex Sans',sans-serif;min-width:0;animation:iris-page-arrive 220ms var(--iris-ease)}
-.app-shell.iris-ui .app-main :is(.tw-desk,.aw-page){background:var(--iris-bg);color:var(--iris-text);animation:iris-page-arrive 220ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.pj-page,.tm-page,.wb-page,.tl-page,.tar-page,.hp-page,.rl-page,.qt-page,.nt-page,.ta-page,.rs-page,.ho-page,.tx-kanban){width:100%;max-width:1440px;margin-inline:auto;padding:40px clamp(20px,3vw,48px) 60px;background:var(--iris-bg);color:var(--iris-text);font-family:'IBM Plex Sans',sans-serif;min-width:0;animation:iris-page-arrive var(--iris-motion-surface,220ms) var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.tw-desk,.aw-page){background:var(--iris-bg);color:var(--iris-text);animation:iris-page-arrive var(--iris-motion-surface,220ms) var(--iris-ease)}
 .app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header,.tx-k-header){align-items:flex-start;gap:20px 24px;margin-bottom:30px}
 .app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header,.tx-k-header) h1{font-family:Manrope,sans-serif;font-size:clamp(30px,3.4vw,44px);font-weight:500;line-height:1.2;letter-spacing:-.04em;color:var(--iris-text);text-wrap:balance}
 .app-shell.iris-ui .app-main :is(.cz-eyebrow,.ag-eyebrow,.tm-eyebrow,.wb-eyebrow,.tl-eyebrow,.tar-eyebrow,.hp-eyebrow,.rl-eyebrow,.qt-eyebrow,.nt-eyebrow,.ta-eyebrow,.rs-eyebrow,.ho-eyebrow){color:var(--iris-text-muted);font-size:10px;letter-spacing:.12em;font-weight:500}
@@ -208,7 +208,7 @@ html[data-motion=reduced] .app-shell.iris-ui .app-main :is(a.pj-project-row,a.rl
 @media print{.app-shell.iris-ui{--iris-bg:#fff;--iris-surface:#fff;--iris-surface-2:#f4f4f4;--iris-text:#171717;--iris-text-muted:#424242;--iris-border:#ccc;--iris-shadow:none}}
 /* Public login uses the same wordmark and calm surfaces; OAuth behavior stays unchanged. */
 html .lg-page[data-testid=login-page]{background:var(--iris-bg);color:var(--iris-text)}
-html .lg-page .lg-card{border-radius:18px;border-color:var(--iris-border);background:var(--iris-surface);box-shadow:0 8px 36px #4937540a;animation:iris-page-arrive 220ms var(--iris-ease)}
+html .lg-page .lg-card{border-radius:18px;border-color:var(--iris-border);background:var(--iris-surface);box-shadow:0 8px 36px #4937540a;animation:iris-page-arrive var(--iris-motion-surface,220ms) var(--iris-ease)}
 html .lg-page .lg-logo{display:flex;justify-content:center;align-items:center;width:auto;height:auto;margin:0 auto 24px;background:none}
 html .lg-page .lg-logo .iris-wordmark-text{font-size:46px}
 html .lg-page h1{font-family:Manrope,sans-serif;font-weight:500;letter-spacing:-.04em;color:var(--iris-text)}

@@ -1,3 +1,4 @@
+import ChangeCue from '../components/ux/ChangeCue';
 import { MotionNav } from '../components/motion/Motion';
 import { usePageMemoryState } from '../components/ux/PageMemory';
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
@@ -79,7 +80,7 @@ export default function ProjectsListPage({
           {projectPages.items.map(project => {
             const p = progress(project.task_counts);
             return <Link className="pj-project-row" key={project.id} to={`/animateur/projects/${project.id}`}>
-              <div className="pj-row-copy"><div className="pj-row-title"><strong title={project.title}>{project.title}</strong><span className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</span>{project.priority === 'haute' && <Priority value={project.priority}/>}</div><p title={project.description}>{project.description || 'Le brief reste à construire.'}</p>{!!project.tags?.length && <span className="pj-row-tags">{project.tags.map(tag => `#${tag}`).join(' · ')}</span>}</div>
+              <div className="pj-row-copy"><div className="pj-row-title"><strong title={project.title}>{project.title}</strong><ChangeCue value={project.status} className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</ChangeCue>{project.priority === 'haute' && <Priority value={project.priority}/>}</div><p title={project.description}>{project.description || 'Le brief reste à construire.'}</p>{!!project.tags?.length && <span className="pj-row-tags">{project.tags.map(tag => `#${tag}`).join(' · ')}</span>}</div>
               <div className="pj-row-progress"><span>{p.done} / {p.total} validées <strong>{p.percent}%</strong></span><progress value={p.percent} max="100" aria-label={`Avancement de ${project.title}`}/></div>
               <div className="pj-member-stack" aria-label={`${project.members?.length || 0} membres`}>{project.members?.slice(0,3).map(m => <Avatar key={m.id} member={m}/>)}{project.members?.length > 3 && <span>+{project.members.length - 3}</span>}</div>
               <span className="pj-row-date"><small>{project.end_date ? 'Fin prévue' : 'Début'}</small>{dateLabel(project.end_date || project.start_date)}</span><ArrowUpRight size={17} aria-hidden="true"/>

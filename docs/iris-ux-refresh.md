@@ -54,3 +54,9 @@ En-têtes et densité harmonisés, silhouettes de chargement sur les projets, do
 Dates et statuts mieux alignés, lecture des textes longs limitée en largeur, séparation des actions d’archivage et de suppression, aides accessibles sur les icônes communes et cibles tactiles de 44 px. Les marges de sécurité du téléphone sont prises en compte dans les barres d’action. La base de flex des en-têtes empilés est corrigée pour éviter une hauteur vide sur mobile.
 
 Pendant l’enregistrement du brief d’un projet, les nouvelles modifications ne sont plus perdues à la fermeture de l’éditeur : celui-ci reste ouvert si la saisie a continué depuis l’envoi. Un échec conserve aussi le texte avec une indication près de l’éditeur. Les champs des formulaires partagés sont temporairement verrouillés pendant leur envoi et réactivés après une erreur.
+
+## Repères d’état et mouvements localisés
+
+Les statuts des dossiers et projets ainsi que la synchronisation des suivis utilisent un retour visuel local. Les boutons d’enregistrement partagés et le formulaire de projet réservent leurs libellés pour éviter les changements de largeur. Les tableaux de dossiers et de statistiques, la discussion des tâches et le panneau de suivi disposent de repères de débordement lorsque nécessaire.
+
+Les sections de tâche se déplient avec des contrôles accessibles. Le dashboard replie ses blocs sans démonter leur contenu. La fermeture des fenêtres partagées revient discrètement vers leur déclencheur, sans déplacement sur les fenêtres plein écran et avec les durées et protections existantes. Les primitives sont documentées dans la section 13 de la charte.

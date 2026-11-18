@@ -1,6 +1,7 @@
 import { usePageReturnPosition } from "./PageMemory";
 import "./Refinements.css";
 import "./Comfort.css";
+import "./StateMotion.css";
 import useMotionPreference from "../../hooks/useMotionPreference";
 import { useEffect } from "react";
 import "../motion/Motion.css";

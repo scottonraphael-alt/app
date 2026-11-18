@@ -7,6 +7,7 @@ import { personName, PRIORITY } from './projectUtils';
 import { usePageMemoryState } from '../ux/PageMemory';
 import { motionAllowed } from '../motion/Motion';
 import IconHint from '../ux/IconHint';
+import '../ux/StateMotion.css';
 import '../../Casier.css';
 import '../../Projects.css';
 const ModalBusyContext = createContext(false);
@@ -39,9 +40,11 @@ export function Modal({
 }) {
   const root = useRef(null);
   const titleId = useId();
+  const opener = useRef(null);
   const [closing, setClosing] = useState(false);
   useLayoutEffect(() => {
-    const trigger = document.activeElement?.getBoundingClientRect?.();
+    opener.current = document.activeElement;
+    const trigger = opener.current?.getBoundingClientRect?.();
     const rect = root.current?.getBoundingClientRect();
     if (trigger && rect && trigger.width && trigger.height) {
       root.current.style.setProperty('--iris-origin-x', `${trigger.left + trigger.width / 2 - rect.left}px`);
@@ -56,7 +59,16 @@ export function Modal({
   const dismiss = () => {
     if (busy || closing) return;
     if (!motionAllowed()) close.current();
-    else setClosing(true);
+    else {
+      const rect = root.current?.getBoundingClientRect();
+      const trigger = opener.current?.isConnected && opener.current.getBoundingClientRect?.();
+      const usable = rect && trigger && rect.width < window.innerWidth * .95;
+      const x = usable ? Math.max(-72, Math.min(72, (trigger.left + trigger.width / 2 - rect.left - rect.width / 2) * .15)) : 0;
+      const y = usable ? Math.max(-48, Math.min(48, (trigger.top + trigger.height / 2 - rect.top - rect.height / 2) * .15)) : 0;
+      root.current?.style.setProperty('--iris-return-x', `${x}px`);
+      root.current?.style.setProperty('--iris-return-y', `${y}px`);
+      setClosing(true);
+    }
   };
   const close = useRef(onClose);
   close.current = onClose;

@@ -1,3 +1,4 @@
+import StableLabel from '../ux/StableLabel';
 import { useLayoutEffect, useRef } from 'react';
 import { Check } from 'lucide-react';
 import './CaseMotion.css';
@@ -60,6 +61,6 @@ export function ActionProgressButton({ busy, pendingLabel = 'Enregistrement…',
   const complete = !busy && Boolean(confirmed);
   return <button {...props} className={`${className} case-action-progress`}
     disabled={disabled || busy} aria-busy={Boolean(busy)} data-confirmed={complete || undefined}>
-    <span>{busy ? pendingLabel : complete ? <><Check size={15} aria-hidden="true" /> Enregistré</> : children}</span>
+    <StableLabel variants={[children, pendingLabel, 'Enregistré']}>{busy ? pendingLabel : complete ? <><Check size={15} aria-hidden="true" /> Enregistré</> : children}</StableLabel>
   </button>;
 }

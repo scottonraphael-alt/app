@@ -1,3 +1,5 @@
+import ChangeCue from '../components/ux/ChangeCue';
+import ScrollEdges from '../components/ux/ScrollEdges';
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import useTicketWorkingDraft from "../hooks/useTicketWorkingDraft";
 import { Archive, ArrowRight, Bot, CalendarDays, Check, ChevronLeft, ChevronRight, ChevronsUpDown, ListFilter, Search, FilePlus2, FileText, HeartHandshake, LoaderCircle, MoreHorizontal, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
@@ -402,10 +404,10 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
       <div className="tw-layout">
         <section className="tw-conversation" data-testid="transcript-panel" aria-label="Conversation">
           <header className="tw-panel-heading"><span className="tw-panel-icon"><HeartHandshake size={22} /></span><div><h2>Conversation <span>{ticket.message_count}</span></h2><p>{ticket.last_synced_at ? `Synchronisé le ${formatTime(ticket.last_synced_at)}` : "Historique des échanges"}</p></div><button type="button" className="tw-button" aria-expanded={searchOpen} onClick={() => { setSearchOpen((open) => !open); ticketEvent(searchOpen ? "search.closed" : "search.opened", ticketId); }}><Search size={15} /> Rechercher</button></header>
-          <div className={`tw-sync-status ${ticket.sync_status === "error" ? "is-error" : ""}`} role="status">
+          <ChangeCue as="div" value={`${syncing}:${ticket.sync_status}`} className={`tw-sync-status ${ticket.sync_status === "error" ? "is-error" : ""}`} role="status">
             <RefreshCw size={13} className={syncing || ticket.sync_status === "syncing" ? "tw-spin" : ""} />
             <span>{syncing || ticket.sync_status === "syncing" ? "Synchronisation des messages en cours…" : ticket.sync_status === "error" ? ticket.sync_error || "Synchronisation en échec" : ticket.last_synced_at ? "Messages synchronisés" : "Aucune synchronisation effectuée"}</span>
-          </div>
+          </ChangeCue>
           {searchOpen && <form className="tw-search-form" onSubmit={searchMessages}>
             <label><span>Dans toute la conversation</span><input type="search" value={searchTerm} maxLength={120} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Mot ou expression…" aria-label="Rechercher dans toute la conversation" /></label>
             <div><label>Du<input type="date" value={searchFrom} onChange={(event) => setSearchFrom(event.target.value)} /></label><label>Au<input type="date" value={searchTo} onChange={(event) => setSearchTo(event.target.value)} /></label><button type="submit" className="tw-button tw-button-primary" disabled={searchLoading || (!searchTerm.trim() && !searchFrom && !searchTo)}>{searchLoading ? "Recherche…" : "Rechercher"}</button></div>
@@ -448,7 +450,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
             ticketEvent("workspace.tab_changed", ticketId, value);
           }}>
             <Tabs.List className="tw-tabs" aria-label="Contenu du dossier" style={{ "--tw-tab-index": dossierTabIndex }}><Tabs.Trigger className="tw-tab" value="resume"><Bot size={15} /> Résumé</Tabs.Trigger><Tabs.Trigger className="tw-tab" value="notes"><FileText size={15} /> Notes <span>{noteCount}</span></Tabs.Trigger><Tabs.Trigger className="tw-tab" value="reperes"><HeartHandshake size={15} /> Repères</Tabs.Trigger></Tabs.List>
-            <div className="tw-dossier-content">
+            <ScrollEdges className="tw-dossier-content" fill label="Dossier et suivi">
               <SlidingPanels active={dossierTabIndex}>
               <Tabs.Content forceMount value="resume" className="tw-tab-content">
                 <section className="tw-summary" data-testid="ai-summary-panel"><header className="tw-section-title tw-section-title--violet"><span className="tw-panel-icon"><Bot size={22} /></span><h2>Synthèse du dossier</h2><span className="tw-claude">Claude</span></header>
@@ -466,7 +468,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
 
               <Tabs.Content forceMount value="reperes" className="tw-tab-content"><section className="tw-fields" data-testid="person-triggers-panel"><header className="tw-section-title tw-section-title--clay"><span className="tw-panel-icon"><HeartHandshake size={22} /></span><h2>Repères de l’accompagnement</h2></header><label htmlFor="tw-person-triggers">Points de vigilance<span>Sujets, situations ou formulations sensibles.</span><textarea id="tw-person-triggers" rows={4} value={personTriggers} onChange={(event) => setPersonTriggers(event.target.value)} placeholder="Ce qui aide à adapter l’écoute…" data-testid="person-triggers-input" /></label><label htmlFor="tw-vocal-summary">Compte-rendu d’échange<span>Les éléments à garder pour la suite.</span><textarea id="tw-vocal-summary" rows={6} value={vocalSummary} onChange={(event) => setVocalSummary(event.target.value)} placeholder="Repères et synthèse de l’échange…" data-testid="ticket-vocal-input" /></label><p className="tw-caption">Utilisez « Enregistrer » pour conserver vos modifications.</p></section></Tabs.Content>
               </SlidingPanels>
-            </div>
+            </ScrollEdges>
             <footer className="tw-dossier-footer"><ShieldCheck size={13} /><span>{ticket.status === "active" ? "Messages et résumé actualisés chaque jour" : "Dossier archivé · Actualisation manuelle"}</span></footer>
           </Tabs.Root>
         </aside>

@@ -18,7 +18,7 @@ const click=async text=>{const b=[...document.querySelectorAll('button')].find(b
 const field=label=>[...document.querySelectorAll('label')].find(l=>l.querySelector(':scope > span')?.textContent===label)?.querySelector('input,textarea,select');
 const fill=async(el,value)=>{expect(el).toBeTruthy();const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;await act(async()=>{Object.getOwnPropertyDescriptor(proto,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});};
 const submit=async(form=document.querySelector('form'))=>{await act(async()=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));};
-const openDiscussion=async()=>{await act(async()=>{const details=container.querySelector('details');details.open=true;details.dispatchEvent(new Event('toggle'));});};
+const openDiscussion=async()=>{await act(async()=>{container.querySelector('.pj-task-comments .iris-disclosure-trigger').click();});};
 it('duplique avec de nouvelles dates en conservant la durée et permet de ne pas reprendre les tâches',async()=>{
   expect(duplicateEnd(project,'2026-12-31')).toBe('2027-01-03');
   const created=jest.fn();await act(async()=>root.render(<ProjectDuplicate project={project} onClose={jest.fn()} onCreated={created}/>));

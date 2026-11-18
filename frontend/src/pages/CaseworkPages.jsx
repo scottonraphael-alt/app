@@ -1,3 +1,5 @@
+import ChangeCue from '../components/ux/ChangeCue';
+import ScrollEdges from '../components/ux/ScrollEdges';
 import { usePageMemoryState } from '../components/ux/PageMemory';
 import WorkflowRequests from "../components/casework/WorkflowRequests";
 import "../WorkflowSettings.css";
@@ -57,7 +59,7 @@ function Frame({ kind, title, children, back, refresh, embedded = false }) {
 }
 
 function State({ row }) {
-  return <span key={row.status} className={`cw-state cw-state-${row.status} case-status-feedback`}>{row.status === 'archived' && <Check size={13} aria-hidden="true" />}{STATES[row.status] || row.status}</span>;
+  return <ChangeCue value={row.status} className={`cw-state cw-state-${row.status} case-status-feedback`}>{row.status === 'archived' && <Check size={13} aria-hidden="true" />}{STATES[row.status] || row.status}</ChangeCue>;
 }
 
 function CaseList({ kind, canReassign, canSeeMember360 }) {
@@ -94,10 +96,10 @@ function CaseList({ kind, canReassign, canSeeMember360 }) {
         const panelData = view === archived ? data : views[view]?.data;
         const panelOffset = view === archived ? offset : views[view]?.offset ?? 0;
         if (!panelData) return !error || view !== archived ? <section key={String(view)} className="cw-card"><CasePanelLoading /></section> : null;
-        return <section key={String(view)} className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
+        return <section key={String(view)} className="cw-card"><ScrollEdges className="cw-table-wrap" label="Tableau des dossiers"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
       <MotionRows>{panelData.items.map(row => <tr key={row.id}><td><Link className="cw-case-link" to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${row.member?.display_name || row.member?.username || row.member?.id}`} onClick={() => setPreview(row)}><PanelRightOpen size={16} aria-hidden="true" /></button>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>
-        <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</MotionRows></table></div>
+        <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</MotionRows></table></ScrollEdges>
       {!panelData.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
       <footer className="cw-toolbar"><button className="cw-button" disabled={!panelOffset} onClick={() => setOffset(n => Math.max(0, n - 25))}>Précédent</button>
         <span>Page {Math.floor(panelOffset / 25) + 1} sur {Math.max(1, Math.ceil(panelData.total / 25))} · {panelData.total} dossiers</span>

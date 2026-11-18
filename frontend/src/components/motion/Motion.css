@@ -34,7 +34,7 @@
   width:min(1060px,92vw); height:100dvh; max-height:100dvh; margin:0; border-radius:20px 0 0 20px;
   animation:iris-drawer-enter 280ms cubic-bezier(.2,.8,.2,1)!important;
 }
-.iris-drawer-overlay[data-closing="true"] .pj-modal { animation:iris-drawer-exit 160ms ease-in forwards!important; }
+.iris-drawer-overlay[data-closing="true"] .pj-modal { animation:iris-modal-return var(--iris-motion-dismiss,160ms) ease-in forwards!important; }
 .iris-drawer-overlay .pj-modal > header { position:sticky; top:0; z-index:2; background:var(--iris-surface,#fff); padding:16px 24px; }
 .iris-drawer-overlay :is(.cw-layout,.vf-layout) { grid-template-columns: minmax(0,1fr); }
 .iris-drawer-overlay :is(.cw-page,.vf-page) { padding:0; }

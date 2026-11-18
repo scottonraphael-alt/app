@@ -22,13 +22,13 @@
 .app-shell.iris-ui .app-main :is(.pj-project-row,.tl-row,.tar-row,.rl-card):focus-visible{outline:3px solid var(--iris-violet);outline-offset:3px}
 .app-shell.iris-ui .app-main :is(.pj-row-copy p,.rl-card-body p,.nt-body){line-height:1.7}
 /* Loading content fades into place without animating layout or disabling interaction. */
-.app-shell.iris-ui .app-main :is(.pj-project-list,.rl-grid,.nt-list){animation:iris-content-arrive 180ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.pj-project-list,.rl-grid,.nt-list){animation:iris-content-arrive var(--iris-motion-feedback,180ms) var(--iris-ease)}
 @keyframes iris-content-arrive{from{opacity:.55}to{opacity:1}}
 .app-shell.iris-ui .iris-return-target{outline:2px solid var(--iris-violet);outline-offset:4px;animation:iris-return-mark 1600ms ease-out}
 @keyframes iris-return-mark{from{box-shadow:0 0 0 6px var(--iris-violet-soft)}to{box-shadow:0 0 0 0 transparent}}
 /* Tactile feedback is limited to controls, never draggable handles or board pieces. */
 .app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.rl-primary-button,.rl-ghost-button),
-:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button){transition:background-color 160ms,border-color 160ms,box-shadow 160ms,transform 120ms var(--iris-ease)}
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button){transition:background-color 160ms,border-color 160ms,box-shadow 160ms,transform var(--iris-motion-press,100ms) var(--iris-ease)}
 .app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.rl-primary-button,.rl-ghost-button):active:not(:disabled):not([aria-disabled=true]),
 :root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button):active:not(:disabled){transform:scale(.98)}
 .app-shell.iris-ui .app-main :is(.pj-tabs>button,.nt-chip,.qt-tabs>button,.cz-tab),
