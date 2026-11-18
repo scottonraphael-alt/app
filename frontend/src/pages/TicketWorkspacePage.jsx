@@ -1,3 +1,4 @@
+import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import useTicketWorkingDraft from "../hooks/useTicketWorkingDraft";
 import { Archive, ArrowRight, Bot, CalendarDays, Check, ChevronLeft, ChevronRight, ChevronsUpDown, ListFilter, Search, FilePlus2, FileText, HeartHandshake, LoaderCircle, MoreHorizontal, RefreshCw, Save, ShieldCheck, Trash2, UserRoundCheck, X } from "lucide-react";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -337,7 +338,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
     }
   };
 
-  if (loading) return <div className="tw-desk tw-loading" data-testid="ticket-loading"><LoaderCircle className="spin" size={26} /> Chargement du dossier…</div>;
+  if (loading) return <div className="tw-desk tw-loading" data-testid="ticket-loading"><LoadingSkeleton label="Chargement du dossier…" count={5}/></div>;
   if (error || !ticket) return <div className="tw-desk tw-loading tw-error" data-testid="ticket-load-error">{error || "Ticket introuvable."}</div>;
 
 

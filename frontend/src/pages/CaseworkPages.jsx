@@ -1,3 +1,4 @@
+import { usePageMemoryState } from '../components/ux/PageMemory';
 import WorkflowRequests from "../components/casework/WorkflowRequests";
 import "../WorkflowSettings.css";
 // Prepared routes: mount each page behind the existing Staff access guard at integration.
@@ -61,7 +62,7 @@ function State({ row }) {
 
 function CaseList({ kind, canReassign, canSeeMember360 }) {
   const [preview, setPreview] = useState(null);
-  const [archived, setArchived] = useState(false), [attention, setAttention] = useState(false), [offset, setOffset] = useState(0);
+  const [archived, setArchived] = usePageMemoryState(`casework.${kind}.archived`, false), [attention, setAttention] = usePageMemoryState(`casework.${kind}.attention`, false), [offset, setOffset] = usePageMemoryState(`casework.${kind}.offset`, 0);
   const [views, setViews] = useState({}), [error, setError] = useState(''), [refresh, setRefresh] = useState(0);
   const [importing, setImporting] = useState(false), [channelId, setChannelId] = useState(''), [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -94,7 +95,7 @@ function CaseList({ kind, canReassign, canSeeMember360 }) {
         const panelOffset = view === archived ? offset : views[view]?.offset ?? 0;
         if (!panelData) return !error || view !== archived ? <section key={String(view)} className="cw-card"><CasePanelLoading /></section> : null;
         return <section key={String(view)} className="cw-card"><div className="cw-table-wrap"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
-      <MotionRows>{panelData.items.map(row => <tr key={row.id}><td><Link to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${row.member?.display_name || row.member?.username || row.member?.id}`} onClick={() => setPreview(row)}><PanelRightOpen size={16} aria-hidden="true" /></button>
+      <MotionRows>{panelData.items.map(row => <tr key={row.id}><td><Link className="cw-case-link" to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${row.member?.display_name || row.member?.username || row.member?.id}`} onClick={() => setPreview(row)}><PanelRightOpen size={16} aria-hidden="true" /></button>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>
         <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.username?'@'+row.assigned.username:(row.assigned.display_name||'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</MotionRows></table></div>
       {!panelData.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
@@ -194,7 +195,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
           </SlidingPanels>
         </section>
       </aside></div></>}
-    {confirm && <Modal title="Confirmer l’action" eyebrow={FAMILIES[kind].short.toUpperCase()} busy={busy} onClose={() => setConfirm(null)}><div className="cw-modal"><h3>{ACTIONS[confirm.action]}</h3>
+    {confirm && <Modal size="sm" title="Confirmer l’action" eyebrow={FAMILIES[kind].short.toUpperCase()} busy={busy} onClose={() => setConfirm(null)}><div className="cw-modal"><h3>{ACTIONS[confirm.action]}</h3>
       {error && <p role="alert" className="cw-alert">{error}</p>}
       {confirm.action === 'archive' ? <><p>La conversation et ses fichiers seront vérifiés dans Iris avant la suppression du salon Discord. Une pièce jointe manquante bloque cette suppression. Le dossier restera consultable dans les archives et le parcours du membre.</p><p>{confirm.text}</p></> : <p>L’attribution sera enregistrée sans réduire l’accès des autres intervenants autorisés.</p>}
       <ActionProgressButton className="cw-button cw-primary" busy={busy} onClick={() => send(confirm)}>Confirmer</ActionProgressButton></div></Modal>}

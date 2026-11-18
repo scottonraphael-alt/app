@@ -1,3 +1,5 @@
+import { usePageMemoryState } from '../components/ux/PageMemory';
+import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import {groupNotifications,isUrgentNotification} from "../utils/notificationGroups";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -52,8 +54,8 @@ export default function NotificationsPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [nextBefore, setNextBefore] = useState(null);
-  const [onlyUnread, setOnlyUnread] = useState(false);
-  const [type, setType] = useState("");
+  const [onlyUnread, setOnlyUnread] = usePageMemoryState('notifications.onlyUnread', false);
+  const [type, setType] = usePageMemoryState('notifications.type', "");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
@@ -345,10 +347,7 @@ export default function NotificationsPage() {
 
       <div className="nt-list-card" aria-busy={loading}>
         {loading ? (
-          <div className="nt-state" role="status">
-            <LoaderCircle className="nt-spin" size={22} aria-hidden="true" />
-            Chargement des notifications…
-          </div>
+          <LoadingSkeleton label="Chargement des notifications…" count={4}/>
         ) : error ? (
           <div className="nt-error" role="alert">
             <h2>Les notifications n’ont pas pu être chargées.</h2>

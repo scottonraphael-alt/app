@@ -25,7 +25,7 @@ export default function ProjectTemplateBuilder({ onClose, onSaved }) {
       onClose();
     } catch (error) { toast.error(getErrorMessage(error)); } finally { setBusy(false); }
   };
-  return <Modal title="Nouveau modèle de projet" busy={busy} onClose={onClose}><form className="pj-form" onSubmit={submit}>
+  return <Modal size="lg" title="Nouveau modèle de projet" busy={busy} onClose={onClose}><form className="pj-form" onSubmit={submit}>
     <p className="pj-help">Les échéances sont relatives à la fin du projet : -7 signifie sept jours avant, 0 le jour même.</p>
     <Field label="Nom du modèle" wide><input required maxLength={100} value={name} onChange={e => setName(e.target.value)} /></Field>
     <Field label="Description" wide><textarea rows={2} maxLength={2000} value={description} onChange={e => setDescription(e.target.value)} /></Field>

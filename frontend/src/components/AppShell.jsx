@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import Topbar from "./topbar/Topbar";
 import CommandPalette from "./command/CommandPalette";
 import AnnouncementBanner from "./responsable/AnnouncementBanner";
+import { PageMemoryProvider } from "./ux/PageMemory";
 import UxLayer from "./ux/UxLayer";
 
 function highestRoleLabel({ isResponsable, isAdmin, isAnimateur, isOperateur, isStaff, isHelper }) {
@@ -25,7 +26,7 @@ export default function AppShell({
   const roleLabel = highestRoleLabel({ isAdmin, isStaff, isOperateur, isResponsable, isAnimateur, isHelper });
 
   return (
-    <div className="app-shell iris-ui" data-testid="iris-application">
+    <PageMemoryProvider key={helper?.id || "session"}><div className="app-shell iris-ui" data-testid="iris-application">
       <main className="app-main">
         <Topbar helper={helper} roleLabel={roleLabel} onLogout={onLogout} />
         <AnnouncementBanner />
@@ -33,6 +34,6 @@ export default function AppShell({
         <CommandPalette onLogout={onLogout} />
         <UxLayer />
       </main>
-    </div>
+    </div></PageMemoryProvider>
   );
 }

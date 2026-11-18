@@ -64,13 +64,13 @@ export function MotionRows({ children, as: Container = 'tbody', ...props }) {
   return <Container {...props} ref={root}>{visible.map(row => cloneElement(row, { 'data-motion-key': row.key }))}</Container>;
 }
 
-export function MotionNav({ children, className = '', ...props }) {
+export function MotionNav({ children, className = '', as: Container = 'nav', ...props }) {
   const root = useRef(null);
   const marker = useRef(null);
   useLayoutEffect(() => {
     const nav = root.current;
     const move = () => {
-      const active = nav.querySelector('a[aria-current="page"]');
+      const active = nav.querySelector(':is(a,button)[aria-current="page"],button[aria-pressed="true"],button[aria-selected="true"]');
       if (!active) { marker.current.style.opacity = '0'; return; }
       const bounds = nav.getBoundingClientRect();
       const rect = active.getBoundingClientRect();
@@ -82,14 +82,14 @@ export function MotionNav({ children, className = '', ...props }) {
     move();
     const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(move);
     resize?.observe(nav);
-    nav.querySelectorAll('a').forEach(link => resize?.observe(link));
+    nav.querySelectorAll('a,button').forEach(link => resize?.observe(link));
     const changes = new MutationObserver(move);
-    changes.observe(nav, { subtree: true, attributes: true, attributeFilter: ['aria-current'] });
+    changes.observe(nav, { subtree: true, attributes: true, attributeFilter: ['aria-current', 'aria-pressed', 'aria-selected'] });
     return () => { resize?.disconnect(); changes.disconnect(); };
   }, [children]);
-  return <nav {...props} ref={root} className={`iris-motion-nav ${className}`}>
+  return <Container {...props} ref={root} className={`iris-motion-nav ${className}`}>
     <span ref={marker} className="iris-nav-marker" aria-hidden="true" />{children}
-  </nav>;
+  </Container>;
 }
 
 export function useNewMessageMotion(ref, revision, items, visible = true) {

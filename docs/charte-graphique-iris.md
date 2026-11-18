@@ -166,3 +166,15 @@ Respecter à la fois `prefers-reduced-motion: reduce` et `html[data-motion="redu
 - [ ] Un aperçu des composants réels et des captures permettent de relire le rendu avant publication.
 
 Voir aussi [le compte rendu de l’harmonisation UX](iris-ux-refresh.md) et [les comportements du dashboard, des notifications et des brouillons](dashboard-widgets-notifications-drafts.md).
+
+## 11. Raffinements de lecture et de navigation
+
+Les composants de [Refinements.css](../frontend/src/components/ux/Refinements.css), [LoadingSkeleton](../frontend/src/components/ux/LoadingSkeleton.jsx) et [PageMemory](../frontend/src/components/ux/PageMemory.jsx) prolongent ces règles :
+
+- Aligner les en-têtes sur un même ordre de lecture. Les actions secondaires restent visibles et se replient sur plusieurs lignes ; ne pas masquer une commande utile pour simplifier artificiellement la page.
+- Garder les données déjà affichées pendant une actualisation lorsque c’est possible. Utiliser les silhouettes pour le chargement initial, avec un statut accessible et sans pulsation en mode d’animations réduites.
+- Au retour navigateur, restaurer la position quand le contenu a chargé. L’intervention de l’utilisateur au clavier, à la molette ou au toucher interrompt la restauration. Le lien retrouvé peut recevoir un repère bref et le focus sans défilement supplémentaire.
+- Conserver les filtres des listes prises en charge en mémoire dans la session d’interface : projets, ressources, notifications, familles de dossiers et archives. Conserver aussi la pagination des projets et dossiers. Cette mémoire est réinitialisée au changement de compte et au démontage de l’interface ; aucun contenu de dossier n’est enregistré dans le stockage du navigateur par ce mécanisme.
+- Pour les formulaires longs, regrouper les champs avec des titres de section et garder les actions accessibles pendant le défilement. Le composant `Field` des projets relie les indications et erreurs au champ avec `aria-describedby` et garde son libellé accessible indépendant du texte d’aide.
+- Choisir une taille de fenêtre explicite : petite pour une confirmation, moyenne pour un réglage, grande pour une rédaction ou un formulaire long. Les grandes fenêtres de projet occupent le mobile en plein écran ; leur en-tête et leurs actions restent accessibles.
+- Réutiliser `MotionNav` pour les indicateurs d’onglet qui glissent. Ne pas doubler le fond actif avec un second marqueur. Les pressions de boutons et les confirmations doivent rester brèves, avec les couleurs du thème.

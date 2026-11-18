@@ -1,3 +1,4 @@
+import { usePageMemoryState } from '../components/ux/PageMemory';
 import { ticketEvent } from "../utils/ticketEvents";
 import { resolveAvatarUrl } from "../utils/avatar";
 import { useEffect, useMemo, useState } from "react";
@@ -83,8 +84,8 @@ export default function TicketArchivesPage({
   onTicketDeleted,
 }) {
   const [preview, setPreview] = useState(null);
-  const [search, setSearch] = useState("");
-  const [onlyMine, setOnlyMine] = useState(false);
+  const [search, setSearch] = usePageMemoryState("archives.search", "");
+  const [onlyMine, setOnlyMine] = usePageMemoryState("archives.onlyMine", false);
 
   useEffect(() => {
     document.body.classList.add("ticket-archives-no-nav");

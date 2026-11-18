@@ -42,3 +42,9 @@ Les anciennes variables de chaque famille sont reliées à la palette commune su
 Les animations d’arrivée durent 220 ms, les transitions de contrôle 140 à 180 ms. Le déplacement au survol concerne uniquement les cartes navigables. Le déplacement des widgets, les positions du calendrier, les graphiques et les rendus Discord restent gérés par leur fonctionnalité. Les préférences de réduction des animations continuent de s’appliquer.
 
 La connexion reprend le logo typographique et les surfaces communes. Le parcours OAuth reste inchangé. Vérification visuelle locale des véritables composants avec données fictives : projets, fenêtre de création, agenda, ressources, notifications et connexion ; desktop et mobile, thèmes clair et sombre. Cet aperçu ne se connecte pas au serveur.
+
+## Raffinements de lecture et d’interaction
+
+En-têtes et densité harmonisés, silhouettes de chargement sur les projets, dossiers de soutien, ressources et notifications, indicateurs d’onglet animés sur les projets, confirmations adaptées au thème et retours de pression discrets. Les formulaires de projet sont regroupés en sections, avec leurs actions fixes pendant le défilement et les erreurs reliées aux champs. Les fenêtres partagées de projet acceptent les tailles `sm`, `md` et `lg` ; les formulaires longs prennent tout l’écran mobile.
+
+`PageMemoryProvider`, monté dans l’interface du compte, conserve les filtres des principales listes et la pagination des projets et familles de dossiers. Le retour navigateur restaure le défilement et, lorsque possible, le lien sélectionné après chargement. Une intervention de l’utilisateur interrompt cette restauration. La mémoire ne contient pas les données des dossiers et n’utilise ni `localStorage` ni `sessionStorage`.

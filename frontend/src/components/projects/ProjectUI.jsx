@@ -1,9 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useProjectAudit } from './projectAudit';
 import { personName, PRIORITY } from './projectUtils';
+import { usePageMemoryState } from '../ux/PageMemory';
 import { motionAllowed } from '../motion/Motion';
 import '../../Casier.css';
 import '../../Projects.css';
@@ -30,7 +31,8 @@ export function Modal({
   busy = false,
   eyebrow = 'ATELIER DES PROJETS',
   className = '',
-  variant = 'modal'
+  variant = 'modal',
+  size = 'md'
 }) {
   const root = useRef(null);
   const titleId = useId();
@@ -86,7 +88,7 @@ export function Modal({
         first?.focus();
       }
     }
-  }}><div className={`pj-modal ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2></div><button className="pj-icon" onClick={dismiss} disabled={busy || closing} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
+  }}><div className={`pj-modal pj-modal--${size} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2></div><button className="pj-icon" onClick={dismiss} disabled={busy || closing} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
 }
 export function Avatar({
   member
@@ -106,12 +108,22 @@ export function Empty({
 }) {
   return <div className="pj-empty"><strong>{title}</strong><p>{children}</p></div>;
 }
-export function Field({
-  label,
-  children,
-  wide = false
-}) {
-  return <label className={`pj-field ${wide ? 'pj-wide' : ''}`}><span>{label}</span>{children}</label>;
+export function Field({ label, children, wide = false, hint = null }) {
+  const id = useId();
+  const [validation, setValidation] = useState('');
+  const control = isValidElement(children) && ['input', 'select', 'textarea'].includes(children.type);
+  const hintId = `${id}-hint`, errorId = `${id}-error`;
+  const describe = control ? [children.props['aria-describedby'], hint && hintId, validation && errorId].filter(Boolean).join(' ') : undefined;
+  const message = target => target.validity.valueMissing ? 'Renseignez ce champ pour continuer.' : target.validity.typeMismatch ? 'Vérifiez le format de cette valeur.' : target.validity.rangeUnderflow ? `Choisissez une valeur à partir de ${target.min}.` : target.validity.rangeOverflow ? `Choisissez une valeur jusqu’à ${target.max}.` : target.validationMessage;
+  const content = control ? cloneElement(children, {
+    'aria-describedby': describe || undefined,
+    'aria-labelledby': children.props['aria-labelledby'] || (children.props['aria-label'] ? undefined : `${id}-label`),
+    'aria-invalid': validation ? true : children.props['aria-invalid'],
+    onInvalid: event => { children.props.onInvalid?.(event); setValidation(message(event.currentTarget)); },
+    onBlur: event => { children.props.onBlur?.(event); if (event.currentTarget.value || validation) setValidation(event.currentTarget.validity.valid ? '' : message(event.currentTarget)); },
+    onChange: event => { children.props.onChange?.(event); if (validation) setValidation(event.currentTarget.validity.valid ? '' : message(event.currentTarget)); },
+  }) : children;
+  return <label className={`pj-field ${wide ? 'pj-wide' : ''}`}><span id={`${id}-label`}>{label}</span>{content}{hint && <span className="iris-field-hint" id={hintId}>{hint}</span>}{validation && <span className="iris-field-error" role="alert" id={errorId}>{validation}</span>}</label>;
 }
 export function Panel({
   title,
@@ -124,9 +136,12 @@ export function Panel({
 }
 
 
-export function usePage(items, pageSize, resetKey) {
-  const [requestedPage, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [resetKey]);
+export function usePage(items, pageSize, resetKey, memoryKey = null) {
+  const [requestedPage, setPage] = usePageMemoryState(memoryKey, 1);
+  const previousResetKey = useRef(resetKey);
+  useEffect(() => {
+    if (previousResetKey.current !== resetKey) { setPage(1); previousResetKey.current = resetKey; }
+  }, [resetKey, setPage]);
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(items.length / pageSize)));
   return { page, setPage, items: items.slice((page - 1) * pageSize, page * pageSize) };
 }

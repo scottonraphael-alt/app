@@ -1,3 +1,5 @@
+import { usePageReturnPosition } from "./PageMemory";
+import "./Refinements.css";
 import useMotionPreference from "../../hooks/useMotionPreference";
 import { useEffect } from "react";
 import "../motion/Motion.css";
@@ -10,6 +12,7 @@ import ShortcutsHelp from "./ShortcutsHelp";
 
 export default function UxLayer() {
   const navigate = useNavigate();
+  usePageReturnPosition();
   useEffect(() => {
     const invalid = event => event.target.setAttribute('data-motion-invalid', 'true');
     const clear = event => event.target.removeAttribute?.('data-motion-invalid');

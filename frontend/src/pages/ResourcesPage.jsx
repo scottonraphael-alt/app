@@ -1,3 +1,5 @@
+import { usePageMemoryState } from '../components/ux/PageMemory';
+import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -78,8 +80,8 @@ function typeLabel(resource) {
 export default function ResourcesPage({ isAdmin = false }) {
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [search, setSearch] = usePageMemoryState("resources.search", "");
+  const [categoryFilter, setCategoryFilter] = usePageMemoryState("resources.categoryFilter", "all");
 
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
@@ -395,10 +397,7 @@ export default function ResourcesPage({ isAdmin = false }) {
       </section>
 
       {loading ? (
-        <div className="rl-state" role="status" data-testid="resources-loading">
-          <LoaderCircle className="spin" size={26} aria-hidden="true" />
-          <p>Chargement des ressources…</p>
-        </div>
+        <LoadingSkeleton variant="cards" label="Chargement des ressources…" data-testid="resources-loading"/>
       ) : visibleResources.length === 0 ? (
         <div className="rl-state" data-testid="resources-empty">
           <FolderOpen size={32} aria-hidden="true" />

@@ -1,0 +1,76 @@
+/* Iris UX refinements: reading rhythm, stable loading, tactile states and proportionate dialogs. */
+.iris-visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.iris-loading{padding:20px 0;min-width:0;color:var(--iris-text-muted)}
+.iris-loading-shapes{display:grid;gap:12px}
+.iris-loading-item{display:flex;align-items:center;gap:16px;padding:22px;border:1px solid var(--iris-border);border-radius:14px;background:var(--iris-surface);min-width:0}
+.iris-loading-item>div{flex:1;min-width:0;display:grid;gap:10px}
+.iris-loading-icon,.iris-loading-line{display:block;background:var(--iris-surface-3,var(--iris-border));animation:iris-skeleton-breathe 1500ms ease-in-out infinite alternate}
+.iris-loading-icon{width:36px;height:36px;flex:none;border-radius:10px}
+.iris-loading-line{height:12px;width:72%;border-radius:4px}
+.iris-loading-line--short{height:9px;width:44%;animation-delay:120ms}
+.iris-loading--cards .iris-loading-shapes{grid-template-columns:repeat(3,minmax(0,1fr))}
+.iris-loading--cards .iris-loading-item{min-height:190px;align-items:flex-start;flex-direction:column;gap:24px}
+.iris-loading--cards .iris-loading-item>div{width:100%;flex:none}
+@keyframes iris-skeleton-breathe{from{opacity:.45}to{opacity:.85}}
+/* Headers use the same reading order without hiding or moving secondary actions into a menu. */
+.app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header){display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header)>:first-child{flex:1 1 320px;min-width:0}
+.app-shell.iris-ui .app-main :is(.cz-header-actions,.ag-header-actions,.tm-header-actions,.wb-header-actions,.tl-header-actions,.tar-header-actions,.hp-header-actions,.rl-header-actions,.qt-header-actions,.nt-header-actions,.ta-header-actions,.rs-header-actions,.ho-header-actions){display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;max-width:560px;min-width:0}
+.app-shell.iris-ui .app-main :is(.cz-intro,.ag-intro,.tm-intro,.wb-intro,.rl-intro,.qt-intro,.nt-intro){max-width:62ch;margin-top:12px}
+.app-shell.iris-ui .app-main :is(.cz-panel,.ag-panel,.pj-panel,.tm-panel,.wb-panel,.rl-card,.ho-panel){overflow-wrap:anywhere}
+.app-shell.iris-ui .app-main :is(.cz-table,.cw-table,.vf-table,.tl-table,.tar-table,.rs-table,.ta-table,.ag-table) td{line-height:1.6;padding-block:13px;vertical-align:top}
+.app-shell.iris-ui .app-main :is(.pj-project-row,.tl-row,.tar-row,.rl-card):focus-visible{outline:3px solid var(--iris-violet);outline-offset:3px}
+.app-shell.iris-ui .app-main :is(.pj-row-copy p,.rl-card-body p,.nt-body){line-height:1.7}
+/* Loading content fades into place without animating layout or disabling interaction. */
+.app-shell.iris-ui .app-main :is(.pj-project-list,.rl-grid,.nt-list){animation:iris-content-arrive 180ms var(--iris-ease)}
+@keyframes iris-content-arrive{from{opacity:.55}to{opacity:1}}
+.app-shell.iris-ui .iris-return-target{outline:2px solid var(--iris-violet);outline-offset:4px;animation:iris-return-mark 1600ms ease-out}
+@keyframes iris-return-mark{from{box-shadow:0 0 0 6px var(--iris-violet-soft)}to{box-shadow:0 0 0 0 transparent}}
+/* Tactile feedback is limited to controls, never draggable handles or board pieces. */
+.app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.rl-primary-button,.rl-ghost-button),
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button){transition:background-color 160ms,border-color 160ms,box-shadow 160ms,transform 120ms var(--iris-ease)}
+.app-shell.iris-ui .app-main :is(.cz-button,.ag-button,.pj-btn,.tm-btn,.wb-btn,.cw-button,.vf-button,.an-button,.qt-button,.nt-button,.ho-btn,.rs-btn,.rl-primary-button,.rl-ghost-button):active:not(:disabled):not([aria-disabled=true]),
+:root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button):active:not(:disabled){transform:scale(.98)}
+.app-shell.iris-ui .app-main :is(.pj-tabs>button,.nt-chip,.qt-tabs>button,.cz-tab),
+:root body.iris-ux-active .ag-segmented>button{transition:background-color 180ms,color 180ms,box-shadow 180ms}
+/* Success feedback stays quiet and uses theme tokens, even when the toast portal lives on body. */
+body.iris-ux-active [data-sonner-toast]{background:var(--iris-surface);color:var(--iris-text);border-color:var(--iris-border);border-radius:12px;box-shadow:var(--iris-shadow);font-family:'IBM Plex Sans',sans-serif}
+body.iris-ux-active [data-sonner-toast][data-type=success] [data-icon]{color:var(--iris-sage)}
+body.iris-ux-active [data-sonner-toast][data-type=error] [data-icon]{color:var(--iris-danger)}
+/* Native field validation: errors remain next to the field and linked through aria-describedby. */
+.pj-field .iris-field-hint{font-size:12px;line-height:1.6;color:var(--iris-text-muted)}
+.pj-field .iris-field-error{font-size:12px;line-height:1.6;color:var(--iris-danger);font-weight:400}
+.pj-field [aria-invalid=true]{border-color:var(--iris-danger)}
+:root body.iris-ux-active .pj-field>span:first-child{color:var(--iris-text-muted)}
+/* Explicit sizes instead of one large dialog for every task. Existing drawer geometry stays intact. */
+:root body.iris-ux-active .pj-modal--sm{width:min(460px,100%)}
+:root body.iris-ux-active .pj-modal--md{width:min(700px,100%)}
+:root body.iris-ux-active .pj-modal--lg{width:min(920px,100%)}
+:root body.iris-ux-active .pj-modal>header{position:sticky;top:0;z-index:2}
+:root body.iris-ux-active .pj-modal :is(.pj-form,.pj-task-detail)>.pj-form-actions{position:sticky;bottom:-26px;z-index:1;background:var(--iris-surface);border-color:var(--iris-border);margin:4px -28px -26px;padding:16px 28px;box-shadow:0 -8px 16px color-mix(in srgb,var(--iris-surface) 90%,transparent)}
+:root body.iris-ux-active :is(.ag-dialog,.pj-modal) :is(input,select,textarea){scroll-margin-block:110px}
+:root body.iris-ux-active .pj-form-group{grid-column:1/-1;min-width:0;border:0;border-top:1px solid var(--iris-border);padding:20px 0 0;margin:2px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+:root body.iris-ux-active .pj-form-group>legend{padding:0 10px 0 0;font:500 13px Manrope,sans-serif;color:var(--iris-text)}
+@media(max-width:900px){.iris-loading--cards .iris-loading-shapes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+ .app-shell.iris-ui .app-main :is(.cz-header-actions,.ag-header-actions,.tm-header-actions,.wb-header-actions,.tl-header-actions,.rl-header-actions,.qt-header-actions,.rs-header-actions){max-width:none;width:100%;justify-content:flex-start}
+ .iris-loading--cards .iris-loading-shapes{grid-template-columns:1fr}
+ .iris-loading--cards .iris-loading-item{min-height:150px}
+ :root body.iris-ux-active .pj-overlay:not(.iris-drawer-overlay):has(.pj-modal--lg){padding:0;align-items:stretch}
+ :root body.iris-ux-active .pj-overlay>.pj-modal.pj-modal--lg{width:100%;max-height:100dvh;border-radius:0;min-height:100dvh}
+ :root body.iris-ux-active .pj-form-group{grid-template-columns:1fr}
+ :root body.iris-ux-active .pj-modal :is(.pj-form,.pj-task-detail)>.pj-form-actions{bottom:-20px;margin:4px -18px -20px;padding:14px 18px;flex-wrap:wrap}
+ :root body.iris-ux-active .pj-modal :is(.pj-form,.pj-task-detail)>.pj-form-actions>button{min-height:44px;flex:1;justify-content:center}
+}
+@media(prefers-reduced-motion:reduce){.iris-loading *,.iris-return-target{animation:none!important}.app-shell.iris-ui .app-main :is(button,a):active{transform:none!important}}
+html[data-motion=reduced] :is(.iris-loading *,.iris-return-target){animation:none!important}
+html[data-motion=reduced] .app-shell.iris-ui .app-main :is(button,a):active{transform:none!important}
+@media print{.iris-loading,.iris-return-target{animation:none!important}.iris-loading{display:none}.app-shell.iris-ui .iris-return-target{outline:none}:root body.iris-ux-active .pj-modal :is(.pj-form,.pj-task-detail)>.pj-form-actions{position:static;box-shadow:none}}
+
+.app-shell.iris-ui .app-main .pj-tabs.iris-motion-nav>button.is-active{background:transparent}
+.app-shell.iris-ui .app-main .pj-tabs.iris-motion-nav>.iris-nav-marker{background:var(--ui-soft);border-radius:8px}
+body.iris-ux-active .iris-form-error{border:1px solid var(--iris-danger);border-radius:9px;background:var(--iris-danger-soft);color:var(--iris-danger);padding:12px 14px;margin:0;font-size:13px;line-height:1.6}
+@media(prefers-reduced-motion:reduce){body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button):active{transform:none!important}}
+html[data-motion=reduced] body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button):active{transform:none!important}
+.app-shell.iris-ui .pj-section-heading>.pj-btn{min-width:125px;justify-content:center}
+.app-shell.iris-ui .tw-loading>.iris-loading{width:min(920px,100%)}
