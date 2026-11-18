@@ -364,7 +364,7 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         <div className="tw-top-actions">
           <Link to="/" className="tw-button tw-home" data-testid="ticket-back-link">Accueil <ArrowRight size={17} /></Link>
           <button className="tw-button" disabled={syncing} onClick={sync} type="button" data-testid="sync-ticket-button">{syncing ? <LoaderCircle className="tw-spin" size={15} /> : <RefreshCw size={15} />} Actualiser</button>
-          <button className="tw-button" onClick={archive} type="button" data-testid="archive-ticket-button"><Archive size={15} /> {ticket.status === "active" ? "Archiver" : "Réactiver"}</button>
+          <div className="iris-action-danger-group"><button className="tw-button" onClick={archive} type="button" data-testid="archive-ticket-button"><Archive size={15} /> {ticket.status === "active" ? "Archiver" : "Réactiver"}</button></div>
           <ActionProgressButton className="tw-button tw-button-primary tw-save-button" busy={saving} confirmed={saveConfirmed} disabled={!dirty} onClick={save} type="button" data-testid="save-ticket-button"><Save size={15} aria-hidden="true" /> Enregistrer</ActionProgressButton>
           {isAdmin && <details className="tw-menu"><summary aria-label="Actions du dossier"><MoreHorizontal size={20} /></summary><div className="tw-menu-content"><button className="tw-danger" onClick={deleteTicket} type="button" data-testid="delete-ticket-button"><Trash2 size={15} /> Supprimer le dossier</button></div></details>}
         </div>

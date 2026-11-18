@@ -1,7 +1,7 @@
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import { MotionNav } from '../components/motion/Motion';
 import { projectConfirm } from '../components/projects/projectAudit';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Archive, ArrowUpRight, CalendarDays, CheckCheck, ClipboardList, Clock3, Download, FileText, LayoutGrid, List, MessageSquare, Pencil, Plus, Settings2, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -48,6 +48,14 @@ export default function ProjectDetailPage({
   const [taskView, setTaskView] = useState('list');
   const [editingBrief, setEditingBrief] = useState(false);
   const [content, setContent] = useState('');
+  const briefRevision = useRef(0);
+  const projectScope = useRef(projectId);
+  const [briefFeedback, setBriefFeedback] = useState(null);
+  useLayoutEffect(() => {
+    projectScope.current = projectId;
+    return () => { projectScope.current = null; };
+  }, [projectId]);
+  const changeBrief = next => { briefRevision.current += 1; setContent(next); };
   const [message, setMessage] = useState('');
   const [resourceTitle, setResourceTitle] = useState('');
   const [resourceFile, setResourceFile] = useState(null);
@@ -77,6 +85,8 @@ export default function ProjectDetailPage({
   };
   useEffect(() => {
     setTab('overview');
+    setBusy(false);
+    setBriefFeedback(null);
     setEditingBrief(false);
     setSelectedId(null);
     load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */
@@ -133,14 +143,29 @@ export default function ProjectDetailPage({
     setProject(r.data);
     toast.success('État du projet mis à jour.');
   });
-  const saveBrief = () => act(async () => {
-    const r = await api.patch(`/animateur/projects/${projectId}/brief`, {
-      content_markdown: content
-    });
-    setProject(r.data);
-    setEditingBrief(false);
-    toast.success('Brief enregistré.');
-  });
+  const saveBrief = async () => {
+    if (busy) return;
+    const requestedProject = projectId, revision = briefRevision.current;
+    const submittedContent = content;
+    setBusy(true);
+    setBriefFeedback(null);
+    try {
+      const response = await api.patch(`/animateur/projects/${requestedProject}/brief`, { content_markdown: submittedContent });
+      if (projectScope.current !== requestedProject) return;
+      setProject(response.data);
+      if (briefRevision.current === revision) {
+        setEditingBrief(false);
+        toast.success('Brief enregistré.');
+      } else {
+        setBriefFeedback({ error: false, message: 'La version envoyée est enregistrée. Vos nouvelles modifications restent ouvertes et doivent encore être enregistrées.' });
+      }
+    } catch (error) {
+      if (projectScope.current !== requestedProject) return;
+      setBriefFeedback({ error: true, message: `${getErrorMessage(error)} Votre texte est conservé dans l’éditeur. Vous pouvez réessayer.` });
+    } finally {
+      if (projectScope.current === requestedProject) setBusy(false);
+    }
+  };
   const upload = e => {
     e.preventDefault();
     if (!resourceFile) return;
@@ -194,15 +219,16 @@ export default function ProjectDetailPage({
             }}><span>Bloquées</span><strong>{tasks.filter(t => !!t.blocked_reason && t.status !== 'valide').length}</strong></button><button onClick={() => {
               setTaskFilter('review');
               setTab('tasks');
-            }}><span>À valider</span><strong>{tasks.filter(t => t.status === 'rendu').length}</strong></button></div>{manager && writable && <div className="pj-lifecycle"><button className="pj-btn" disabled={busy || project.status !== 'termine' && p.done !== p.total} onClick={() => changeStatus(project.status === 'termine' ? 'en_cours' : 'termine')}><CheckCheck size={16} />{project.status === 'termine' ? 'Rouvrir le projet' : 'Terminer le projet'}</button><p className="pj-help">Validez toutes les tâches pour terminer le projet.</p><button className="pj-btn" disabled={busy} onClick={() => changeStatus('archive')}><Archive size={16} /> Archiver</button></div>}</Panel><Panel title="Une équipe, un projet" intro={`${project.members.length} personnes réunies autour de cette idée.`}><div className="pj-member-list">{project.members.slice(0, 5).map(m => <div className="pj-member" key={m.id}><Avatar member={m} /><strong>{personName(m)}</strong><small>{m.id === project.created_by.id ? 'Pilote' : 'Équipe'}</small></div>)}</div><button className="pj-btn" onClick={() => setTab('team')}>Voir l’équipe</button></Panel></aside></div>}
+            }}><span>À valider</span><strong>{tasks.filter(t => t.status === 'rendu').length}</strong></button></div>{manager && writable && <div className="pj-lifecycle"><button className="pj-btn" disabled={busy || project.status !== 'termine' && p.done !== p.total} onClick={() => changeStatus(project.status === 'termine' ? 'en_cours' : 'termine')}><CheckCheck size={16} />{project.status === 'termine' ? 'Rouvrir le projet' : 'Terminer le projet'}</button><p className="pj-help">Validez toutes les tâches pour terminer le projet.</p><div className="iris-action-danger-group"><button className="pj-btn" disabled={busy} onClick={() => changeStatus('archive')}><Archive size={16} /> Archiver</button></div></div>}</Panel><Panel title="Une équipe, un projet" intro={`${project.members.length} personnes réunies autour de cette idée.`}><div className="pj-member-list">{project.members.slice(0, 5).map(m => <div className="pj-member" key={m.id}><Avatar member={m} /><strong>{personName(m)}</strong><small>{m.id === project.created_by.id ? 'Pilote' : 'Équipe'}</small></div>)}</div><button className="pj-btn" onClick={() => setTab('team')}>Voir l’équipe</button></Panel></aside></div>}
     {tab === 'tasks' && <><div className="pj-section-heading"><div><h2>De l’idée au résultat</h2><p className="pj-help">Ouvrez une tâche pour avancer, signaler un blocage ou présenter un rendu. Le pilote valide le travail.</p></div>{manager && writable && <button className="pj-btn pj-primary" onClick={() => setTaskForm({})}><Plus size={16} /> Ajouter une tâche</button>}</div><div className="pj-filters"><input aria-label="Rechercher une tâche" placeholder="Une tâche, un membre…" value={taskQuery} onChange={e => setTaskQuery(e.target.value)} /><select aria-label="Filtrer les tâches" value={taskFilter} onChange={e => setTaskFilter(e.target.value)}><option value="all">Toutes les tâches</option><option value="mine">Mes tâches</option><option value="late">En retard</option><option value="blocked">Bloquées</option><option value="review">À valider</option></select><div className="pj-chips"><button className={`pj-btn ${taskView === 'board' ? 'is-selected' : ''}`} onClick={() => setTaskView('board')} aria-pressed={taskView === 'board'}><LayoutGrid size={15} /> Tableau</button><button className={`pj-btn ${taskView === 'list' ? 'is-selected' : ''}`} onClick={() => setTaskView('list')} aria-pressed={taskView === 'list'}><List size={15} /> Liste</button></div></div>{!filtered.length ? <Empty title={tasks.length ? 'Aucune tâche dans cette sélection.' : 'Le projet attend ses premières étapes.'}>{manager && writable ? 'Ajoutez une tâche pour répartir le travail.' : 'Les tâches apparaîtront ici une fois créées.'}</Empty> : taskView === 'board' ? <div className="pj-board">{Object.entries(TASK_STATUS).map(([key, label]) => <section key={key} className={`pj-board-column pj-column-${key}`}><header><h3>{label}</h3><span>{filtered.filter(t => t.status === key).length}</span></header><div className="pj-board-body" role="region" aria-label={`Tâches ${label.toLowerCase()}`} tabIndex={0}>{filtered.filter(t => t.status === key).map(taskCard)}{!filtered.some(t => t.status === key) && <p className="pj-column-empty">Rien ici pour le moment.</p>}</div></section>)}</div> : <ProjectTasksList tasks={filtered} onOpen={setSelectedId} resetKey={`${projectId}|${taskFilter}|${taskQuery}`}/>}</>}
-    {tab === 'brief' && <Panel title="Le brief partagé" intro="L’objectif, le déroulé, le matériel et les décisions de l’équipe." actions={canEdit && writable && <div className="pj-inline">{editingBrief ? <><button className="pj-btn" disabled={busy} onClick={() => {
+    {tab === 'brief' && <Panel title="Le brief partagé" intro="L’objectif, le déroulé, le matériel et les décisions de l’équipe." actions={canEdit && writable && <div className="pj-brief-actions">{editingBrief ? <><button className="pj-btn" disabled={busy} onClick={() => {
           setContent(project.content_markdown || '');
           setEditingBrief(false);
         }}>Annuler</button><button className="pj-btn pj-primary" disabled={busy} onClick={saveBrief}>{busy ? 'Enregistrement…' : 'Enregistrer le brief'}</button></> : <button className="pj-btn" onClick={() => {
         setContent(project.content_markdown || '');
+        setBriefFeedback(null);
         setEditingBrief(true);
-      }}><Pencil size={15} /> Modifier le brief</button>}</div>}>{editingBrief ? <TiptapSummaryEditor value={content} onChange={setContent} placeholder="Objectif, public, déroulé, matériel… Tapez / pour les outils." /> : project.content_markdown ? <SummaryReader key={project.updated_at} content={project.content_markdown} /> : <Empty title="Le point de départ du projet.">Notez ce que vous souhaitez créer, puis enrichissez le brief ensemble.</Empty>}</Panel>}
+      }}><Pencil size={15} /> Modifier le brief</button>}</div>}>{editingBrief ? <><TiptapSummaryEditor value={content} onChange={changeBrief} placeholder="Objectif, public, déroulé, matériel… Tapez / pour les outils." />{briefFeedback && <p className={`pj-brief-feedback ${briefFeedback.error ? 'is-error' : ''}`} role={briefFeedback.error ? 'alert' : 'status'}>{briefFeedback.message}</p>}</> : project.content_markdown ? <SummaryReader key={project.updated_at} content={project.content_markdown} /> : <Empty title="Le point de départ du projet.">Notez ce que vous souhaitez créer, puis enrichissez le brief ensemble.</Empty>}</Panel>}
     {tab === 'team' && <Panel title="Les personnes derrière le projet" intro="Le pilote organise le projet. Chaque membre peut enrichir le brief, déposer des fichiers et avancer sur ses tâches." actions={manager && writable && <button className="pj-btn pj-primary" onClick={() => setAddingMember(true)}><UserPlus size={16} /> Ajouter un animateur</button>}><div className="pj-team-grid">{project.members.map(m => {
           const assigned = tasks.filter(t => t.assignee?.id === m.id);
           return <article className="pj-team-card" key={m.id}><Avatar member={m} /><h3>{personName(m)}</h3><span className="pj-badge">{m.id === project.created_by.id ? 'Pilote du projet' : 'Équipe'}</span><p>{assigned.filter(t => t.status !== 'valide').length} tâche(s) ouverte(s) · {assigned.filter(t => t.status === 'valide').length} validée(s)</p>{manager && writable && m.id !== project.created_by.id && <button className="pj-btn pj-danger" disabled={busy} onClick={() => {

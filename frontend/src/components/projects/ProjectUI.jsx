@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createContext, useContext, cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -6,8 +6,11 @@ import { useProjectAudit } from './projectAudit';
 import { personName, PRIORITY } from './projectUtils';
 import { usePageMemoryState } from '../ux/PageMemory';
 import { motionAllowed } from '../motion/Motion';
+import IconHint from '../ux/IconHint';
 import '../../Casier.css';
 import '../../Projects.css';
+const ModalBusyContext = createContext(false);
+
 export function ProjectPage({
   title,
   intro,
@@ -62,7 +65,8 @@ export function Modal({
     const previousScope = previous?.closest?.('.cz-page,.tl-page,.tar-page');
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    root.current?.querySelector('input,textarea,select,button')?.focus();
+    const initial = root.current?.querySelector('input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[contenteditable="true"]') || root.current?.querySelector('button:not(:disabled)');
+    initial?.focus();
     return () => {
       document.body.style.overflow = oldOverflow;
       if (previous?.isConnected && !previous.closest?.('[inert]')) previous.focus?.();
@@ -88,7 +92,7 @@ export function Modal({
         first?.focus();
       }
     }
-  }}><div className={`pj-modal pj-modal--${size} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2></div><button className="pj-icon" onClick={dismiss} disabled={busy || closing} aria-label="Fermer"><X size={20} /></button></header>{children}</div></div>, document.body);
+  }}><div className={`pj-modal pj-modal--${size} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={root}><header><div><p className="cz-eyebrow">{eyebrow}</p><h2 id={titleId}>{title}</h2></div><IconHint label="Fermer cette fenêtre (Échap)"><button className="pj-icon" onClick={dismiss} disabled={busy || closing} aria-label="Fermer"><X size={20} /></button></IconHint></header><ModalBusyContext.Provider value={busy}>{children}</ModalBusyContext.Provider></div></div>, document.body);
 }
 export function Avatar({
   member
@@ -110,12 +114,14 @@ export function Empty({
 }
 export function Field({ label, children, wide = false, hint = null }) {
   const id = useId();
+  const busy = useContext(ModalBusyContext);
   const [validation, setValidation] = useState('');
   const control = isValidElement(children) && ['input', 'select', 'textarea'].includes(children.type);
   const hintId = `${id}-hint`, errorId = `${id}-error`;
   const describe = control ? [children.props['aria-describedby'], hint && hintId, validation && errorId].filter(Boolean).join(' ') : undefined;
   const message = target => target.validity.valueMissing ? 'Renseignez ce champ pour continuer.' : target.validity.typeMismatch ? 'Vérifiez le format de cette valeur.' : target.validity.rangeUnderflow ? `Choisissez une valeur à partir de ${target.min}.` : target.validity.rangeOverflow ? `Choisissez une valeur jusqu’à ${target.max}.` : target.validationMessage;
   const content = control ? cloneElement(children, {
+    disabled: busy || children.props.disabled,
     'aria-describedby': describe || undefined,
     'aria-labelledby': children.props['aria-labelledby'] || (children.props['aria-label'] ? undefined : `${id}-label`),
     'aria-invalid': validation ? true : children.props['aria-invalid'],

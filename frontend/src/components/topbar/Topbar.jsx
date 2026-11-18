@@ -1,3 +1,4 @@
+import IconHint from '../ux/IconHint';
 import {groupNotifications} from "../../utils/notificationGroups";
 import IrisBrand from "../brand/IrisBrand";
 import useMotionPreference from "../../hooks/useMotionPreference";
@@ -95,13 +96,12 @@ function FavoritesBar() {
           )}
         </span>
       )}
-      <button
+      <IconHint label={editing ? "Terminer la modification des favoris" : "Organiser vos raccourcis favoris"}><button
         type="button" className="tb-icon-btn" onClick={() => { setEditing((value) => !value); setAdding(false); }}
         aria-label={editing ? "Terminer la modification des favoris" : "Modifier mes favoris"}
-        title={editing ? "Terminer" : "Modifier mes favoris"}
       >
         {editing ? <Check size={15} /> : <Pencil size={14} />}
-      </button>
+      </button></IconHint>
     </MotionNav>
   );
 }
@@ -206,12 +206,12 @@ function ThemeToggle() {
   const { preference, cycleTheme } = useTheme();
   const { Icon, label, next } = THEME_META[preference];
   return (
-    <button
+    <IconHint label={`${label} · passer au thème ${next}`}><button
       type="button" className="tb-icon-btn" onClick={cycleTheme} data-testid="theme-toggle"
-      aria-label={`${label}. Passer au thème ${next}`} title={`${label} (cliquer pour : ${next})`}
+      aria-label={`${label}. Passer au thème ${next}`}
     >
       <Icon size={16} />
-    </button>
+    </button></IconHint>
   );
 }
 
@@ -222,15 +222,15 @@ export default function Topbar({ helper, roleLabel, onLogout }) {
       <Link to="/" className="iris-home-link" aria-label="Revenir à l’accueil Iris"><IrisBrand /></Link>
       <FavoritesBar />
       <div className="tb-right">
-        <button
+        <IconHint label="Rechercher une page · Ctrl+K"><button
           type="button" className="tb-icon-btn" onClick={() => window.dispatchEvent(new Event(OPEN_EVENT))}
-          aria-label="Rechercher une page (Ctrl+K)" title="Rechercher (Ctrl+K)" data-testid="command-open"
+          aria-label="Rechercher une page (Ctrl+K)" data-testid="command-open"
         >
           <Search size={16} />
-        </button>
+        </button></IconHint>
         <StatusPicker />
         <ThemeToggle />
-        <button type="button" className="tb-icon-btn" aria-pressed={motion.reduced} aria-label={motion.reduced?"Rétablir les animations selon le système":"Réduire les animations"} title={motion.reduced?"Animations réduites · rétablir":"Réduire les animations"} onClick={motion.toggle}><Accessibility size={17}/></button>
+        <IconHint label={motion.reduced ? "Rétablir les animations selon votre système" : "Réduire les mouvements de l’interface"}><button type="button" className="tb-icon-btn" aria-pressed={motion.reduced} aria-label={motion.reduced?"Rétablir les animations selon le système":"Réduire les animations"} onClick={motion.toggle}><Accessibility size={17}/></button></IconHint>
         <LearningLinks />
         <NotificationBell />
         {(helper || onLogout) && (
@@ -244,9 +244,9 @@ export default function Topbar({ helper, roleLabel, onLogout }) {
                 <small>{roleLabel}</small>
               </span>
             </Link>
-            <button type="button" className="tb-icon-btn" aria-label="Se déconnecter" title="Se déconnecter" onClick={onLogout} data-testid="logout-button">
+            <IconHint label="Quitter votre session Iris"><button type="button" className="tb-icon-btn" aria-label="Se déconnecter" onClick={onLogout} data-testid="logout-button">
               <LogOut size={16} />
-            </button>
+            </button></IconHint>
           </div>
         )}
       </div>

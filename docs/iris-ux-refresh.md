@@ -48,3 +48,9 @@ La connexion reprend le logo typographique et les surfaces communes. Le parcours
 En-têtes et densité harmonisés, silhouettes de chargement sur les projets, dossiers de soutien, ressources et notifications, indicateurs d’onglet animés sur les projets, confirmations adaptées au thème et retours de pression discrets. Les formulaires de projet sont regroupés en sections, avec leurs actions fixes pendant le défilement et les erreurs reliées aux champs. Les fenêtres partagées de projet acceptent les tailles `sm`, `md` et `lg` ; les formulaires longs prennent tout l’écran mobile.
 
 `PageMemoryProvider`, monté dans l’interface du compte, conserve les filtres des principales listes et la pagination des projets et familles de dossiers. Le retour navigateur restaure le défilement et, lorsque possible, le lien sélectionné après chargement. Une intervention de l’utilisateur interrompt cette restauration. La mémoire ne contient pas les données des dossiers et n’utilise ni `localStorage` ni `sessionStorage`.
+
+## Confort supplémentaire
+
+Dates et statuts mieux alignés, lecture des textes longs limitée en largeur, séparation des actions d’archivage et de suppression, aides accessibles sur les icônes communes et cibles tactiles de 44 px. Les marges de sécurité du téléphone sont prises en compte dans les barres d’action. La base de flex des en-têtes empilés est corrigée pour éviter une hauteur vide sur mobile.
+
+Pendant l’enregistrement du brief d’un projet, les nouvelles modifications ne sont plus perdues à la fermeture de l’éditeur : celui-ci reste ouvert si la saisie a continué depuis l’envoi. Un échec conserve aussi le texte avec une indication près de l’éditeur. Les champs des formulaires partagés sont temporairement verrouillés pendant leur envoi et réactivés après une erreur.

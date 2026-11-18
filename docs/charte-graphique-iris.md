@@ -178,3 +178,18 @@ Les composants de [Refinements.css](../frontend/src/components/ux/Refinements.cs
 - Pour les formulaires longs, regrouper les champs avec des titres de section et garder les actions accessibles pendant le défilement. Le composant `Field` des projets relie les indications et erreurs au champ avec `aria-describedby` et garde son libellé accessible indépendant du texte d’aide.
 - Choisir une taille de fenêtre explicite : petite pour une confirmation, moyenne pour un réglage, grande pour une rédaction ou un formulaire long. Les grandes fenêtres de projet occupent le mobile en plein écran ; leur en-tête et leurs actions restent accessibles.
 - Réutiliser `MotionNav` pour les indicateurs d’onglet qui glissent. Ne pas doubler le fond actif avec un second marqueur. Les pressions de boutons et les confirmations doivent rester brèves, avec les couleurs du thème.
+
+## 12. Confort de lecture, actions et saisie
+
+[Comfort.css](../frontend/src/components/ux/Comfort.css) précise les règles suivantes :
+
+- Dans les listes, aligner les dates et compteurs avec des chiffres tabulaires, réserver une place cohérente aux statuts et garder des espacements réguliers entre les lignes. Sur petit écran, libérer les largeurs minimales des dates pour permettre le repli.
+- Pour les textes longs, viser environ 72 caractères par ligne et un interligne proche de 1.8. Conserver les titres, paragraphes et listes du contenu ; ne pas inventer de sous-titres dans un texte utilisateur ni tronquer les informations essentielles. Les tableaux, images et blocs de code gardent leur espace propre.
+- Séparer les actions sensibles des actions courantes par un espacement ou un séparateur. Le groupe d’enregistrement se termine par l’action principale. Ne pas placer une suppression au contact immédiat d’un bouton d’enregistrement.
+- Réutiliser [IconHint](../frontend/src/components/ux/IconHint.jsx) pour les boutons à icône qui demandent une explication. Le texte doit être court, disponible au focus clavier, refermable avec Échap et rester dans la fenêtre visible. Un bouton doit toujours garder son propre libellé accessible. Ne pas ajouter une infobulle sur chaque bouton avec texte.
+- Sur écran tactile, les petites commandes ciblées font au moins 44 × 44 px. Tenir compte de `safe-area-inset-*` dans les barres fixes et fenêtres plein écran, sans ajouter de marge inutile sur ordinateur.
+- Préserver l’instance de l’éditeur, son texte et son curseur lors des mises à jour ordinaires. Une réponse d’enregistrement ne doit pas fermer un brief qui a été modifié depuis l’envoi. Expliquer que les nouveaux ajouts restent à enregistrer. En cas d’erreur, garder le texte ouvert et permettre une nouvelle tentative.
+- Dans les formulaires de fenêtres, désactiver temporairement les champs natifs pendant leur envoi pour ne pas fermer ensuite sur une saisie différente de celle enregistrée. Réactiver les champs après une erreur. Le rendu riche d’une tâche est également verrouillé pendant son envoi.
+- L’en-tête mobile ne doit pas hériter d’une hauteur vide provenant d’un `flex-basis` prévu pour un alignement horizontal.
+
+Ces règles complètent les protections de brouillon existantes ; elles n’introduisent pas de nouvel enregistrement automatique du contenu.

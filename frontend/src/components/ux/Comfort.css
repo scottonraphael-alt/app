@@ -1,0 +1,51 @@
+/* Reading comfort: useful alignment, restrained line lengths and distinct action groups. */
+.app-shell.iris-ui :is(.pj-row-date,.tar-ticket-date,.pj-deadline,.nt-item time,.cw-table time){font-variant-numeric:tabular-nums;line-height:1.6}
+.app-shell.iris-ui :is(.pj-row-date,.tar-ticket-date){min-inline-size:104px}
+.app-shell.iris-ui :is(.cw-table,.cz-table,.tl-table,.tar-table) :is(td,th):last-child{min-inline-size:145px}
+.app-shell.iris-ui :is(.cw-table,.cz-table,.tl-table,.tar-table) td{padding-block:15px}
+.app-shell.iris-ui .cw-table td:nth-child(2){min-inline-size:130px}
+.app-shell.iris-ui :is(.pj-status-en_cours,.pj-status-termine,.tar-status,.cw-state){line-height:1.4;white-space:normal;text-align:center}
+.app-shell.iris-ui .pj-row-copy strong{line-height:1.5}
+.app-shell.iris-ui :is(.pj-preline,.tw-note>p:not(.tw-note-byline),.tw-trigger-reminder>p,.cw-message-body){max-inline-size:72ch;line-height:1.85;overflow-wrap:anywhere}
+.app-shell.iris-ui .iris-editor--readonly .bn-block-content[data-content-type=paragraph]>.bn-inline-content{max-inline-size:72ch;line-height:1.85}
+.app-shell.iris-ui .iris-editor--readonly .bn-block-content:is([data-content-type=bulletListItem],[data-content-type=numberedListItem])>.bn-inline-content{line-height:1.8}
+.app-shell.iris-ui .iris-editor--readonly .bn-block-content[data-content-type=heading]{margin-block-start:1.4em;margin-block-end:.6em;text-wrap:pretty}
+.app-shell.iris-ui .iris-editor--readonly .bn-block-outer:first-child .bn-block-content[data-content-type=heading]{margin-block-start:0}
+.app-shell.iris-ui :is(.pj-preline,.tw-note p,.iris-editor--readonly) a{text-underline-offset:.2em}
+/* A destructive action has its own space; saving remains at the end of the normal action group. */
+.app-shell.iris-ui .iris-action-danger-group{margin-block-start:16px;padding-block-start:16px;border-block-start:1px solid var(--iris-border);display:flex;gap:12px;flex-wrap:wrap}
+.app-shell.iris-ui .pj-file>.pj-danger{margin-inline-start:16px;flex:none}
+.app-shell.iris-ui .tw-note>header>.tw-danger{margin-inline-start:16px;flex:none}
+.app-shell.iris-ui .tw-controls{column-gap:12px;row-gap:10px}
+.app-shell.iris-ui .tw-controls>.iris-action-danger-group{margin:0 8px 0 0;padding:0 12px 0 0;border-block-start:0;border-inline-end:1px solid var(--iris-border)}
+:root body.iris-ux-active .pj-modal :is(.pj-form,.pj-task-detail)>.pj-form-actions{gap:12px}
+.app-shell.iris-ui :is(.pj-brief-actions,.iris-editor-actions){display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px}
+.app-shell.iris-ui .pj-brief-feedback{max-inline-size:72ch;padding:12px 14px;border-radius:9px;border:1px solid var(--iris-border);background:var(--iris-info-soft);color:var(--iris-text);font-size:13px;line-height:1.7}
+.app-shell.iris-ui .pj-brief-feedback.is-error{background:var(--iris-danger-soft);border-color:var(--iris-danger);color:var(--iris-danger)}
+/* No forced text truncation or animation in the reading flow while a field is focused. */
+.app-shell.iris-ui :is(.pj-panel,.tw-fields,.an-editor,.ag-dialog-body):focus-within{overflow-anchor:auto}
+.iris-icon-hint{z-index:1000;max-width:min(280px,calc(100vw - 24px));padding:9px 12px;border:1px solid var(--iris-border-strong);border-radius:9px;background:var(--iris-text);color:var(--iris-bg);box-shadow:var(--iris-shadow);font:400 12px/1.6 'IBM Plex Sans',sans-serif;overflow-wrap:anywhere;animation:iris-hint-enter 120ms ease-out}
+.iris-icon-hint-arrow{fill:var(--iris-text)}
+@keyframes iris-hint-enter{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:translateY(0)}}
+@media(pointer:coarse),(max-width:760px){
+ .app-shell.iris-ui :is(.tb-icon-btn,.tb-chip-tools button,.iris-preview-trigger,.pj-icon,.tw-icon-button,.ag-icon-button,.nt-icon-button),
+ :root body.iris-ux-active :is(.pj-icon,.ag-icon-button){min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;touch-action:manipulation}
+ .app-shell.iris-ui .tb-chip-tools{gap:6px}
+ .app-shell.iris-ui .tb-right{flex-wrap:wrap;gap:8px;min-width:0}
+ .app-shell.iris-ui :is(.pj-pagination,.tw-pager) button{min-width:44px;min-height:44px}
+ .app-shell.iris-ui :is(.pj-row-date,.tar-ticket-date){min-inline-size:0}
+}
+@media(max-width:760px){
+ .app-shell.iris-ui .tb-bar{padding-top:max(14px,env(safe-area-inset-top));padding-inline:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right))}
+ .app-shell.iris-ui .app-main :is(.cz-page,.ag-page,.tm-page,.wb-page,.rl-page,.nt-page,.hp-page,.qt-page,.tl-page,.tar-page){padding-inline:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right));padding-bottom:max(44px,calc(24px + env(safe-area-inset-bottom)))}
+ :root body.iris-ux-active .pj-modal.pj-modal--lg>header{padding-top:max(20px,env(safe-area-inset-top))}
+ :root body.iris-ux-active .pj-modal :is(.pj-form,.pj-task-detail)>.pj-form-actions{padding-bottom:calc(14px + env(safe-area-inset-bottom));padding-inline:max(18px,env(safe-area-inset-left)) max(18px,env(safe-area-inset-right))}
+ :root body.iris-ux-active .ag-dialog .ag-dialog-footer{padding-bottom:calc(14px + env(safe-area-inset-bottom))}
+ :root body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(input,textarea,select){scroll-margin-block-end:calc(140px + env(safe-area-inset-bottom))}
+ .app-shell.iris-ui .tw-controls>.iris-action-danger-group{margin:0;padding:0 0 0 12px;border:0;border-inline-start:1px solid var(--iris-border);order:5}
+ .app-shell.iris-ui .pj-file>.pj-danger{margin-inline-start:12px}
+ .app-shell.iris-ui .iris-editor--readonly .bn-block-content[data-content-type=paragraph]>.bn-inline-content{max-inline-size:100%}
+}
+@media(prefers-reduced-motion:reduce){.iris-icon-hint{animation:none}}
+html[data-motion=reduced] .iris-icon-hint{animation:none}
+@media print{.iris-icon-hint{display:none}.app-shell.iris-ui .iris-action-danger-group{display:none}}

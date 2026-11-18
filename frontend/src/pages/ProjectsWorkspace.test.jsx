@@ -245,3 +245,33 @@ it('réserve les réglages Discord aux responsables et propose la duplication au
   await act(async()=>root.render(<ProjectsListPage helper={{id:'member'}} isResponsableGlobal/>));expect(container.textContent).toContain('Rappels Discord');
   await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));expect(container.textContent).toContain('Dupliquer');
 });
+
+it('conserve les nouvelles modifications saisies pendant l’enregistrement du brief', async () => {
+  let resolveSave;
+  api.patch.mockImplementation(() => new Promise(resolve => { resolveSave = resolve; }));
+  await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+  await click('Le brief'); await click('Modifier le brief');
+  const editor=container.querySelector('textarea');
+  const type=value=>act(()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(editor,value);editor.dispatchEvent(new Event('input',{bubbles:true}));});
+  type('Version envoyée'); await click('Enregistrer le brief');
+  type('Version envoyée et complétée pendant la requête');
+  await act(async()=>resolveSave({data:{...project,content_markdown:'Version envoyée'}}));
+  expect(container.querySelector('textarea')).toBe(editor);
+  expect(editor.value).toBe('Version envoyée et complétée pendant la requête');
+  expect(container.querySelector('[role="status"]').textContent).toContain('doivent encore être enregistrées');
+  expect(api.patch).toHaveBeenCalledWith('/animateur/projects/p/brief',{content_markdown:'Version envoyée'});
+});
+
+it('garde le brief ouvert et son contenu après un échec, puis permet de réessayer', async () => {
+  api.patch.mockRejectedValueOnce(new Error('Réseau indisponible'));
+  await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+  await click('Le brief'); await click('Modifier le brief');
+  const editor=container.querySelector('textarea');
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(editor,'Mon texte à conserver');editor.dispatchEvent(new Event('input',{bubbles:true}));});
+  await click('Enregistrer le brief');
+  expect(container.querySelector('textarea')).toBe(editor);
+  expect(editor.value).toBe('Mon texte à conserver');
+  expect(container.querySelector('[role="alert"]').textContent).toContain('Votre texte est conservé');
+  api.patch.mockResolvedValueOnce({data:{...project,content_markdown:'Mon texte à conserver'}});
+  await click('Enregistrer le brief'); expect(container.querySelector('textarea')).toBeNull();
+});

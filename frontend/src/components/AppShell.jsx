@@ -21,7 +21,20 @@ export default function AppShell({
 }) {
   useEffect(() => {
     document.body.classList.add("iris-ux-active");
-    return () => document.body.classList.remove("iris-ux-active");
+    const viewport = document.querySelector('meta[name="viewport"]');
+    const previousViewport = viewport?.getAttribute('content');
+    const baseViewport = previousViewport || 'width=device-width, initial-scale=1';
+    const safeViewport = /viewport-fit\s*=/.test(baseViewport)
+      ? baseViewport.replace(/viewport-fit\s*=[^,]*/g, 'viewport-fit=cover')
+      : `${baseViewport}, viewport-fit=cover`;
+    viewport?.setAttribute('content', safeViewport);
+    return () => {
+      document.body.classList.remove("iris-ux-active");
+      if (viewport?.getAttribute('content') === safeViewport) {
+        if (previousViewport === null) viewport.removeAttribute('content');
+        else viewport.setAttribute('content', previousViewport);
+      }
+    };
   }, []);
   const roleLabel = highestRoleLabel({ isAdmin, isStaff, isOperateur, isResponsable, isAnimateur, isHelper });
 

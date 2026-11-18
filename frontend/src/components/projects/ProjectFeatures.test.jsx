@@ -73,3 +73,16 @@ it('garde un bilan archivé en lecture seule',async()=>{
   await act(async()=>root.render(<ProjectReview project={{...project,status:'archive',review:{attendance:15,successes:'Une réussite',updated_at:'2026-10-27T10:00:00Z',updated_by:member}}} manager onSaved={jest.fn()}/>));
   expect(document.body.textContent).toContain('Une réussite');expect(document.querySelector('form')).toBeNull();expect(document.body.textContent).not.toContain('Modifier le bilan');
 });
+it('protège les champs pendant l’envoi et garde la saisie après une erreur',async()=>{
+ let rejectSave;
+ api.post.mockImplementation(()=>new Promise((resolve,reject)=>{rejectSave=reject;}));
+ await act(async()=>root.render(<ProjectForm onClose={jest.fn()} onSaved={jest.fn()}/>));
+ await fill(field('Nom du projet'),'Mon idée à conserver');
+ await submit();
+ expect(field('Nom du projet').disabled).toBe(true);
+ expect(field('L’idée en quelques mots').disabled).toBe(true);
+ await act(async()=>rejectSave(new Error('Réseau indisponible')));
+ expect(field('Nom du projet').disabled).toBe(false);
+ expect(field('Nom du projet').value).toBe('Mon idée à conserver');
+ expect(document.querySelector('[role=alert]').textContent).toBeTruthy();
+});

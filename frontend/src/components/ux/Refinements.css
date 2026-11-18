@@ -74,3 +74,7 @@ body.iris-ux-active .iris-form-error{border:1px solid var(--iris-danger);border-
 html[data-motion=reduced] body.iris-ux-active :is(.pj-modal,.ag-dialog) :is(.pj-btn,.ag-button):active{transform:none!important}
 .app-shell.iris-ui .pj-section-heading>.pj-btn{min-width:125px;justify-content:center}
 .app-shell.iris-ui .tw-loading>.iris-loading{width:min(920px,100%)}
+/* On stacked headers, a horizontal flex basis must not become 320px of empty height. */
+@media(max-width:760px){
+ .app-shell.iris-ui .app-main :is(.cz-header,.ag-header,.tm-header,.wb-header,.tl-header,.tar-header,.hp-header,.rl-header,.qt-header,.nt-header,.ta-header,.rs-header,.ho-header)>:first-child{flex:0 1 auto;width:100%}
+}
