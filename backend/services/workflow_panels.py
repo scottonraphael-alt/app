@@ -30,6 +30,14 @@ KEYS = {
 _cache = {}
 VARIABLES={'membre_id':20,'membre_username':32,'membre':24,'interlocuteur':24,'traite_par':24,'date_traitement':40,'salon':95,'avis_ia':1000,'identifiant_anonyme':11,'message_anonyme':3000,'motif':1000,'triggers':1000,'motif_refus':1000,'statut':40,'reponses_formulaire':2200}
 TOKEN=re.compile(r'\{('+ '|'.join(VARIABLES) +r')\}')
+# Imported BotGhost panels used this channel-scoped member identifier.
+LEGACY_MEMBER_TOKEN = re.compile(r'<@!?\{usridchan\}>|\{usridchan\}')
+
+
+def normalize_member_tokens(text):
+    return LEGACY_MEMBER_TOKEN.sub(
+        lambda match: '{membre}' if match.group(0).startswith('<@') else '{membre_id}', text
+    )
 
 
 def values(row):
@@ -71,7 +79,7 @@ def member_avatar(row):
 
 def render_text(text,row):
     replacements=values(row)
-    return TOKEN.sub(lambda match:replacements[match.group(1)],text)
+    return TOKEN.sub(lambda match:replacements[match.group(1)],normalize_member_tokens(text))
 
 
 
@@ -96,7 +104,14 @@ def text_limit(key):
 
 
 def expanded_size(blocks):
-    return sum(len(b.text.encode('utf-16-le'))//2 + sum(b.text.count('{'+name+'}')*max(0,size-len(name)-2) for name,size in VARIABLES.items()) for b in blocks if b.kind in ('text','section'))
+    total = 0
+    for block in blocks:
+        if block.kind not in ('text', 'section'):
+            continue
+        text = normalize_member_tokens(block.text)
+        total += len(text.encode('utf-16-le')) // 2
+        total += sum(text.count('{'+name+'}') * max(0, size-len(name)-2) for name, size in VARIABLES.items())
+    return total
 
 
 def form_answer_limit():
@@ -117,6 +132,7 @@ def validate(panels):
         except ValidationError:
             raise HTTPException(422,"Vérifie les types de blocs, leurs champs et la couleur du panneau.") from None
         for b in panel.blocks:
+            b.text = normalize_member_tokens(b.text)
             if b.kind in ('text','section') and not b.text.strip():
                 raise HTTPException(422,'Un bloc texte ne peut pas être vide.')
             if b.kind in ('image','section') and b.url=='{avatar_membre}':
@@ -178,4 +194,8 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 def revision(key):
     layout = 8 if key in ('staff:verification', 'form:verification') else 7
-    return hashlib.sha256(json.dumps({'layout':layout,'panel':_cache.get(key,{})},sort_keys=True).encode()).hexdigest()[:16]
+    panel = _cache.get(key, {})
+    # Refresh existing opening messages whose saved presentation still has the legacy token.
+    if any(LEGACY_MEMBER_TOKEN.search(block.get('text', '')) for block in panel.get('blocks', [])):
+        layout = 9
+    return hashlib.sha256(json.dumps({'layout':layout,'panel':panel},sort_keys=True).encode()).hexdigest()[:16]

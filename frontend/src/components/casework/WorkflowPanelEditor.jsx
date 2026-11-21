@@ -29,20 +29,22 @@ const VARIABLES=[
  ['date_traitement','Date de la décision ; sinon « Décision en attente »','30 octobre 2026 à 15:00'],
  ['salon','Lien vers le salon ; sinon « Salon en préparation »','#soutient-membre'],
 ];
-const previewText=text=>(text||'').replace(/\{(membre_id|membre_username|membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme|statut|motif|triggers|motif_refus|reponses_formulaire)\}/g,(_,key)=>VARIABLES.find(v=>v[0]===key)[2]);
+const normalizeMemberTokens=text=>(text||'').replace(/<@!?\{usridchan\}>|\{usridchan\}/g,token=>token.startsWith('<@')?'{membre}':'{membre_id}');
+const previewText=text=>normalizeMemberTokens(text).replace(/\{(membre_id|membre_username|membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme|statut|motif|triggers|motif_refus|reponses_formulaire)\}/g,(_,key)=>VARIABLES.find(v=>v[0]===key)[2]);
 
 export default function WorkflowPanelEditor({value={},onChange,catalogue,panelCatalogue=PANELS}){
  const [key,setKey]=useState('public:support');
  const panel=value[key]||empty();
  const limit=['room:verification','room:contact_staff','room:bubble','room:summons','review:support'].includes(key)?3700:4000;
  const sizes={membre_id:20,membre_username:32,membre:24,interlocuteur:24,traite_par:24,date_traitement:40,salon:95,avis_ia:1000,identifiant_anonyme:11,message_anonyme:3000,statut:40,motif:1000,triggers:1000,motif_refus:1000,reponses_formulaire:2200};
- const used=(panel.blocks||[]).filter(b=>['text','section'].includes(b.kind)).reduce((n,b)=>n+(b.text||'').replace(/\{(membre_id|membre_username|membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme|statut|motif|triggers|motif_refus|reponses_formulaire)\}/g,(_,name)=>'x'.repeat(sizes[name])).length,0);
+ const used=(panel.blocks||[]).filter(b=>['text','section'].includes(b.kind)).reduce((n,b)=>n+normalizeMemberTokens(b.text).replace(/\{(membre_id|membre_username|membre|interlocuteur|traite_par|date_traitement|salon|avis_ia|identifiant_anonyme|message_anonyme|statut|motif|triggers|motif_refus|reponses_formulaire)\}/g,(_,name)=>'x'.repeat(sizes[name])).length,0);
  const update=next=>onChange({...value,[key]:next});
  const blocks=panel.blocks||[];
  const change=(index,patch)=>update({...panel,blocks:blocks.map((b,i)=>i===index?{...b,...patch}:b)});
  const move=(index,delta)=>{const next=[...blocks];[next[index],next[index+delta]]=[next[index+delta],next[index]];update({...panel,blocks:next});};
  return <section className="wf-panel-editor">
  <p className="cz-eyebrow">COMPOSER · MESSAGES DISCORD</p><h2>Vos panneaux, votre ton</h2>
+ <p>Pour mentionner le membre, utilisez <code>{'{membre}'}</code>. L’ancien format BotGhost <code>{'<@{usridchan}>'}</code> reste compatible.</p>
  <p>Composez les textes, vignettes à droite, séparateurs, images et liens. Dans un ticket personnalisé, votre contenu remplace l’en-tête et le pied de page d’origine. Seuls les boutons et sélecteurs restent ajoutés. Sans bloc personnalisé, le texte d’origine est conservé.</p>
  <div className="wf-grid"><label>Panneau à personnaliser<select value={key} onChange={e=>setKey(e.target.value)}>{Object.entries(panelCatalogue).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
  <label>Couleur du panneau<input type="color" value={panel.color} onChange={e=>update({...panel,color:e.target.value})}/></label></div>

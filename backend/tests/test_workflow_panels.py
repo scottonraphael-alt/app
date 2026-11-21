@@ -314,3 +314,52 @@ def test_custom_support_receipt_keeps_decision_color_author_date_and_large_separ
         assert 'Demande '+label+' par <@456>' in content[2]['content']
         assert '\nLe <t:' in content[2]['content']
     h.run(check())
+
+@pytest.mark.parametrize(('template', 'expected'), [
+    ('Bulle d’échange de <@{usridchan}>', 'Bulle d’échange de <@123>'),
+    ('Bulle de <@!{usridchan}>', 'Bulle de <@123>'),
+    ('Membre : {usridchan}', 'Membre : 123'),
+])
+def test_legacy_botghost_member_token_renders_once(template, expected):
+    assert panels.render_text(template, {'member_id': '123'}) == expected
+    assert panels.render_text(template, {'member': {'id': '123'}}) == expected
+
+
+def test_legacy_member_mention_has_safe_fallback_and_does_not_expand_user_content():
+    assert panels.render_text('<@{usridchan}>', {}) == 'Membre à sélectionner'
+    assert panels.render_text('<@{usridchan}>', {'member_id': 'invalid'}) == 'Membre à sélectionner'
+    assert panels.render_text('{motif}', {'member_id': '123', 'reason': 'Texte littéral <@{usridchan}>'}) == 'Texte littéral <@{usridchan}>'
+
+
+@pytest.mark.parametrize('template', ['<@{usridchan}>', '<@!{usridchan}>', '{usridchan}'])
+def test_legacy_identity_tokens_keep_public_and_anonymous_validation_guards(template):
+    with pytest.raises(HTTPException):
+        panels.validate({'public:support': {'blocks': [{'text': template}]}})
+    with pytest.raises(HTTPException):
+        panels.validate({'anonymous:review': {'blocks': [{'text': '{message_anonyme}\n'+template}]}})
+
+
+def test_legacy_member_tokens_are_normalized_and_budgeted_before_storage():
+    result = panels.validate({'room:bubble': {'blocks': [{'text': 'Bulle de <@{usridchan}> · {usridchan}'}]}})
+    assert result['room:bubble']['blocks'][0]['text'] == 'Bulle de {membre} · {membre_id}'
+    assert panels.expanded_size([panels.Block(text='<@{usridchan}>'*2)]) == 48
+    with pytest.raises(HTTPException):
+        panels.validate({'room:bubble': {'blocks': [{'text': '<@{usridchan}>'*155}]}})
+
+
+def test_saved_legacy_bubble_panel_renders_member_and_refreshes_its_revision():
+    import hashlib
+    import json
+    panel = panels.Panel(blocks=[panels.Block(text='## Bulle d’échange de <@{usridchan}>\nPris en charge par {interlocuteur}')]).model_dump()
+    panels.configure({'room:bubble': panel})  # Existing DB configuration, without re-saving in the editor.
+    previous_revision = hashlib.sha256(json.dumps({'layout':7, 'panel':panel},sort_keys=True).encode()).hexdigest()[:16]
+    assert panels.revision('room:bubble') != previous_revision
+    async def check():
+        view = commands.RoomPanel('request', row={'kind':'bubble','member_id':'123','actor_id':'789','assigned_id':'456','reason':'Échange rassurant','status':'open','visibility':'restricted'})
+        payload = str(view.to_components())
+        assert 'Bulle d’échange de <@123>' in payload
+        assert 'Pris en charge par <@456>' in payload
+        assert '{usridchan}' not in payload
+        assert 'iris:room:request:actions' in payload
+        assert 'Ticket restreint' in payload
+    h.run(check())

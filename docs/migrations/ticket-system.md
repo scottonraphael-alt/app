@@ -232,3 +232,22 @@ Le bot, les commandes BotGhost et la branche du site ne sont pas modifiés par c
 
 Précisions de périmètre utilisateur : `/panel support` est obsolète et exclu ;
 `/panel salon-aide` existe mais n'a pas de lien avec les tickets et reste hors migration.
+
+## Compatibilité des titres importés — 21 novembre 2026
+
+Les présentations personnalisées importées de BotGhost peuvent encore contenir
+`<@{usridchan}>` ou `<@!{usridchan}>`. Iris les interprète désormais comme
+`{membre}`, à partir du membre du dossier courant. La variable seule
+`{usridchan}` correspond à `{membre_id}`. Pour les nouveaux modèles, utiliser
+`{membre}` pour une mention et `{membre_id}` pour l’identifiant sans mention.
+
+Le remplacement est effectué avant l’insertion des réponses et motifs, sans
+réinterpréter leur contenu. Les contrôles d’anonymat, les restrictions des panneaux
+publics et le budget de caractères s’appliquent aux variables normalisées.
+L’aperçu de l’éditeur utilise la même correspondance.
+
+Après déploiement du backend, la révision de présentation change pour les modèles
+qui contiennent encore cette ancienne variable. La maintenance habituelle édite
+alors les messages d’ouverture actifs déjà suivis par Iris. Elle ne recrée pas les
+messages supprimés et ne modifie pas les dossiers archivés. Les mentions de
+notification restent désactivées pendant cette actualisation.

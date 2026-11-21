@@ -37,3 +37,13 @@ test('convocation preset renders a heading with a right thumbnail',async()=>{
   expect(host.querySelector('.wf-thumbnail-empty')).not.toBeNull();
  }finally{await act(async()=>root.unmount());host.remove();}
 });
+
+test('previews the legacy BotGhost member mention in a saved bubble title',async()=>{
+ const host=document.createElement('div');document.body.append(host);const root=createRoot(host);
+ const value={'room:bubble':{color:'#78618c',blocks:[{kind:'text',text:'## Bulle d’échange de <@{usridchan}>',url:'',label:''}]}};
+ try{
+  await act(async()=>root.render(<Editor value={value} onChange={()=>{}} catalogue={{roles:[],channels:[]}}/>));
+  await act(async()=>{const select=host.querySelector('select');select.value='room:bubble';select.dispatchEvent(new Event('change',{bubbles:true}));});
+  expect(host.querySelector('.wf-panel-preview').textContent).toContain('Bulle d’échange de @Membre');
+ }finally{await act(async()=>root.unmount());host.remove();}
+});
