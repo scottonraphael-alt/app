@@ -112,10 +112,18 @@ def test_empty_or_invalid_category_never_falls_back_to_general_catalog(monkeypat
 def test_category_routes_check_host_token_and_only_expose_count(monkeypatch):
     async def run():
         guard = AsyncMock()
-        monkeypatch.setattr(tools, 'controller', guard)
+        monkeypatch.setattr(tools, 'catalog_controller', guard)
         monkeypatch.setattr(karaoke, 'category_tracks', AsyncMock(return_value=[NS(title='Réponse secrète')]))
         options = await tools.catalog_categories('signed')
         result = await tools.catalog_category('signed', 'rock', '1980')
         assert len(options['styles']) == 20 and result == {'count': 1, 'style': 'rock', 'decade': '1980'}
         assert guard.await_count == 2
     asyncio.run(run())
+
+
+def test_category_routes_reject_an_invalid_token():
+    from fastapi import HTTPException
+    for endpoint in (tools.catalog_categories, tools.catalog_category):
+        with pytest.raises(HTTPException) as error:
+            asyncio.run(endpoint('invalid-token'))
+        assert error.value.status_code == 401

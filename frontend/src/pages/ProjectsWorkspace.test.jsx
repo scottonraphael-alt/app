@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import ProjectsListPage from './ProjectsListPage';
 import ProjectDetailPage from './ProjectDetailPage';
 import { api } from '../api/client';
+let mockProjectId='p';
 jest.mock('react-router-dom', () => ({
   Link: ({
     to,
@@ -11,7 +12,7 @@ jest.mock('react-router-dom', () => ({
   }) => <a href={to} {...props}>{children}</a>,
   useNavigate: () => jest.fn(),
   useParams: () => ({
-    projectId: 'p'
+    projectId: mockProjectId
   }),
   useSearchParams: () => [new URLSearchParams(), jest.fn()]
 }), {
@@ -94,6 +95,7 @@ const tasks = [{
 let root, container;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockProjectId='p';
   api.post.mockResolvedValue({data:null});
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -274,4 +276,27 @@ it('garde le brief ouvert et son contenu après un échec, puis permet de réess
   expect(container.querySelector('[role="alert"]').textContent).toContain('Votre texte est conservé');
   api.patch.mockResolvedValueOnce({data:{...project,content_markdown:'Mon texte à conserver'}});
   await click('Enregistrer le brief'); expect(container.querySelector('textarea')).toBeNull();
+});
+
+it('ignore une réponse de projet devenue obsolète après navigation',async()=>{
+ let resolvePrevious;
+ api.get.mockImplementation(url=>url==='/animateur/projects/p'?new Promise(resolve=>{resolvePrevious=resolve;}):Promise.resolve({data:url.endsWith('/tasks')||url.endsWith('/resources')?[]:{...project,id:'next',title:'Projet suivant'}}));
+ await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+ mockProjectId='next';await act(async()=>root.render(<ProjectDetailPage helper={{id:'owner'}}/>));
+ expect(container.querySelector('h1').textContent).toBe('Projet suivant');
+ await act(async()=>resolvePrevious({data:project}));
+ expect(container.querySelector('h1').textContent).toBe('Projet suivant');
+});
+
+it('conserve les liens et les filtres entre les vues cartes et liste', async () => {
+  await act(async () => root.render(<ProjectsListPage helper={{id:'member'}}/>));
+  expect(container.querySelector('.pj-project-board .pj-board-card[href="/animateur/projects/p"]')).not.toBeNull();
+  await click('Liste', container.querySelector('.pj-view-controls'));
+  expect(container.querySelector('.pj-project-list .pj-project-row')).not.toBeNull();
+  expect(container.querySelector('.pj-project-board')).toBeNull();
+  await click('Cartes', container.querySelector('.pj-view-controls'));
+  await click('Tous', container.querySelector('.pj-tabs'));
+  expect(container.querySelectorAll('.pj-kanban-column')).toHaveLength(3);
+  expect(container.querySelector('.pj-kanban-en_cours a[href="/animateur/projects/p"]')).not.toBeNull();
+  expect(container.querySelector('.pj-kanban-termine .pj-project-row')).toBeNull();
 });

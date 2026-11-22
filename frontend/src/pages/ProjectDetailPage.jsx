@@ -19,13 +19,11 @@ import ProjectForm from '../components/projects/ProjectForm';
 import ProjectTaskDialog, { TaskForm } from '../components/projects/ProjectTaskDialog';
 import { ACTIVITY_LABELS, dateLabel, isLate, personName, progress, PROJECT_STATUS, TASK_STATUS, taskCounts } from '../components/projects/projectUtils';
 const TABS = [['overview', 'Vue d’ensemble', LayoutGrid], ['tasks', 'Tâches', ClipboardList], ['brief', 'Le brief', FileText], ['team', 'L’équipe', Users], ['files', 'Fichiers', Download], ['rundown', 'Déroulé', Clock3], ['review', 'Bilan', CheckCheck], ['activity', 'Journal', MessageSquare]];
-export default function ProjectDetailPage({
-  helper,
-  isResponsableGlobal
-}) {
-  const {
-    projectId
-  } = useParams();
+export default function ProjectDetailPage(props) {
+  const {projectId}=useParams();
+  return <ProjectWorkspace key={projectId} {...props} projectId={projectId}/>;
+}
+function ProjectWorkspace({helper,isResponsableGlobal,projectId}) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [project, setProject] = useState(null);

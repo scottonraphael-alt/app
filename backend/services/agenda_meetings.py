@@ -80,6 +80,8 @@ STATUS_PENDING = "en_attente_resume"
 PAST_DAYS = 366
 FUTURE_DAYS = 731
 MAX_DEPTH = 20
+# Bound JSON structure independently of the interpreter recursion limit.
+MAX_JSON_DEPTH = 160
 CONTENT_TEXT_MAX = 100_000
 SEARCH_TEXT_MAX = 20_000
 EXCERPT_MAX = 220
@@ -368,6 +370,14 @@ def _parse_content(raw: Any) -> tuple[str, list | None]:
         return "unreadable", None
     except ValueError:
         return "text", None
+    stack = [(parsed, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if isinstance(node, (dict, list)):
+            if depth > MAX_JSON_DEPTH:
+                return "unreadable", None
+            children = node.values() if isinstance(node, dict) else node
+            stack.extend((child, depth + 1) for child in children if isinstance(child, (dict, list)))
     if not isinstance(parsed, list):
         return "text", None
     try:

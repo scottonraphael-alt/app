@@ -60,3 +60,10 @@ Pendant l’enregistrement du brief d’un projet, les nouvelles modifications n
 Les statuts des dossiers et projets ainsi que la synchronisation des suivis utilisent un retour visuel local. Les boutons d’enregistrement partagés et le formulaire de projet réservent leurs libellés pour éviter les changements de largeur. Les tableaux de dossiers et de statistiques, la discussion des tâches et le panneau de suivi disposent de repères de débordement lorsque nécessaire.
 
 Les sections de tâche se déplient avec des contrôles accessibles. Le dashboard replie ses blocs sans démonter leur contenu. La fermeture des fenêtres partagées revient discrètement vers leur déclencheur, sans déplacement sur les fenêtres plein écran et avec les durées et protections existantes. Les primitives sont documentées dans la section 13 de la charte.
+
+
+## Composition éditoriale — 22 novembre 2026
+
+L’accueil, les projets et la bibliothèque reprennent la seconde direction validée : titres avec accent typographique, destinations sous forme de cartes, vues Cartes/Liste et document réel mis en avant. Les contrôles communs et les en-têtes métier prolongent cette direction. Les données, rôles, filtres, pagination, actions et disposition enregistrée du dashboard sont conservés. Voir la section 14 de la charte pour les règles et les limites du prototype.
+
+Aucune migration ni dépendance supplémentaire. Reconstruction du frontend uniquement pour cette évolution visuelle.

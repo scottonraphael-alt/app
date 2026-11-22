@@ -86,3 +86,14 @@ it('protège les champs pendant l’envoi et garde la saisie après une erreur',
  expect(field('Nom du projet').value).toBe('Mon idée à conserver');
  expect(document.querySelector('[role=alert]').textContent).toBeTruthy();
 });
+it('préserve un bilan en cours lors d’une actualisation distante et garde sa révision de départ',async()=>{
+ const first={...project,review:{successes:'Bilan initial',updated_at:'v1',updated_by:member}};
+ await act(async()=>root.render(<ProjectReview project={first} manager onSaved={jest.fn()}/>));await click('Modifier le bilan');
+ await fill(field('Ce qui a bien fonctionné'),'Ma saisie en cours');
+ await act(async()=>root.render(<ProjectReview project={{...first,review:{...first.review,successes:'Autre auteur',updated_at:'v2'}}} manager onSaved={jest.fn()}/>));
+ expect(field('Ce qui a bien fonctionné').value).toBe('Ma saisie en cours');
+ expect(container.textContent).toContain('Le bilan a changé');
+ api.put.mockRejectedValueOnce({response:{status:409}});await submit();
+ expect(api.put).toHaveBeenCalledWith('/animateur/projects/p/review',expect.objectContaining({expected_updated_at:'v1',successes:'Ma saisie en cours'}));
+ expect(field('Ce qui a bien fonctionné').value).toBe('Ma saisie en cours');
+});

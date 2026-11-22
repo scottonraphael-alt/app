@@ -177,7 +177,7 @@ const pills = [
   const widgets = [
     canSeeStaff && {id:'day',label:'Ma journée',width:8,content:<MyDayWidget day={myDay}/>},
     canSeeStaff && {id:'team',label:'Équipe en ligne',width:4,content:<TeamOnlineWidget helperId={helper?.id} enabled={canSeeStaff}/>},
-    (isStaff || isResponsable || isServerAdmin) && {id:'casework',label:'Dossiers des membres',width:12,content:<section className="nd-casework-module" aria-labelledby="member-casework-title"><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>},
+    (isStaff || isResponsable || isServerAdmin) && {id:'casework',label:'Dossiers des membres',width:12,content:<section className="nd-casework-module" aria-labelledby="member-casework-title"><p className="iris-section-kicker">CHAQUE ÉCHANGE À SA PLACE</p><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>},
     {id:'music',label:'Karaoké & blind test',width:12,content:<nav className="nd-helper-v2-shortcuts" aria-label="Animations musicales"><Link to="/karaoke" className="nd-helper-v2-shortcut nd-helper-v2-shortcut--clay"><span className="nd-helper-v2-shortcut-copy"><strong>🎤 Karaoké & blind test</strong><small>Chanter ensemble, réserver une chanson et jouer avec OasisLink.</small></span><ArrowRight size={18}/></Link></nav>},
     isResponsable && {id:'responsable',label:'Outils responsable',width:12,content:<ResponsableToolsModule/>},
     quickCards.length>0 && {id:'shortcuts',label:'Accès principaux',width:12,content:(        <nav
@@ -221,7 +221,8 @@ const pills = [
         <div className="nd-heading">
           <p className="nd-eyebrow">ESPACE IRIS</p>
 
-          <h1>Bienvenue {pseudo}</h1>
+          <p className="nd-welcome">Bienvenue {pseudo}</p>
+          <h1>On prend <span className="iris-title-accent">le relais.</span></h1>
 
           <HomeGreeting pseudo={pseudo} summary={daySummary} />
 

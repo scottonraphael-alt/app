@@ -1,3 +1,4 @@
+import IrisIllustration from '../illustrations/IrisIllustration';
 import { Link } from "react-router-dom";
 import { ArrowRight, Bell, CalendarClock, ClipboardList, Users } from "lucide-react";
 
@@ -31,6 +32,7 @@ export default function MyDayWidget({ day }) {
     <section className="hm-card hm-day" aria-labelledby="hm-day-title" data-testid="my-day-widget">
       <div className="hm-card-head">
         <h2 id="hm-day-title">Ma journée</h2>
+        <IrisIllustration kind="calendar"/>
         <Link to="/staff/calendrier" className="hm-card-link">
           Agenda <ArrowRight size={15} aria-hidden="true" />
         </Link>

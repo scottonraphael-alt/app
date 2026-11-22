@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '../../api/client';
@@ -12,21 +12,28 @@ export default function ProjectReview({project,manager,onSaved}) {
   const [busy,setBusy]=useState(false);
   const [conflict,setConflict]=useState(false);
   const review=project.review;
+  const baseRevision=useRef(review?.updated_at || null);
+  const previousProject=useRef(project.id);
   const writable=manager && project.status!=='archive';
-  useEffect(()=>{setForm(initial(project));setEditing(false);setConflict(false);},[project.id,project.review?.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{
+    const switched=previousProject.current!==project.id;
+    previousProject.current=project.id;
+    if(switched || !editing){setForm(initial(project));setEditing(false);setConflict(false);baseRevision.current=project.review?.updated_at || null;}
+    else if((project.review?.updated_at || null)!==baseRevision.current)setConflict(true);
+  },[project.id,project.review?.updated_at,editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const change=key=>e=>setForm(v=>({...v,[key]:e.target.value}));
   const save=async e=>{
     e.preventDefault();setBusy(true);setConflict(false);
-    try {const r=await api.put(`/animateur/projects/${project.id}/review`,{...form,attendance:form.attendance===''?null:Number(form.attendance),event_date:form.event_date || null,expected_updated_at:review?.updated_at || null});onSaved(r.data);setEditing(false);toast.success('Bilan enregistré.');}
+    try {const r=await api.put(`/animateur/projects/${project.id}/review`,{...form,attendance:form.attendance===''?null:Number(form.attendance),event_date:form.event_date || null,expected_updated_at:baseRevision.current});onSaved(r.data);setEditing(false);toast.success('Bilan enregistré.');}
     catch(error){setConflict(error.response?.status===409);toast.error(getErrorMessage(error));}finally{setBusy(false);}
   };
   const reload=async()=>{setBusy(true);try{const r=await api.get(`/animateur/projects/${project.id}`);onSaved(r.data);setForm(initial(r.data));setEditing(false);setConflict(false);}catch(error){toast.error(getErrorMessage(error));}finally{setBusy(false);}};
-  return <Panel title="Ce qu’on retient de l’animation" intro="La participation, les réussites et les idées à garder pour la prochaine fois. Le pilote peut compléter ce bilan même après la clôture." className="pj-event-review" actions={writable && !editing && <button className="pj-btn" onClick={()=>setEditing(true)}><Pencil size={15}/>{review?'Modifier le bilan':'Rédiger le bilan'}</button>}>
+  return <Panel title="Ce qu’on retient de l’animation" intro="La participation, les réussites et les idées à garder pour la prochaine fois. Le pilote peut compléter ce bilan même après la clôture." className="pj-event-review" actions={writable && !editing && <button className="pj-btn" onClick={()=>{baseRevision.current=review?.updated_at || null;setForm(initial(project));setConflict(false);setEditing(true);}}><Pencil size={15}/>{review?'Modifier le bilan':'Rédiger le bilan'}</button>}>
     {editing && writable ? <form className="pj-review-form" onSubmit={save}>
-      <Field label="Date de l’animation"><input type="date" value={form.event_date} onChange={change('event_date')}/></Field><Field label="Nombre de participants · facultatif"><input type="number" min="0" max="1000000" step="1" value={form.attendance} onChange={change('attendance')} placeholder="Non renseigné"/></Field>
-      <Field label="Ce qui a bien fonctionné" wide><textarea rows={3} maxLength={4000} value={form.successes} onChange={change('successes')} placeholder="Les moments forts, les retours positifs…"/></Field>
-      <Field label="Ce qu’on peut améliorer" wide><textarea rows={3} maxLength={4000} value={form.improvements} onChange={change('improvements')} placeholder="Les difficultés et les ajustements utiles…"/></Field>
-      <Field label="À garder pour la prochaine fois" wide><textarea rows={3} maxLength={4000} value={form.next_steps} onChange={change('next_steps')} placeholder="Les idées ou décisions à reprendre…"/></Field>
+      <Field label="Date de l’animation"><input disabled={busy} type="date" value={form.event_date} onChange={change('event_date')}/></Field><Field label="Nombre de participants · facultatif"><input disabled={busy} type="number" min="0" max="1000000" step="1" value={form.attendance} onChange={change('attendance')} placeholder="Non renseigné"/></Field>
+      <Field label="Ce qui a bien fonctionné" wide><textarea disabled={busy} rows={3} maxLength={4000} value={form.successes} onChange={change('successes')} placeholder="Les moments forts, les retours positifs…"/></Field>
+      <Field label="Ce qu’on peut améliorer" wide><textarea disabled={busy} rows={3} maxLength={4000} value={form.improvements} onChange={change('improvements')} placeholder="Les difficultés et les ajustements utiles…"/></Field>
+      <Field label="À garder pour la prochaine fois" wide><textarea disabled={busy} rows={3} maxLength={4000} value={form.next_steps} onChange={change('next_steps')} placeholder="Les idées ou décisions à reprendre…"/></Field>
       {conflict && <div className="pj-notice pj-wide"><p>Le bilan a changé entre-temps. Copiez vos modifications avant de recharger la version enregistrée.</p><button type="button" className="pj-btn" disabled={busy} onClick={reload}>Recharger le bilan</button></div>}
       <footer className="pj-form-actions"><button type="button" className="pj-btn" disabled={busy} onClick={()=>{setForm(initial(project));setEditing(false);}}>Annuler</button><button className="pj-btn pj-primary" disabled={busy}>{busy?'Enregistrement…':'Enregistrer le bilan'}</button></footer>
     </form> : !review ? <Empty title="Une animation, des enseignements.">Après l’événement, gardez une trace de ce qui a fonctionné et de ce que vous souhaitez faire évoluer.</Empty> : <>

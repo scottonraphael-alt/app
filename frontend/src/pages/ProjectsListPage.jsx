@@ -1,10 +1,11 @@
+import IrisIllustration from '../components/illustrations/IrisIllustration';
 import ChangeCue from '../components/ux/ChangeCue';
 import { MotionNav } from '../components/motion/Motion';
 import { usePageMemoryState } from '../components/ux/PageMemory';
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
-import { useEffect, useState } from 'react';
+import { Children, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowUpRight, CheckCheck, Clock3, FolderKanban, Plus, RefreshCw, Search, Users } from 'lucide-react';
+import { ArrowUpRight, CheckCheck, Clock3, FolderKanban, Plus, RefreshCw, Search, Users, LayoutGrid, List } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, getErrorMessage } from '../api/client';
 import { Avatar, Empty, Panel, Priority, ProjectPage, Pagination, usePage } from '../components/projects/ProjectUI';
@@ -12,6 +13,17 @@ import ProjectReminderSettings from '../components/projects/ProjectReminderSetti
 import ProjectForm from '../components/projects/ProjectForm';
 import ProjectTemplateBuilder from '../components/projects/ProjectTemplateBuilder';
 import { dateLabel, filterProjects, isLate, personName, progress, PROJECT_STATUS, PRIORITY } from '../components/projects/projectUtils';
+function ProjectCollection({ view, status, children }) {
+  const items = Children.toArray(children);
+  if (view !== 'board') return <div className="pj-project-list">{children}</div>;
+  const cards = items.filter(item => item.props?.['data-project-status']);
+  const footer = items.filter(item => !item.props?.['data-project-status'] && item.props?.className !== 'pj-project-list-head');
+  return <div className="pj-project-collection">
+    {status === 'tous' ? <div className="pj-kanban">{Object.entries(PROJECT_STATUS).map(([value,label])=><section className={`pj-kanban-column pj-kanban-${value}`} key={value} aria-label={label}><header><span className="pj-column-dot"/><h3>{label}</h3><span>{cards.filter(item=>item.props['data-project-status']===value).length} sur cette page</span></header><div>{cards.filter(item=>item.props['data-project-status']===value)}</div></section>)}</div> : <div className="pj-project-board">{cards}</div>}
+    {footer}
+  </div>;
+}
+
 export default function ProjectsListPage({
   helper, isResponsableGlobal
 }) {
@@ -28,6 +40,7 @@ export default function ProjectsListPage({
   const [buildingTemplate, setBuildingTemplate] = useState(false);
   const [query, setQuery] = usePageMemoryState('projects.query', '');
   const [status, setStatus] = usePageMemoryState('projects.status', 'actifs');
+  const [view, setView] = usePageMemoryState('projects.view', 'board');
   const [mine, setMine] = usePageMemoryState('projects.mine', false);
   const [priority, setPriority] = usePageMemoryState('projects.priority', '');
   const [sort, setSort] = usePageMemoryState('projects.sort', 'updated');
@@ -63,7 +76,7 @@ export default function ProjectsListPage({
   const personalPages = usePage(myTasks, 5, taskFilter, 'projects.tasksPage');
   const active = data.projects.filter(p => p.status === 'en_cours');
   const projectTitle = id => data.projects.find(p => p.id === id)?.title || 'Projet';
-  return <ProjectPage title="Les idées prennent vie." intro="Préparez vos animations, répartissez les rôles et gardez le prochain rendez-vous en vue." actions={<><Link className="pj-btn" to="/animateur/projects/chronologie">Chronologie</Link><button className="pj-btn" onClick={()=>setBuildingTemplate(true)}>Nouveau modèle</button>{isResponsableGlobal && <button className="pj-btn" onClick={()=>setShowReminders(true)}><Clock3 size={16}/> Rappels Discord</button>}<button className="pj-btn pj-primary" onClick={() => setCreating(true)} data-testid="new-project-button"><Plus size={17} /> Nouveau projet</button></>}>
+  return <ProjectPage title={<>Les idées <span className="iris-title-accent">prennent vie.</span></>} intro="Préparez vos animations, répartissez les rôles et gardez le prochain rendez-vous en vue." actions={<><Link className="pj-btn" to="/animateur/projects/chronologie">Chronologie</Link><button className="pj-btn" onClick={()=>setBuildingTemplate(true)}>Nouveau modèle</button>{isResponsableGlobal && <button className="pj-btn" onClick={()=>setShowReminders(true)}><Clock3 size={16}/> Rappels Discord</button>}<button className="pj-btn pj-primary" onClick={() => setCreating(true)} data-testid="new-project-button"><Plus size={17} /> Nouveau projet</button></>}>
     <div className="pj-summary-heading"><p className="pj-kicker">L’ATELIER EN UN REGARD</p></div>
     <div className="pj-summary">
       <div className="pj-summary-stat"><span className="pj-counter-icon"><FolderKanban size={21}/></span><div><strong>{loading && !hasLoaded ? '—' : active.length}</strong><span>Projets en cours</span></div></div>
@@ -71,15 +84,15 @@ export default function ProjectsListPage({
       <div className={`pj-summary-stat ${lateTasks.length ? 'pj-warm' : ''}`}><span className="pj-counter-icon"><Clock3 size={21}/></span><div><strong>{loading && !hasLoaded ? '—' : lateTasks.length}</strong><span>Mes tâches en retard</span></div></div>
     </div>
     {(data.projects_truncated || data.tasks_truncated) && <p className="pj-notice">Affichage limité aux 500 projets les plus récents et aux 500 premières tâches personnelles.</p>}
-    <div className="pj-workspace">
-      <div><div className="pj-section-heading"><div><p className="pj-kicker">EXPLORER & CONSTRUIRE</p><h2>Le carnet de projets</h2></div><button className="pj-btn" onClick={load} disabled={loading} aria-busy={loading}><RefreshCw size={15} /> {loading && hasLoaded ? 'Actualisation…' : 'Actualiser'}</button></div>
+    <div className={`pj-workspace pj-workspace--${view}`}>
+      <div><div className="pj-section-heading"><div className="pj-illustrated-heading"><IrisIllustration/><div><p className="pj-kicker">EXPLORER & CONSTRUIRE</p><h2>Le carnet de projets</h2></div></div><div className="pj-view-controls" role="group" aria-label="Présentation des projets"><button className="pj-btn" aria-pressed={view==='board'} onClick={()=>setView('board')}><LayoutGrid size={16}/> Cartes</button><button className="pj-btn" aria-pressed={view==='list'} onClick={()=>setView('list')}><List size={16}/> Liste</button></div><button className="pj-btn" onClick={load} disabled={loading} aria-busy={loading}><RefreshCw size={15} /> {loading && hasLoaded ? 'Actualisation…' : 'Actualiser'}</button></div>
         <MotionNav as="div" className="pj-tabs" aria-label="État des projets">{[['actifs', 'En cours'], ['termine', 'Terminés'], ['archive', 'Archives'], ['tous', 'Tous']].map(([v, l]) => <button key={v} aria-pressed={status === v} className={status === v ? 'is-active' : ''} onClick={() => setStatus(v)}>{l}<span>{data.projects.filter(p => v === 'tous' || p.status === (v === 'actifs' ? 'en_cours' : v)).length}</span></button>)}</MotionNav>
         <div className="pj-filters"><label className="pj-search"><Search size={17} /><input aria-label="Rechercher un projet" placeholder="Un projet, une idée, un membre…" value={query} onChange={e => setQuery(e.target.value)} /></label><select aria-label="Priorité des projets" value={priority} onChange={e => setPriority(e.target.value)}><option value="">Toutes les priorités</option>{Object.entries(PRIORITY).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><select aria-label="Trier les projets" value={sort} onChange={e => setSort(e.target.value)}><option value="updated">Dernière activité</option><option value="date">Fin la plus proche</option><option value="priority">Priorité</option><option value="title">Nom du projet</option></select><button className={`pj-btn ${mine ? 'is-selected' : ''}`} aria-pressed={mine} onClick={() => setMine(v => !v)}><Users size={15} /> Mes projets</button></div>
-        {loading && !hasLoaded ? <LoadingSkeleton label="Chargement des projets et de vos tâches." count={4}/> : error ? <Empty title="Impossible de charger les projets">Utilisez Actualiser pour réessayer.</Empty> : !projects.length ? <Empty title="Une page blanche, des possibilités.">{query || mine || priority ? 'Aucun projet ne correspond à vos filtres.' : status === 'actifs' ? 'Lancez une idée avec Nouveau projet.' : 'Aucun projet dans cette catégorie.'}</Empty> : <div className="pj-project-list">
+        {loading && !hasLoaded ? <LoadingSkeleton label="Chargement des projets et de vos tâches." count={4}/> : error ? <Empty title="Impossible de charger les projets">Utilisez Actualiser pour réessayer.</Empty> : !projects.length ? <Empty title="Une page blanche, des possibilités.">{query || mine || priority ? 'Aucun projet ne correspond à vos filtres.' : status === 'actifs' ? 'Lancez une idée avec Nouveau projet.' : 'Aucun projet dans cette catégorie.'}</Empty> : <ProjectCollection view={view} status={status}>
           <div className="pj-project-list-head" aria-hidden="true"><span>Projet</span><span>Avancement</span><span>Équipe</span><span>Échéance</span><span/></div>
           {projectPages.items.map(project => {
             const p = progress(project.task_counts);
-            return <Link className="pj-project-row" key={project.id} to={`/animateur/projects/${project.id}`}>
+            return <Link className={`pj-project-row ${view==='board'?'pj-board-card':''}`} key={project.id} data-project-status={project.status} to={`/animateur/projects/${project.id}`}>
               <div className="pj-row-copy"><div className="pj-row-title"><strong title={project.title}>{project.title}</strong><ChangeCue value={project.status} className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</ChangeCue>{project.priority === 'haute' && <Priority value={project.priority}/>}</div><p title={project.description}>{project.description || 'Le brief reste à construire.'}</p>{!!project.tags?.length && <span className="pj-row-tags">{project.tags.map(tag => `#${tag}`).join(' · ')}</span>}</div>
               <div className="pj-row-progress"><span>{p.done} / {p.total} validées <strong>{p.percent}%</strong></span><progress value={p.percent} max="100" aria-label={`Avancement de ${project.title}`}/></div>
               <div className="pj-member-stack" aria-label={`${project.members?.length || 0} membres`}>{project.members?.slice(0,3).map(m => <Avatar key={m.id} member={m}/>)}{project.members?.length > 3 && <span>+{project.members.length - 3}</span>}</div>
@@ -87,7 +100,7 @@ export default function ProjectsListPage({
             </Link>;
           })}
           <Pagination page={projectPages.page} pageSize={8} total={projects.length} onChange={projectPages.setPage} label="projets"/>
-        </div>}
+        </ProjectCollection>}
 
       </div>
       <aside><Panel title="Mon prochain pas" intro="Vos tâches sur les projets en cours, classées par échéance." className="pj-personal"><div className="pj-chips">{[['all', 'Tout'], ['late', 'En retard'], ['review', 'À valider']].map(([v, l]) => <button className={`pj-btn ${taskFilter === v ? 'is-selected' : ''}`} key={v} onClick={() => setTaskFilter(v)} aria-pressed={taskFilter === v}>{l}</button>)}</div>{loading && !hasLoaded ? <LoadingSkeleton label="Chargement de vos tâches." count={2}/> : !myTasks.length ? <Empty title="Le champ est libre.">Aucune tâche dans cette sélection.</Empty> : <div className="pj-personal-list">{personalPages.items.map(task => <Link key={task.id} to={`/animateur/projects/${task.project_id}?task=${encodeURIComponent(task.id)}`} className={`pj-personal-task ${task.blocked_reason ? 'is-blocked' : ''}`}><span className={isLate(task) ? 'pj-deadline is-late' : 'pj-deadline'}>{task.status === 'rendu' ? <CheckCheck size={15} /> : <Clock3 size={15} />} {dateLabel(task.due_date)}</span><strong title={task.title}>{task.title}</strong><small>{projectTitle(task.project_id)} · {task.status === 'rendu' ? 'En attente de validation' : task.blocked_reason ? 'Bloquée' : personName(task.assignee)}</small></Link>)}</div>}<Pagination page={personalPages.page} pageSize={5} total={myTasks.length} onChange={personalPages.setPage} label="tâches personnelles"/></Panel><div className="pj-tip"><span className="pj-kicker">LE BON RÉFLEXE</span><h3>Une tâche, un point d’arrivée.</h3><p>Un membre, une échéance et un rendu clair. Le tableau du projet vous aide à suivre le chemin jusqu’à la validation.</p><Link to="/staff/calendrier?categorie=taches">Voir les échéances <ArrowUpRight size={16} /></Link></div></aside>

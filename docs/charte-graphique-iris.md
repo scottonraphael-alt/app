@@ -1,6 +1,6 @@
 # Charte graphique et UX d’Iris
 
-Référence pour toute création ou mise à jour de l’interface Iris. Version du 18 novembre 2026, fondée sur le dashboard et l’harmonisation des pages métier validés. Toute évolution visuelle doit prolonger cette base et mettre ce document à jour si une règle commune change.
+Référence pour toute création ou mise à jour de l’interface Iris. Version du 22 novembre 2026, fondée sur le dashboard et l’harmonisation des pages métier validés. Toute évolution visuelle doit prolonger cette base et mettre ce document à jour si une règle commune change.
 
 ## 1. Intention
 
@@ -21,6 +21,7 @@ Cette charte couvre les pages Iris, la connexion et leurs fenêtres. OasisGame e
 | [theme.css](../frontend/src/theme.css) | Tokens globaux et thème sombre |
 | [IrisRefresh.css](../frontend/src/IrisRefresh.css) | Palette validée, dashboard, navigation et motion commune |
 | [IrisPages.css](../frontend/src/IrisPages.css) | Harmonisation des pages métier et fenêtres |
+| [IrisEditorial.css](../frontend/src/IrisEditorial.css) | Composition éditoriale validée : titres, cartes, bibliothèque et vues des projets |
 | [IrisBrand.jsx](../frontend/src/components/brand/IrisBrand.jsx) et [IrisBrand.css](../frontend/src/components/brand/IrisBrand.css) | Logo floral et mot-symbole |
 | [AppShell.jsx](../frontend/src/components/AppShell.jsx) | Structure commune et périmètre de l’interface |
 | [useMotionPreference.js](../frontend/src/hooks/useMotionPreference.js) | Préférence d’animation et synchronisation |
@@ -206,3 +207,30 @@ Ces règles complètent les protections de brouillon existantes ; elles n’intr
 - Les blocs du dashboard utilisent une transition de grille, gardent leur contenu monté et rendent le contenu replié inactif et masqué aux technologies d’assistance. Leurs poignées et commandes de réorganisation restent indépendantes de cette animation.
 
 Tous ces mouvements respectent le réglage système et le réglage manuel de réduction. Les ombres de défilement restent de simples repères ; la lecture et la saisie ne déclenchent pas d’animation décorative continue.
+
+
+## 14. Direction éditoriale validée le 22 novembre 2026
+
+La composition reprend la seconde proposition visuelle : titres plus affirmés, contraste entre Manrope et une courte accentuation en Georgia italique, surfaces neutres et cartes aux formats variés. `IrisEditorial.css`, chargé après les deux feuilles communes, porte cette évolution dans le périmètre `.app-shell.iris-ui`. Il utilise les tokens existants pour les deux thèmes et ne modifie pas OasisGame ni le contenu des documents et éditeurs.
+
+- Les titres de page font 34 à 58 px sur ordinateur, 37 px sur mobile, avec un interligne de 1.12. `.iris-title-accent` est réservé à une courte partie d’un titre de page. Ne pas appliquer cette typographie au texte saisi par les membres.
+- Les sections principales ont un rayon de 20 px, les cartes de 14 à 18 px et les contrôles de 8 à 10 px. Conserver une hiérarchie de formats plutôt que des capsules sur chaque élément.
+- La navigation reste en haut avec les favoris, recherche, profil et préférences existants. Le repère framboise sous le favori actif ne remplace pas son libellé ni son état accessible.
+- L’accueil conserve tous les modules autorisés, les positions sauvegardées et les tailles choisies. Les destinations de dossiers deviennent des cartes verticales ; ne pas ajouter de compteurs sans données réelles.
+- Les projets proposent Cartes et Liste avec les mêmes filtres, liens et pagination. Le filtre Tous regroupe les cartes par états réels : En cours, Terminé, Archivé. Les compteurs de colonne précisent « sur cette page ». Ne pas inventer des états métier à partir des libellés du prototype.
+- La bibliothèque met en avant le premier document de la liste renvoyée par l’API, seulement en dehors des recherches et catégories filtrées. Le dépôt reste réservé aux administrateurs dans une section native dépliable ; tous les contrôles et règles de validation sont conservés.
+- Les couleurs restent ponctuelles : lavande, sauge, framboise, pêche et bleu. Les contrastes sont définis par les tokens ; aucune couleur du prototype ne doit être copiée dans les données métier.
+- Les nouvelles surfaces héritent des mouvements existants. Le soulèvement des cartes navigables est limité à 4 px et disparaît en préférence réduite, système ou manuelle. Ne pas réanimer les positions contrôlées par le dashboard.
+
+La composition mobile empile les colonnes de projets et conserve des cartes lisibles ; les titres longs peuvent revenir à la ligne. Les prototypes et réponses API fictives restent hors du code livré.
+
+### Cartes de compteurs, marges et illustrations
+
+Les compteurs de travail restent des cartes distinctes, avec icône, valeur dominante et libellé lisible : trois colonnes sur ordinateur, cartes empilées sur mobile. Employer les accents sauge et lavande ; un retard réel garde un traitement framboise. Ne pas remplacer ces repères par une simple ligne de chiffres.
+
+Une surface avec fond et coins arrondis doit toujours conserver ses marges intérieures. Le bloc Responsable utilise 28 px sur ordinateur et 21 px sur mobile ; son en-tête et sa grille ne rajoutent pas un second padding. Tous les descendants du périmètre Iris utilisent `border-box` et les liens restent à l’intérieur de leur groupe. Le contenu doit revenir à la ligne avant de toucher les coins.
+
+[IrisIllustration.jsx](../frontend/src/components/illustrations/IrisIllustration.jsx) apporte des objets distincts selon le contexte : dossier avec fiche pour les projets, calendrier de bureau pour la journée, console à curseurs et molette pour les outils. Le livre est réservé à la bibliothèque. Elles sont décoratives (`aria-hidden`), sans animation ni capture des clics. Utiliser les tokens de couleur et masquer une illustration si elle réduit l’espace d’un contrôle ou d’un titre. Ne pas multiplier les illustrations dans chaque carte ni y placer une information indispensable.
+
+
+Les illustrations occupent une cellule ou un élément flex dans le flux normal, avec un écart réel par rapport aux titres et contrôles. Ne jamais positionner leur conteneur en absolu au-dessus d’une carte. Seules les pièces internes d’un objet peuvent être superposées, dans les limites de son conteneur. Dans « Ma journée », une requête de conteneur masque le calendrier sous 440 px de largeur utile, même si l’écran est large et que le widget a été réduit. Le bouton Agenda conserve toujours son espace et son contour de focus.

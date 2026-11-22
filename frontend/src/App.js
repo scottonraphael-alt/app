@@ -1,3 +1,16 @@
+import { useCallback, useEffect, useState, Suspense, lazy } from "react";
+import "./App.css";
+import "./MentalHealth.css";
+import "./IrisRefresh.css";
+import "./IrisPages.css";
+import "./IrisEditorial.css";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { api } from "./api/client";
+import AppShell from "./components/AppShell";
+import DiscordActivityEntry from "./pages/DiscordActivityEntry";
 const CommandDescriptionsPage=lazy(()=>import("./pages/CommandDescriptionsPage"));
 const KaraokePage=lazy(()=>import("./pages/KaraokePage"));
 const ResolutionsPage=lazy(()=>import("./pages/ResolutionsPage"));
@@ -11,18 +24,6 @@ const VerificationTicketsPage = lazy(() => import("./pages/CaseworkPages").then(
 const ConvocationsPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.ConvocationsPage })));
 const ContactsStaffPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.ContactsStaffPage })));
 const BullesPage = lazy(() => import("./pages/CaseworkPages").then(m => ({ default: m.BullesPage })));
-import { useCallback, useEffect, useState, Suspense, lazy } from "react";
-import "./App.css";
-import "./MentalHealth.css";
-import "./IrisRefresh.css";
-import "./IrisPages.css";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { Toaster } from "sonner";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-
-import { api } from "./api/client";
-import AppShell from "./components/AppShell";
-import DiscordActivityEntry from "./pages/DiscordActivityEntry";
 const NewDashboardPage = lazy(() => import("./pages/NewDashboardPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const AdminDashboardPage = lazy(() => import("./pages/AdminDashboardPage"));

@@ -1,13 +1,14 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import TicketWorkspacePage from "./TicketWorkspacePage";
+import { api } from "../api/client";
+
 
 jest.mock("react-router-dom", () => ({
   useParams: () => ({ ticketId: "ticket" }), useNavigate: () => jest.fn(),
   Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
 }), { virtual: true });
 jest.mock("@/TicketWorkspace.css", () => ({}), { virtual: true });
-import TicketWorkspacePage from "./TicketWorkspacePage";
-import { api } from "../api/client";
 
 jest.mock("../api/client", () => ({ api: { get: jest.fn(), patch: jest.fn(), post: jest.fn() }, getErrorMessage: () => "Erreur" }));
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -185,4 +186,14 @@ it("charge le dossier choisi dans l’aperçu indépendamment du paramètre de l
   expect(api.post).toHaveBeenCalledWith('/tickets/preview-ticket/view');
   expect(api.get).toHaveBeenCalledWith('/tickets/preview-ticket/messages', expect.anything());
   expect(document.body.classList.contains('ticket-workspace-no-nav')).toBe(false);
+});
+it('protège la note pendant son envoi et retrouve les champs après un échec',async()=>{
+ await tab('notes');await act(async()=>[...container.querySelectorAll('button')].find(b=>b.textContent.trim()==='Ajouter').click());
+ await type('#tw-note-title','Une observation');await type('#tw-note-content','Contenu à conserver');
+ let fail;api.post.mockImplementation(url=>url.endsWith('/notes')?new Promise((resolve,reject)=>{fail=reject;}):Promise.resolve({data:{}}));
+ await act(async()=>container.querySelector('[data-testid="new-ticket-note-form"]').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+ expect(container.querySelector('#tw-note-content').disabled).toBe(true);expect(container.querySelector('#tw-note-title').disabled).toBe(true);
+ expect(container.querySelector('[data-testid="new-ticket-note-form"] button[type="button"]').disabled).toBe(true);
+ await act(async()=>fail(new Error('Échec réseau')));
+ expect(container.querySelector('#tw-note-content').value).toBe('Contenu à conserver');expect(container.querySelector('#tw-note-content').disabled).toBe(false);
 });

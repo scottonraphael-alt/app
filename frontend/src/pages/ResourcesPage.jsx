@@ -256,7 +256,7 @@ export default function ResourcesPage({ isAdmin = false }) {
         <div>
           <p className="rl-eyebrow">BIBLIOTHÈQUE PARTAGÉE</p>
 
-          <h1>Ressources</h1>
+          <h1>Le savoir <span className="iris-title-accent">se partage.</span></h1>
 
           <p className="rl-intro">
             Règlements, repères et documents utiles à consulter à tout moment.
@@ -271,7 +271,16 @@ export default function ResourcesPage({ isAdmin = false }) {
         </div>
       </header>
 
+      {!loading && resources.length > 0 && !search.trim() && categoryFilter === "all" && (
+        <section className="rl-featured" aria-label="Ressource à découvrir">
+          <div className="rl-featured-cover" aria-hidden="true"><BookOpen size={58} strokeWidth={1.2}/><span>IRIS · RESSOURCES</span></div>
+          <div className="rl-featured-copy"><p className="rl-eyebrow">À PORTÉE DE MAIN</p><h2>{resources[0].title}</h2><p>{resources[0].description || resources[0].original_filename}</p><button type="button" className="rl-ghost-button" onClick={()=>preview(resources[0])}>Ouvrir le document <ArrowRight size={17}/></button></div>
+          <span className="rl-featured-type">{typeLabel(resources[0])}</span>
+        </section>
+      )}
+
       {isAdmin && (
+        <details className="rl-upload-disclosure"><summary><UploadCloud size={17} aria-hidden="true"/> Partager une ressource <span>PDF, document ou image</span></summary>
         <form
           className="rl-upload"
           onSubmit={upload}
@@ -349,7 +358,7 @@ export default function ResourcesPage({ isAdmin = false }) {
               {uploading ? "Publication…" : "Publier la ressource"}
             </button>
           </div>
-        </form>
+        </form></details>
       )}
 
       <section className="rl-toolbar" aria-label="Filtres de ressources">

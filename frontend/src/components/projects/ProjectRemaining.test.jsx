@@ -51,3 +51,14 @@ it('prévisualise les rappels sans envoi et enregistre une désactivation',async
   await act(async()=>document.querySelector('input[type="checkbox"]').click());await submit();
   expect(api.put).toHaveBeenCalledWith('/animateur/projects/workspace/reminders',{enabled:false,channel_id:'1534270215490244829',expected_updated_at:null});
 });
+it('verrouille les commentaires et la pagination pendant un envoi puis conserve le texte après erreur',async()=>{
+ let fail;
+ api.get.mockImplementation(url=>Promise.resolve({data:url.includes('mentionable')?[]:{items:[comment],total:21,page:1}}));
+ api.post.mockImplementation(()=>new Promise((resolve,reject)=>{fail=reject;}));
+ await act(async()=>root.render(<TaskComments taskId="t" helper={helper} writable manager/>));await openDiscussion();
+ await fill(field('Ajouter un commentaire'),'Ma précision à conserver');await submit(container.querySelector('form'));
+ expect(field('Ajouter un commentaire').disabled).toBe(true);
+ expect(container.querySelector('[aria-label="Page suivante des commentaires de la tâche"]').disabled).toBe(true);
+ await act(async()=>fail(new Error('Connexion interrompue')));
+ expect(field('Ajouter un commentaire').disabled).toBe(false);expect(field('Ajouter un commentaire').value).toBe('Ma précision à conserver');
+});

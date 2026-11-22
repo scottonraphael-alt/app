@@ -164,11 +164,11 @@ export function usePage(items, pageSize, resetKey, memoryKey = null) {
   return { page, setPage, items: items.slice((page - 1) * pageSize, page * pageSize) };
 }
 
-export function Pagination({ page, pageSize, total, onChange, label }) {
+export function Pagination({ page, pageSize, total, onChange, label, disabled = false }) {
   if (!total) return null;
   const pages = Math.ceil(total / pageSize);
   return <nav className="pj-pagination" aria-label={`Pagination des ${label}`}>
     <span role="status">{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} sur {total} {label}</span>
-    {pages > 1 && <div><button className="pj-icon" onClick={() => onChange(page - 1)} disabled={page <= 1} aria-label={`Page précédente des ${label}`}><ChevronLeft size={17}/></button><span>{page} / {pages}</span><button className="pj-icon" onClick={() => onChange(page + 1)} disabled={page >= pages} aria-label={`Page suivante des ${label}`}><ChevronRight size={17}/></button></div>}
+    {pages > 1 && <div><button className="pj-icon" onClick={() => onChange(page - 1)} disabled={disabled || page <= 1} aria-label={`Page précédente des ${label}`}><ChevronLeft size={17}/></button><span>{page} / {pages}</span><button className="pj-icon" onClick={() => onChange(page + 1)} disabled={disabled || page >= pages} aria-label={`Page suivante des ${label}`}><ChevronRight size={17}/></button></div>}
   </nav>;
 }
