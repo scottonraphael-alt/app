@@ -1,3 +1,5 @@
+name: app
+
 networks:
   npm_default:
     external: true
