@@ -4,7 +4,9 @@ FROM python:3.11-slim AS dependencies
 WORKDIR /build
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends build-essential
+    apt-get clean && apt-get update && \
+    apt-get install -y --no-install-recommends build-essential && \
+    apt-get clean
 COPY requirements.txt requirements.karaoke-text.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --prefix=/install -r requirements.txt
