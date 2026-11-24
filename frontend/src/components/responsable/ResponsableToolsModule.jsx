@@ -1,12 +1,13 @@
 import IrisIllustration from '../illustrations/IrisIllustration';
 import {Link} from 'react-router-dom';
-import {ArrowRight,Terminal,BrainCircuit,Settings2,KeyRound,Megaphone,BarChart3,FileText,Gauge,ClipboardList,Archive} from 'lucide-react';
+import {ArrowRight,Terminal,BrainCircuit,Settings2,KeyRound,Megaphone,BarChart3,FileText,Gauge,ClipboardList,Archive,Film} from 'lucide-react';
 const GROUPS=[
  {title:'Discord et IA',intro:'Configurer le bot et préparer les messages.',tone:'violet',links:[
   ['/responsable/commandes-discord','Descriptions des commandes',Terminal],
   ['/responsable/parcours-discord','Parcours, rôles et panneaux',Settings2],
   ['/responsable/moderation-ia','Prompts de l’IA',BrainCircuit],
   ['/responsable/annonces','Composer une annonce',Megaphone],
+  ['/staff/cinestream','Films de CinéStream',Film],
  ]},
  {title:'Sécurité et archives',intro:'Contrôler les accès et retrouver les traces.',tone:'clay',links:[
   ['/responsable/acces-sanctions','Codes d’accès modération',KeyRound],

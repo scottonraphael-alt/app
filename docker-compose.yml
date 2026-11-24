@@ -39,7 +39,7 @@ services:
     restart: unless-stopped
     volumes:
       - resources-data:/app/storage
-      - ./activity-video:/data/activity:ro
+      - ./activity-video:/data/activity
       - ./ai_config:/app/ai_config
       - karaoke-music:/data/karaoke
     env_file:

@@ -92,6 +92,8 @@ def align_tifa(primary, other, lines, language, source, destination, args):
         for i, original in enumerate(baseline['segments']):
             names = [f'{i:04}-{label}' for label in ('demucs', 'roformer')]
             if any(name not in results for name in names):
+                report['needs_review'].append({'line': i+1,
+                    'reason': 'TIFA n’a pas pu convertir cette phrase ; alignement MMS conservé.'})
                 continue
             candidates = [mapped_words(results[name], original['words'], offsets[name]) for name in names]
             reason = None

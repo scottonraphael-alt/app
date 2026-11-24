@@ -18,17 +18,22 @@ import logging
 import math
 import os
 import re
+import shutil
 import time
 import zlib
+import asyncio
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import jwt
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from config import APP_SESSION_SECRET, DISCORD_GUILD_ID, DISCORD_STAFF_ROLE_ID
+from models.ticket import AuthenticatedHelper
+from services.auth_service import current_helper, get_helper_role_flags
 
 logger = logging.getLogger("activity")
 
@@ -63,6 +68,20 @@ ACTIVITY_CONTROLLER_ROLE_IDS = {
 
 # True : la vidéo démarre dès l'ouverture de l'Activity. False : le staff doit lancer la lecture.
 ACTIVITY_AUTOSTART = os.environ.get("ACTIVITY_AUTOSTART", "true").lower() != "false"
+MIN_FREE_BYTES = max(0, int(os.environ.get("ACTIVITY_MIN_FREE_BYTES", str(2 * 1024**3))))
+UPLOAD_CHUNK_BYTES = 768 * 1024
+UPLOAD_TTL_SECONDS = 24 * 60 * 60
+_UPLOADS: dict[str, dict] = {}
+_UPLOAD_LOCK = asyncio.Lock()
+
+
+async def current_cinestream_staff(request: Request) -> AuthenticatedHelper:
+    """Allow CinéStream management to staff and responsables, but not other Iris users."""
+    helper = await current_helper(request)
+    flags = await get_helper_role_flags(helper.id)
+    if not (flags["is_staff"] or flags["is_responsable"]):
+        raise HTTPException(status_code=403, detail="Rôle Staff ou Responsable requis.")
+    return helper
 
 
 def _activity_token_key() -> str | None:
@@ -113,6 +132,214 @@ def list_videos() -> list[dict]:
         ):
             videos.append({"name": entry.name, "title": entry.stem, "size": entry.stat().st_size})
     return videos
+
+
+def _prune_uploads() -> None:
+    now = time.time()
+    for upload_id, upload in list(_UPLOADS.items()):
+        if now - upload["updated_at"] > UPLOAD_TTL_SECONDS:
+            upload["path"].unlink(missing_ok=True)
+            _UPLOADS.pop(upload_id, None)
+    # A process restart loses in-memory upload sessions; remove their abandoned
+    # temporary files after the same one-day grace period.
+    try:
+        for path in VIDEO_DIR.glob(".iris-cinestream-*.part"):
+            if now - path.stat().st_mtime > UPLOAD_TTL_SECONDS:
+                path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _reserved_upload_bytes() -> int:
+    return sum(max(0, upload["size"] - upload["offset"]) for upload in _UPLOADS.values())
+
+
+def _video_storage_status() -> dict:
+    try:
+        VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+        usage = shutil.disk_usage(VIDEO_DIR)
+    except OSError as exc:
+        logger.exception("Impossible de lire le stockage CinéStream")
+        raise HTTPException(status_code=503, detail="Le stockage vidéo est inaccessible.") from exc
+    videos = list_videos()
+    reserved = _reserved_upload_bytes()
+    return {
+        "total_bytes": usage.total,
+        "used_bytes": usage.total - usage.free,
+        "free_bytes": usage.free,
+        "reserve_bytes": MIN_FREE_BYTES,
+        "reserved_upload_bytes": reserved,
+        "safe_upload_bytes": usage.free - MIN_FREE_BYTES - reserved,
+        "video_count": len(videos),
+        "video_bytes": sum(video["size"] for video in videos),
+        "current_video": current_video_path().name if current_video_path() else None,
+        "videos": videos,
+    }
+
+
+class VideoUploadInit(BaseModel):
+    filename: str
+    size: int
+
+
+@router.get("/admin/storage")
+async def activity_storage_status(_: AuthenticatedHelper = Depends(current_cinestream_staff)) -> dict:
+    async with _UPLOAD_LOCK:
+        _prune_uploads()
+        return await asyncio.to_thread(_video_storage_status)
+
+
+@router.post("/admin/uploads", status_code=201)
+async def start_video_upload(payload: VideoUploadInit,
+                             helper: AuthenticatedHelper = Depends(current_cinestream_staff)) -> dict:
+    _prune_uploads()
+    filename = payload.filename.strip()
+    if (not filename or len(filename) > 180 or Path(filename).name != filename
+            or any(ord(char) < 32 for char in filename) or filename.startswith(".")
+            or Path(filename).suffix.lower() not in VIDEO_EXTENSIONS):
+        raise HTTPException(status_code=422, detail="Choisis un fichier MP4 ou WebM avec un nom simple.")
+    if not 1 <= payload.size <= 2**63 - 1:
+        raise HTTPException(status_code=422, detail="La taille du fichier est invalide.")
+    async with _UPLOAD_LOCK:
+        _prune_uploads()
+        if any(video["name"].casefold() == filename.casefold() for video in list_videos()):
+            raise HTTPException(status_code=409, detail="Une vidéo porte déjà ce nom. Renomme le fichier avant l’envoi.")
+        storage = await asyncio.to_thread(_video_storage_status)
+        if payload.size > storage["safe_upload_bytes"]:
+            available = max(0, storage["safe_upload_bytes"])
+            raise HTTPException(status_code=507, detail=(
+                f"Espace insuffisant : il reste {available} octets disponibles pour les vidéos, "
+                "après conservation de la réserve serveur."
+            ))
+        upload_id = uuid4().hex
+        temporary = VIDEO_DIR / f".iris-cinestream-{upload_id}.part"
+        try:
+            await asyncio.to_thread(temporary.touch, mode=0o600, exist_ok=False)
+        except OSError as exc:
+            raise HTTPException(status_code=507, detail="Impossible de créer le fichier temporaire sur le stockage vidéo.") from exc
+        _UPLOADS[upload_id] = {
+            "path": temporary, "filename": filename, "size": payload.size,
+            "offset": 0, "updated_at": time.time(), "uploaded_by": str(helper.id),
+        }
+        return {"upload_id": upload_id, "offset": 0, "chunk_bytes": UPLOAD_CHUNK_BYTES,
+                "storage": _video_storage_status()}
+
+
+@router.put("/admin/uploads/{upload_id}")
+async def append_video_upload(upload_id: str, request: Request,
+                              x_upload_offset: int = Header(alias="X-Upload-Offset"),
+                              _: AuthenticatedHelper = Depends(current_cinestream_staff)) -> dict:
+    chunk = bytearray()
+    async for part in request.stream():
+        if len(chunk) + len(part) > UPLOAD_CHUNK_BYTES:
+            raise HTTPException(status_code=413, detail="Bloc trop volumineux ; reprends le transfert depuis la page.")
+        chunk.extend(part)
+    if not chunk:
+        raise HTTPException(status_code=400, detail="Bloc de transfert vide.")
+    async with _UPLOAD_LOCK:
+        upload = _UPLOADS.get(upload_id)
+        if not upload:
+            raise HTTPException(status_code=404, detail="Envoi introuvable ou expiré. Relance le téléversement.")
+        if x_upload_offset != upload["offset"]:
+            raise HTTPException(status_code=409, detail="Le transfert a changé de position. Actualise l’envoi.")
+        next_offset = upload["offset"] + len(chunk)
+        if next_offset > upload["size"]:
+            raise HTTPException(status_code=413, detail="Le fichier reçu dépasse la taille annoncée.")
+        storage = await asyncio.to_thread(_video_storage_status)
+        if storage["safe_upload_bytes"] < 0:
+            raise HTTPException(status_code=507, detail="L’espace libre est passé sous la réserve serveur ; transfert suspendu.")
+        try:
+            await asyncio.to_thread(_append_upload_chunk, upload["path"], bytes(chunk))
+        except OSError as exc:
+            raise HTTPException(status_code=507, detail="Écriture interrompue : espace disque insuffisant ou stockage indisponible.") from exc
+        upload["offset"] = next_offset
+        upload["updated_at"] = time.time()
+        return {"offset": next_offset, "size": upload["size"]}
+
+
+def _append_upload_chunk(path: Path, chunk: bytes) -> None:
+    with path.open("ab") as stream:
+        stream.write(chunk)
+        stream.flush()
+
+
+@router.post("/admin/uploads/{upload_id}/complete", status_code=201)
+async def complete_video_upload(upload_id: str,
+                                _: AuthenticatedHelper = Depends(current_cinestream_staff)) -> dict:
+    async with _UPLOAD_LOCK:
+        upload = _UPLOADS.get(upload_id)
+        if not upload:
+            raise HTTPException(status_code=404, detail="Envoi introuvable ou expiré. Relance le téléversement.")
+        if upload["offset"] != upload["size"]:
+            raise HTTPException(status_code=409, detail="Le fichier n’a pas été transféré en entier.")
+        path = upload["path"]
+        try:
+            with path.open("rb") as stream:
+                header = stream.read(16)
+            extension = Path(upload["filename"]).suffix.lower()
+            valid = (extension == ".mp4" and len(header) >= 8 and header[4:8] == b"ftyp") or (
+                extension == ".webm" and header.startswith(bytes.fromhex("1a45dfa3")))
+            if not valid:
+                raise HTTPException(status_code=415, detail="Le contenu ne correspond pas à un fichier MP4 ou WebM valide.")
+            target = VIDEO_DIR / upload["filename"]
+            if any(video["name"].casefold() == target.name.casefold() for video in list_videos()):
+                raise HTTPException(status_code=409, detail="Une vidéo porte déjà ce nom. Renomme le fichier avant l’envoi.")
+            path.replace(target)
+        except HTTPException:
+            raise
+        except OSError as exc:
+            raise HTTPException(status_code=507, detail="Impossible de finaliser l’enregistrement de la vidéo.") from exc
+        _UPLOADS.pop(upload_id, None)
+    logger.info("CinéStream : vidéo ajoutée (%s octets, par %s)", upload["size"], upload["uploaded_by"])
+    message = videos_message()
+    for room in ROOMS.values():
+        await broadcast(room, message)
+    return {"name": target.name, "size": target.stat().st_size,
+            "storage": await asyncio.to_thread(_video_storage_status)}
+
+
+@router.delete("/admin/uploads/{upload_id}", status_code=204)
+async def cancel_video_upload(upload_id: str,
+                              _: AuthenticatedHelper = Depends(current_cinestream_staff)) -> Response:
+    async with _UPLOAD_LOCK:
+        upload = _UPLOADS.pop(upload_id, None)
+        if upload:
+            upload["path"].unlink(missing_ok=True)
+    return Response(status_code=204)
+
+
+@router.delete("/admin/videos", status_code=204)
+async def delete_video(filename: str = Query(..., min_length=1, max_length=180),
+                       _: AuthenticatedHelper = Depends(current_cinestream_staff)) -> Response:
+    """Remove an uploaded CinéStream video and refresh the active Activity rooms."""
+    global _current_name
+    if (Path(filename).name != filename or filename.startswith(".")
+            or Path(filename).suffix.lower() not in VIDEO_EXTENSIONS
+            or any(ord(char) < 32 for char in filename)):
+        raise HTTPException(status_code=422, detail="Nom de vidéo invalide.")
+    async with _UPLOAD_LOCK:
+        matches = [video["name"] for video in list_videos() if video["name"].casefold() == filename.casefold()]
+        if not matches:
+            raise HTTPException(status_code=404, detail="Cette vidéo n’existe plus dans le catalogue.")
+        target = VIDEO_DIR / matches[0]
+        was_current = current_video_path() == target
+        try:
+            await asyncio.to_thread(target.unlink)
+        except OSError as exc:
+            logger.exception("Impossible de supprimer une vidéo CinéStream (%s)", target.name)
+            raise HTTPException(status_code=500, detail="Impossible de supprimer ce film du stockage.") from exc
+        remaining = list_videos()
+        if was_current:
+            _current_name = remaining[0]["name"] if remaining else None
+            _write_state(_current_name or "")
+    logger.info("CinéStream : vidéo supprimée (%s)", target.name)
+    if was_current and remaining:
+        await select_video(remaining[0]["name"])
+    else:
+        message = videos_message()
+        for room in ROOMS.values():
+            await broadcast(room, message)
+    return Response(status_code=204)
 
 
 def _read_state() -> str | None:

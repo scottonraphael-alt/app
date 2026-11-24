@@ -39,8 +39,9 @@ def main():
     trainer = pl.Trainer(accelerator='cpu', devices=1, precision='32-true', logger=False,
                          enable_checkpointing=False, callbacks=[Export()])
     trainer.predict(module, loader)
-    if set(outputs) != {item['id'] for item in job['items']}:
-        raise ValueError('TIFA a ignoré une phrase ; consulter le journal.')
+    missing = {item['id'] for item in job['items']} - set(outputs)
+    if missing:
+        print(f'TIFA : {len(missing)} phrase(s) ignorée(s) ; leur alignement MMS sera conservé.', file=sys.stderr)
     Path(job['output']).write_text(json.dumps(outputs, ensure_ascii=False))
 
 

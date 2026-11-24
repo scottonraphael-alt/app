@@ -59,6 +59,7 @@ const ProjectsTimelinePage = lazy(() => import("./pages/ProjectsTimelinePage"));
 const ReflexSheetsPage = lazy(() => import("./pages/ReflexSheetsPage"));
 const TrainingsPage = lazy(() => import("./pages/TrainingsPage"));
 const SystemHealthPage = lazy(() => import("./pages/SystemHealthPage"));
+const ActivityVideoAdminPage = lazy(() => import("./pages/ActivityVideoAdminPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 function Loading() {
@@ -335,6 +336,7 @@ function AuthenticatedApp({
           <Route path="/responsable/acces-sanctions" element={isResponsable ? <SanctionAccessPage /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/responsable/annonces" element={isResponsable ? <DiscordAnnouncementsPage helper={helper} /> : <Navigate to={defaultRoute} replace />} />
           <Route path="/responsable/statistiques" element={isResponsable ? <ServerStatisticsPage /> : <Navigate to={defaultRoute} replace />} />
+          <Route path="/staff/cinestream" element={(isStaff || isResponsable) ? <ActivityVideoAdminPage /> : <Navigate to={defaultRoute} replace />} />
 
           <Route
             path="/responsable/auth-logs"

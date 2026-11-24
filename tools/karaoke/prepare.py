@@ -50,9 +50,23 @@ def separate(source, output, device, threads, allow_cpu_fallback=False, model='h
 
 
 def duration(path):
-    process = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-        '-of', 'default=noprint_wrappers=1:nokey=1', str(path)], check=True, capture_output=True, timeout=30)
-    seconds = float(process.stdout)
+    # Container duration on MP3 can disagree with the decoded stream duration
+    # by several hundred milliseconds. Demucs and the rest of this pipeline
+    # operate on decoded samples, so compare actual frame samples instead.
+    rate = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0',
+        '-show_entries', 'stream=sample_rate', '-of', 'default=noprint_wrappers=1:nokey=1',
+        str(path)], check=True, capture_output=True, text=True, timeout=30)
+    frames = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_frames',
+        '-show_entries', 'frame=nb_samples', '-of', 'csv=p=0', str(path)],
+        check=True, capture_output=True, text=True, timeout=60)
+    try:
+        sample_rate = int(rate.stdout.strip())
+        sample_count = sum(int(value) for value in frames.stdout.splitlines() if value.strip().isdigit())
+    except ValueError as exc:
+        raise ValueError('Impossible de mesurer la durée audio décodée.') from exc
+    if sample_rate <= 0 or sample_count <= 0:
+        raise ValueError('Impossible de mesurer la durée audio décodée.')
+    seconds = sample_count/sample_rate
     if not math.isfinite(seconds) or not 1 <= seconds <= 1200:
         raise ValueError('Le morceau doit durer entre 1 seconde et 20 minutes.')
     return seconds
@@ -254,8 +268,20 @@ def separated_stems(source, destination, args, seconds, device):
         separate(source, stage, device, args.threads, allow_cpu_fallback=args.device == 'auto',
                  model=settings['model'], shifts=settings['shifts'], overlap=settings['overlap'])
         paths = [stage/settings['model']/source.stem/name for name in ('vocals.wav', 'no_vocals.wav')]
-        if any(not path.is_file() or path.is_symlink() or abs(duration(path)-seconds) >= .15 for path in paths):
-            raise ValueError('Pistes Demucs absentes ou de durée incompatible avec le morceau.')
+        invalid = []
+        for path in paths:
+            if not path.is_file() or path.is_symlink():
+                invalid.append(f'{path.name} absente')
+                continue
+            try:
+                actual = duration(path)
+            except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+                invalid.append(f'{path.name} illisible ({exc})')
+                continue
+            if abs(actual-seconds) >= .15:
+                invalid.append(f'{path.name} : {actual:.3f} s au lieu de {seconds:.3f} s')
+        if invalid:
+            raise ValueError('Pistes Demucs invalides — ' + '; '.join(invalid) + '.')
         saved = {'settings': settings, 'files': {path.name: sha256(path) for path in paths}}
         cached.mkdir(exist_ok=True)
         marker.unlink(missing_ok=True)
@@ -653,9 +679,13 @@ def prepare(source, destination, args):
             hybrid_details = json.loads((destination/(source.stem+'.hybrid.json')).read_text())
             quality['text_review'] = [i+1 for i, anchor in enumerate(hybrid_details['anchors'])
                                       if anchor['needs_review'] or anchor['stem_disagreement']]
-            tifa_details = json.loads((destination/(source.stem+'.tifa.json')).read_text())
-            quality['tifa_review'] = tifa_details['needs_review']
-            quality['notes'] = tifa_details['notes']
+            if getattr(args, 'aligner', 'whisper') == 'tifa':
+                tifa_details = json.loads((destination/(source.stem+'.tifa.json')).read_text())
+                quality['tifa_review'] = tifa_details['needs_review']
+                quality['notes'] = tifa_details['notes']
+            else:
+                quality['tifa_review'] = []
+                quality['notes'] = ['TIFA non exécuté ; alignement MMS conservé sans validation TIFA.']
             quality['needs_review'] |= bool(quality['text_review'] or quality['tifa_review'])
         quality_path = destination/(source.stem+'.quality.json')
         quality_temp = quality_path.with_suffix('.json.tmp')

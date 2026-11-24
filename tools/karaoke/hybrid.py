@@ -186,11 +186,25 @@ def hybrid_text(model, primary, source, destination, args, metadata, seconds, ra
     evidence = {'version': 1, 'language': language, 'rows': rows, 'demucs': left, 'roformer': right}
     atomic_json(destination/(source.stem+'.candidates.json'), evidence)
     choices = arbitrate(rows, language, destination, source, getattr(args, 'refresh_arbitration', False))
+    aligner = getattr(args, 'aligner', 'whisper')
+    if aligner in ('mms', 'tifa'):
+        # Whisper timestamps here are only rough text-matching evidence. MMS
+        # performs the actual line alignment below, and TIFA then checks those
+        # timings against both stems. Do not let provisional Whisper anchors
+        # reject a song before those independent aligners can run.
+        anchors = [{'start': None, 'end': None, 'needs_review': choice['needs_review'],
+                    'timing_deferred_to': aligner,
+                    'stem_disagreement': bool(left[i]['start'] is not None and right[i]['start'] is not None
+                        and abs(left[i]['start']-right[i]['start']) > .5)}
+                   for i, choice in enumerate(choices)]
+        atomic_json(destination/(source.stem+'.hybrid.json'), {'anchors': anchors, 'decisions': choices})
+        return '\n'.join(choice['text'] for choice in choices), other, anchors
     from services.karaoke_text import parse_lrc
     reference = [entry for entry in parse_lrc(raw or '') if entry['text'].strip()]
     anchors, out, last = [], [], -1.
     for i, choice in enumerate(choices):
         heard = [c for c in (left[i], right[i]) if c['start'] is not None]
+        reference_fallback = False
         if heard:
             start = statistics.median(c['start'] for c in heard)
             end = statistics.median(c['end'] for c in heard)
@@ -198,10 +212,21 @@ def hybrid_text(model, primary, source, destination, args, metadata, seconds, ra
             start, end = reference[i]['t'], min(seconds, reference[i]['t']+10)
         else:
             raise ValueError(f'Phrase {i+1} sans repère acoustique ; candidats sauvegardés pour vérification.')
-        # Do not silently force an out-of-order ASR match into a false timeline.
+        # Prefer timed source lyrics over forcing a repeated/out-of-order ASR
+        # match into a false timeline. Mark this phrase for manual review below.
         if start <= last or not 0 <= start < end <= seconds+.1:
-            raise ValueError(f'Repères incohérents pour la phrase {i+1} ; vérifier .candidates.json.')
-        anchors.append({'start': start, 'end': end, 'needs_review': choice['needs_review'] or not heard,
+            if len(reference) == len(lines):
+                candidate_start = reference[i]['t']
+                candidate_end = min(seconds, candidate_start+10)
+                if last < candidate_start < candidate_end <= seconds+.1:
+                    start, end = candidate_start, candidate_end
+                    reference_fallback = True
+                else:
+                    raise ValueError(f'Repères incohérents pour la phrase {i+1}, et l’horodatage des paroles ne répare pas la chronologie ; vérifier .candidates.json.')
+            else:
+                raise ValueError(f'Repères incohérents pour la phrase {i+1} sans horodatage de secours ; vérifier .candidates.json.')
+        anchors.append({'start': start, 'end': end, 'needs_review': choice['needs_review'] or not heard or reference_fallback,
+                        'reference_fallback': reference_fallback,
                         'stem_disagreement': bool(len(heard) == 2 and abs(heard[0]['start']-heard[1]['start']) > .5)})
         out.append(f"[{timestamp(start)}]{choice['text']}")
         last = start

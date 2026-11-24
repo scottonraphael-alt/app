@@ -7,6 +7,7 @@ import {
   ArrowRight,
   CalendarDays,
   FileText,
+  Film,
   ShieldCheck,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -171,6 +172,14 @@ const pills = [
         "Consulter les absences et déclarer une indisponibilité.",
       tone: "white",
       Icon: CalendarDays,
+    },
+    (isStaff || isResponsable) && {
+      to: "/staff/cinestream",
+      title: "Films de CinéStream",
+      description:
+        "Gérer les vidéos et vérifier l’espace disponible sur le serveur.",
+      tone: "violet",
+      Icon: Film,
     },
   ].filter(Boolean);
 
