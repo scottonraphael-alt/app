@@ -161,12 +161,22 @@ async def publish_staff(client, row, advisory=None, reference_ids=None):
             reference_ids=generated['advisory']['reference_ids']
     guild = await guild_for(client)
     channel = await private_review_channel(guild)
-    if not (row.get('member') or {}).get('avatar_url') and getattr(guild,'fetch_member',None):
+    if getattr(guild,'fetch_member',None):
         try:
-            member=await guild.fetch_member(int(row['member_id']))
-            row={**row,'member':{**(row.get('member') or {}),'avatar_url':str(member.display_avatar.url)}}
-            await db.verification_cases.update_one({'_id':row['_id']},{'$set':{'member.avatar_url':row['member']['avatar_url']}})
-        except discord.HTTPException:pass
+            member=guild.get_member(int(row['member_id'])) or await guild.fetch_member(int(row['member_id']))
+            row={**row,'member':{**(row.get('member') or {}),'username':member.name,
+                'display_name':member.display_name,'avatar_url':str(member.display_avatar.url),'discord_present':True}}
+            await db.verification_cases.update_one({'_id':row['_id']},{'$set':{
+                'member.username':member.name,'member.display_name':member.display_name,
+                'member.avatar_url':row['member']['avatar_url'],'member.discord_present':True}})
+        except discord.NotFound as exc:
+            if exc.code==10007:
+                row={**row,'member':{**(row.get('member') or {}),'discord_present':False}}
+                await db.verification_cases.update_one({'_id':row['_id']},{'$set':{'member.discord_present':False}})
+        except discord.HTTPException:
+            # A temporary lookup failure should not block form delivery or make
+            # us claim that the applicant left the server.
+            pass
     from services.workflow_panels import revision as panel_revision
     view = StaffPanel(row['member_id'], base_url=config.FRONTEND_URL, row=row,advisory=advisory) if row.get('forms') else message('📁 Formulaire supprimé', 'Les réponses de ce dossier ont été supprimées par un Responsable.')
     record = row.get('staff_delivery') or {}

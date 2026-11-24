@@ -174,7 +174,11 @@ async def run(case_id,gateway,settings):
 async def alerts(client):
     import hashlib,os
     from services.verification_runtime import Adapter,message
-    cutoff=(datetime.now(timezone.utc)-timedelta(days=3)).isoformat()
+    from services import workflow_settings
+    settings=await workflow_settings.load()
+    config_alerts=settings.get('alerts') or {}
+    if not config_alerts.get('summons_enabled',True):return
+    cutoff=(datetime.now(timezone.utc)-timedelta(days=int(config_alerts.get('summons_after_days',3)))).isoformat()
     async for row in db.case_tickets.find({'guild_id':str(policy.config.DISCORD_GUILD_ID),'kind':'summons','status':'open','created_at':{'$lte':cutoff},'no_response_alert':{'$exists':False}}).limit(10):
         replied=await db.case_messages.find_one({'ticket_id':row['id'],'author.id':row['member']['id'],'is_opening':False},{'_id':1})
         if replied:continue
@@ -183,8 +187,12 @@ async def alerts(client):
         guild=client.get_guild(int(row['guild_id']));channel=await guild.fetch_channel(int(os.getenv('CASEWORK_STAFF_ALERT_CHANNEL_ID','1499495750151966862')))
         from services.casework.native import private_destination
         await private_destination(channel,guild,support=False)
-        view=message('🔔 Convocation sans réponse depuis trois jours',f'<@&{policy.config.DISCORD_STAFF_ROLE_ID}>\nMembre : <@{row["member"]["id"]}>\nLe Staff doit décider de la suite. Aucune sanction automatique.\n{policy.config.FRONTEND_URL}/staff/dossiers/summons/{row["id"]}')
+        member_name=discord.utils.escape_mentions(discord.utils.escape_markdown(str(row.get('member',{}).get('display_name') or row.get('member',{}).get('username') or 'Membre')))[:64]
+        mention=bool(config_alerts.get('staff_ping_enabled',True))
+        staff=f'<@&{policy.config.DISCORD_STAFF_ROLE_ID}>' if mention else 'Le Staff'
+        days=int(config_alerts.get('summons_after_days',3))
+        view=message(f'🔔 Convocation sans réponse depuis {days} jour'+('s' if days>1 else ''),f'{staff}\nMembre : **{member_name}** (`{row["member"]["id"]}`)\nLe Staff doit décider de la suite. Aucune sanction automatique.\n{policy.config.FRONTEND_URL}/staff/dossiers/summons/{row["id"]}')
         nonce=hashlib.sha256(('silence:'+row['id']).encode()).hexdigest()[:24]
-        await Adapter(client).send_once(channel,view,nonce,allowed_roles=[policy.config.DISCORD_STAFF_ROLE_ID])
+        await Adapter(client).send_once(channel,view,nonce,allowed_roles=[policy.config.DISCORD_STAFF_ROLE_ID] if mention else [])
         await db.case_tickets.update_one({'_id':row['_id']},{'$set':{'no_response_alert':service.now()}})
         await audit('casework.summons.alerted',case_id=row['id'])

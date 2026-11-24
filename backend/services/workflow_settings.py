@@ -26,6 +26,12 @@ DEFAULTS = {**IDS,'category':'1081957992896942166','support_category':str(config
  'support_review':'1499496022529806446','verification_review':'1425589415165558825','welcome_channel':'1081957994125860905',
  'staff_alerts':'1499495750151966862','contact_panel':'1081957993492533364','support_panel':'1501795550062710825','verification_panel':'1081957992418783296'}
 
+class AlertSettingsIn(BaseModel):
+    summons_enabled:bool=True
+    summons_after_days:int=Field(default=3,ge=1,le=30)
+    staff_ping_enabled:bool=True
+
+
 class SettingsIn(BaseModel):
     model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
     revision:int=Field(ge=0)
@@ -34,6 +40,7 @@ class SettingsIn(BaseModel):
     admission_rules:str=Field(default='',max_length=10000)
     panels:dict=Field(default_factory=dict,max_length=14)
     purgatory_responsables:bool=False
+    alerts:AlertSettingsIn=Field(default_factory=AlertSettingsIn)
 
 
 def normalize(value):
@@ -60,6 +67,7 @@ async def load():
     return {'revision':(row or {}).get('revision',0),'ids':{**ids,**(row or {}).get('ids',{})},
         'gifs':(row or {}).get('gifs',gifs),'admission_rules':(row or {}).get('admission_rules',os.getenv('VERIFICATION_ADMISSION_RULES',ADMISSION_RULES)),
         'panels':(row or {}).get('panels',{}),
+        'alerts':{**AlertSettingsIn().model_dump(),**(row or {}).get('alerts',{})},
         'purgatory_responsables':(row or {}).get('purgatory_responsables',False)}
 
 

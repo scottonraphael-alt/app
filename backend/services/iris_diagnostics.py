@@ -90,7 +90,7 @@ async def run_checks(client):
         scope = discord.Object(id=int(config.DISCORD_GUILD_ID))
         tree = client.sanction_tree
         remote = {c.name for c in await tree.fetch_commands(guild=scope)}
-        expected = {'sanction','infos-troubles','crise','panel','panel-vérification','convocation','bulle','dossier','purgatoire','iris-oasis','anonyme','suggestion','règlement','recrutement'}
+        expected = {'aide','sanction','infos-troubles','crise','panel','panel-vérification','convocation','bulle','dossier','purgatoire','iris-aide','iris-oasis','anonyme','suggestion','règlement','recrutement'}
         missing = sorted(name for name in expected if name not in remote or tree.get_command(name,guild=scope) is None)
         return ('error','Commandes absentes : '+', '.join(missing)) if missing else ('ok','Commandes présentes sur Discord et dans le bot.')
     add('Commandes natives', commands)
@@ -165,6 +165,22 @@ async def run_checks(client):
 
 def report_pages(rows):
     icons={'ok':'✅','warning':'⚠️','error':'❌'}
+    actions={
+        'Base IRIS':'Vérifie que MongoDB est joignable depuis le backend.',
+        'Stockage des archives et avatars':'Vérifie le volume de stockage et les droits d’écriture du conteneur.',
+        'Création des tickets':'Vérifie les catégories configurées et la permission Gérer les salons pour OasisLink.',
+        'Connexion Discord':'Vérifie le token du bot, son invitation sur le serveur et son état Gateway.',
+        'Événements membres / messages / vocaux':'Active les intents indiqués dans le portail développeur Discord et dans OasisLink.',
+        'Commandes natives':'Redémarre le bot après déploiement, puis vérifie les commandes de l’application OasisLink sur le serveur.',
+        'Rôles et hiérarchie':'Place le rôle OasisLink au-dessus des rôles à attribuer et vérifie Gérer les rôles.',
+        'Traitements automatiques':'Vérifie les logs backend du worker indiqué puis redémarre le backend si nécessaire.',
+        'Files des tickets':'Ouvre les dossiers concernés dans Iris et utilise la reprise après vérification de l’état Discord.',
+        'Activation des parcours':'Active les parcours natifs dans la configuration Iris puis relance le diagnostic.',
+        'Site IRIS':'Vérifie FRONTEND_URL, le certificat HTTPS et la disponibilité du frontend.',
+        'Services IA':'Configure la clé Anthropic côté backend si le préavis IA est utilisé.',
+        'Réception des formulaires':'Vérifie le salon de lecture et ses permissions dans Iris → Parcours Discord et rôles.',
+        'Bienvenue après validation':'Vérifie le salon de bienvenue, les GIF et la permission Joindre des fichiers dans Iris.',
+    }
     pages=[]
     for start in range(0,len(rows),5):
         view=discord.ui.LayoutView(timeout=180)
@@ -173,7 +189,9 @@ def report_pages(rows):
             counts={s:sum(r['status']==s for r in rows) for s in icons}
             box.add_item(discord.ui.TextDisplay(f'✅ {counts["ok"]} contrôles OK · ⚠️ {counts["warning"]} à vérifier · ❌ {counts["error"]} erreurs\nPermissions et connexions contrôlées, sans actions réelles sur les membres ni leurs dossiers.'))
         for row in rows[start:start+5]:
-            box.add_item(discord.ui.TextDisplay(f'### {icons[row["status"]]} {row["name"]}\n{row["detail"][:450]}'))
+            detail=f'### {icons[row["status"]]} {row["name"]}\n{row["detail"][:330]}'
+            if row['status']!='ok' and row['name'] in actions:detail+='\n**À vérifier :** '+actions[row['name']]
+            box.add_item(discord.ui.TextDisplay(detail))
         box.add_item(discord.ui.Separator())
         box.add_item(discord.ui.TextDisplay('-# Un contrôle OK ne remplace pas un essai fonctionnel. Aucun message de test envoyé dans les salons ; aucun rôle, ticket ou sanction modifié.'))
         view.add_item(box);pages.append(view)
@@ -204,9 +222,13 @@ async def install(client):
     tree=getattr(client,'sanction_tree',None)
     if tree is None:tree=app_commands.CommandTree(client);client.sanction_tree=tree
     guild=discord.Object(id=int(config.DISCORD_GUILD_ID))
-    if not tree.get_command('iris-oasis',guild=guild):
-        async def command(interaction:discord.Interaction):await execute(interaction)
-        tree.add_command(app_commands.Command(name='iris-oasis',description='Diagnostic privé des liaisons OasisLink et IRIS',callback=app_commands.guild_only()(command)),guild=guild)
+    async def command(interaction:discord.Interaction):await execute(interaction)
+    for name,description in (
+        ('iris-aide','Diagnostiquer OasisLink et obtenir des pistes de résolution'),
+        ('iris-oasis','Alias historique du diagnostic OasisLink'),
+    ):
+        if not tree.get_command(name,guild=guild):
+            tree.add_command(app_commands.Command(name=name,description=description,callback=app_commands.guild_only()(command)),guild=guild)
     from services.discord_command_registration import upsert_commands
-    await upsert_commands(client,tree,guild,('iris-oasis',))
+    await upsert_commands(client,tree,guild,('iris-aide','iris-oasis'))
     client.iris_diagnostics_registered=True

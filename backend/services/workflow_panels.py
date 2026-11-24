@@ -55,14 +55,17 @@ def values(row):
     fields=[('name','👤 Prénom / pseudo',80),('age','🎂 Tranche d’âge',24),('reason','🌱 Motif de venue',500),('psychiatry','💬 Avis sur la psychiatrie',1300)]
     response='\n'.join('### '+label+'\n```\n'+short(answers.get(key),limit).strip().replace('`','ˋ')+'\n```' for key,label,limit in fields)
     response+='\n-# '+('✅ Règlement accepté : Oui' if answers.get('rules') else '⚠️ Règlement accepté : Non renseigné')
-    return {'membre_id':str(member_id or 'ID indisponible'),'membre_username':str(row.get('member_username') or member.get('username') or 'Pseudo indisponible')[:32],
+    username=discord.utils.escape_mentions(discord.utils.escape_markdown(str(row.get('member_username') or member.get('display_name') or member.get('username') or 'Pseudo indisponible').strip()))[:64]
+    return {'membre_id':str(member_id or 'ID indisponible'),'membre_username':username,
         'motif':short(row.get('reason'),1000),'triggers':short(row.get('triggers'),1000),
         'motif_refus':short(row.get('decision_reason') or row.get('reason'),1000),
         'statut':short(row.get('status_label') or {'waiting':'En attente','claimed':'Pris en charge','pending':'En attente','approved':'Publication en cours','published':'Publié','rejected':'Refusé','open':'Ouvert','suspended':'Suspendu','restricted':'Accès restreint','archived':'Archivé'}.get(row.get('status'),'À vérifier'),40),
         'reponses_formulaire':response,
         'identifiant_anonyme':str(row.get('alias') or 'ANO-XXXX-XX'),'message_anonyme':str(row.get('text') or ''),
         'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:2000].decode('utf-16-le','ignore'),
-        'membre':mention(member_id,'Membre à sélectionner'),
+        # Preserve a real member mention; fall back to the submitted name if the
+        # account has left and Discord would render the ID as an unknown user.
+        'membre':mention(member_id,username) if member.get('discord_present') is not False else username,
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
         'date_traitement':stamp,

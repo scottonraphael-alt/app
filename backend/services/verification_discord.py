@@ -3,6 +3,7 @@
 Integration must persist/register public views, bind the panel publication to the
 existing Responsable/Admin guards and enqueue delivery after a successful intake.
 """
+import asyncio
 from urllib.parse import urlparse
 import discord
 from fastapi import HTTPException
@@ -19,7 +20,25 @@ def message(title,body,*,colour=0x846594):
     return view
 
 async def error(interaction,error):
-    text=error.detail if isinstance(error,HTTPException) else 'Une erreur est survenue. Réessaie ou contacte un responsable.'
+    if isinstance(error,HTTPException):
+        text=str(error.detail)
+        hint={
+            403:'Vérifie que tu as le rôle requis et que le bot dispose des permissions indiquées.',
+            404:'Vérifie que le dossier, le membre ou le salon existe encore sur ce serveur.',
+            409:'L’état a changé ou une action est déjà en cours. Actualise Iris avant de réessayer.',
+            422:'Corrige les informations indiquées puis renvoie la commande.',
+            429:'Patiente quelques instants avant de relancer la commande.',
+            503:'Le service ou un réglage Discord est indisponible. Un Responsable peut lancer `/iris-aide`.',
+        }.get(error.status_code)
+        if hint and hint.lower() not in text.lower():text += '\n\n**À faire :** '+hint
+    elif isinstance(error,discord.Forbidden):
+        text='Discord a refusé cette action. **À faire :** vérifie les permissions du bot dans ce salon et la hiérarchie des rôles.'
+    elif isinstance(error,discord.NotFound):
+        text='Discord ne trouve plus cet élément. **À faire :** actualise le dossier dans Iris et vérifie que le membre ou le salon existe encore.'
+    elif isinstance(error,(TimeoutError,asyncio.TimeoutError)):
+        text='Discord n’a pas répondu à temps. **À faire :** vérifie le résultat dans Iris avant de réessayer pour éviter de répéter une action déjà appliquée.'
+    else:
+        text='Une erreur inattendue est survenue. **À faire :** réessaie une fois; si le problème persiste, copie le nom de la commande et contacte un Responsable pour consulter les logs.'
     view=message('⚠️ Action indisponible',str(text))
     if interaction.response.is_done():await interaction.followup.send(view=view,ephemeral=True,allowed_mentions=NONE)
     else:await interaction.response.send_message(view=view,ephemeral=True,allowed_mentions=NONE)
@@ -92,16 +111,22 @@ def staff_status(row):
     return ('**🧪 Formation / test : simulation, aucun rôle ni accueil réel.**\n' if row.get('training') else '')+'**État :** '+STATUS_LABELS.get(row['status'],'À vérifier')+'\n**Pris en charge par :** '+(f"<@{row['claimed_by']}>" if row.get('claimed_by') else 'Personne pour le moment')
 
 
+def member_label(row, member_id):
+    member=(row or {}).get('member') or {}
+    value=str(member.get('display_name') or member.get('username') or '').strip()
+    value=discord.utils.escape_mentions(discord.utils.escape_markdown(value))[:64]
+    if member.get('discord_present') is False:return value or f'ID {member_id}'
+    return f'<@{member_id}>' if str(member_id).isascii() and str(member_id).isdigit() else value or 'Membre inconnu'
+
+
 def add_member_identity(box, member_id, row, *, custom):
-    mention = f'<@{member_id}>'
+    name=member_label(row,member_id)
     texts = [item.content for item in box.walk_children() if isinstance(item, discord.ui.TextDisplay)]
-    if custom and not any(mention in text for text in texts):
+    if custom and not any(name in text for text in texts):
         return  # Respect custom panels that omit the member variable.
-    member = (row or {}).get('member') or {}
-    name = ' '.join(str(member.get('username') or member.get('display_name') or '').split())[:32]
-    name = discord.utils.escape_mentions(discord.utils.escape_markdown(name))
-    identity = f'{name} · ' if name else ''
-    line = f'-# Membre : {mention} · {identity}`{member_id}`'
+    member=(row or {}).get('member') or {}
+    identity=f'**{name}**' if member.get('discord_present') is False else f'<@{member_id}> · **{name}**'
+    line = f'-# Membre : {identity} · `{member_id}`'
     units = sum(len(text.encode('utf-16-le')) // 2 for text in texts)
     if units + len(line.encode('utf-16-le')) // 2 <= 4000:
         box.add_item(discord.ui.TextDisplay(line))
@@ -130,7 +155,7 @@ class StaffActions:
                 await audit('verification.viewed', str(interaction.user.id), member_id=self.member_id)
                 # Destructive/closing decisions always receive an explicit private confirmation.
                 if action!='claim':
-                    view=Confirm(self.member_id,action,row['revision'],str(interaction.user.id),training=row.get('training',False))
+                    view=Confirm(self.member_id,action,row['revision'],str(interaction.user.id),training=row.get('training',False),member=row.get('member'))
                     await interaction.followup.send(view=view,ephemeral=True,allowed_mentions=NONE);return
                 await service.act(self.member_id,str(interaction.user.id),{'action':action,'revision':row['revision'],'request_id':f'discord:{interaction.id}'},origin='discord')
                 await interaction.followup.send(view=message('🤝 Dossier pris en charge','La prise en charge est enregistrée à ton nom.'),ephemeral=True,allowed_mentions=NONE)
@@ -144,7 +169,7 @@ class StaffForm(StaffActions,discord.ui.LayoutView):
         super().__init__(timeout=None)
         self.member_id=str(member_id)
         from services.verification_runtime import fence
-        box=discord.ui.Container(discord.ui.TextDisplay(f'## 📝 Formulaire de <@{member_id}>'),accent_colour=0x846594)
+        box=discord.ui.Container(discord.ui.TextDisplay(f'## 📝 Formulaire de {member_label(row,member_id)}'),accent_colour=0x846594)
         staff_role=str(service.config.DISCORD_STAFF_ROLE_ID or '')
         if row.get('active') and staff_role.isascii() and staff_role.isdigit():
             box.add_item(discord.ui.TextDisplay(f'<@&{staff_role}> · Un formulaire attend votre lecture.'))
@@ -179,7 +204,7 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         waiting=not row or (row.get('active') and not row.get('claimed_by') and row.get('status') in ('waiting','second_opinion'))
         title='⏳ En attente de prise en charge' if waiting else '🤝 Formulaire pris en charge' if row.get('claimed_by') and row.get('active') else '📋 Vérification · '+STATUS_LABELS.get(row['status'],'À vérifier')
         box=discord.ui.Container(discord.ui.TextDisplay('## '+title),
-            discord.ui.TextDisplay(f'### 👤 Formulaire de <@{self.member_id}>'),
+            discord.ui.TextDisplay(f'### 👤 Formulaire de {member_label(row,self.member_id)}'),
             discord.ui.TextDisplay(staff_status(row)),accent_colour=0x846594)
         from services.workflow_panels import apply as apply_panel
         presentation=discord.ui.Container()
@@ -204,11 +229,13 @@ class StaffPanel(StaffActions,discord.ui.LayoutView):
         self.add_item(box)
 
 class Confirm(discord.ui.LayoutView):
-    def __init__(self,member_id,action,revision,actor_id,*,training=False):
+    def __init__(self,member_id,action,revision,actor_id,*,training=False,member=None):
         super().__init__(timeout=180)
         labels={'approve':'Valider le formulaire','ticket':'Créer un ticket privé','close':'Archiver sans expulser le membre'}
+        member_name=discord.utils.escape_mentions(discord.utils.escape_markdown(str((member or {}).get('display_name') or (member or {}).get('username') or f'ID {member_id}')))[:64]
+        if (member or {}).get('discord_present') is not False and str(member_id).isascii() and str(member_id).isdigit():member_name=f'<@{member_id}>'
         box=discord.ui.Container(discord.ui.TextDisplay('## 🔎 Confirmer cette action'),
-            discord.ui.TextDisplay(f'**{labels[action]}** pour <@{member_id}>.\nLe résultat sera confirmé dans le dossier une fois les étapes Discord terminées.'),accent_colour=0x5B8171)
+            discord.ui.TextDisplay(f'**{labels[action]}** pour **{member_name}** (`{member_id}`).\nLe résultat sera confirmé dans le dossier une fois les étapes Discord terminées.'),accent_colour=0x5B8171)
         if training:box.add_item(discord.ui.TextDisplay('### 🧪 Simulation de formation\nAucun rôle ne sera modifié et aucun message de bienvenue ne sera envoyé.'))
         button=discord.ui.Button(label='Confirmer',style=discord.ButtonStyle.primary)
         async def confirm(interaction):
