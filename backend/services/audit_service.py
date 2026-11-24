@@ -26,6 +26,7 @@ async def log_auth_event(
             "event_type": event_type,
             "helper_id": getattr(helper, "id", None),
             "username": getattr(helper, "username", None),
+            "display_name": getattr(helper, "global_name", None),
             "ip": client_ip(request),
             "user_agent": user_agent[:512] if user_agent else None,
             "path": request.url.path,

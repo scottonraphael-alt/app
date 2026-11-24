@@ -136,6 +136,35 @@ def public(row,*,detail=True):
                 'error_message':delivery.get('cleanup_error'),'at':delivery.get('cleaned_at')}
     return result
 
+
+async def with_actor_names(result):
+    from services.identity_names import resolve_names
+    records=result.get('items') if isinstance(result,dict) and isinstance(result.get('items'),list) else [result]
+    ids=[]
+    for row in records:
+        if not isinstance(row,dict):continue
+        ids.append(row.get('claimed_by'))
+        ids.extend(event.get('actor_id') for event in reversed(row.get('events',[]))
+                   if event.get('kind') not in ('form.submitted','form.imported'))
+        ids.extend(event.get('assignee_id') for event in reversed(row.get('events',[])))
+        ids.extend(job.get('actor_id') for job in reversed(row.get('jobs',[])))
+        ids.extend((form.get('decision') or {}).get('actor_id') for form in reversed(row.get('forms',[])))
+    names=await resolve_names(ids)
+    for row in records:
+        if not isinstance(row,dict):continue
+        if row.get('claimed_by'):row['claimed_by_name']=names.get(str(row['claimed_by']), '')
+        for event_row in row.get('events',[]):
+            member=row.get('member') or {}
+            submitted_by_member=event_row.get('kind') in ('form.submitted','form.imported')
+            event_row['actor_name']=(member.get('display_name') or member.get('username') or ''
+                                     if submitted_by_member else names.get(str(event_row.get('actor_id') or ''), ''))
+            if event_row.get('assignee_id'):event_row['assignee_name']=names.get(str(event_row['assignee_id']), '')
+        for job in row.get('jobs',[]):job['actor_name']=names.get(str(job.get('actor_id') or ''), '')
+        for form in row.get('forms',[]):
+            decision=form.get('decision')
+            if decision and decision.get('actor_id'):decision['actor_name']=names.get(str(decision['actor_id']), '')
+    return result
+
 async def save(old,new):
     if len(new.get('events',[]))>2500:raise HTTPException(409,'Historique volumineux : une intervention Responsable est nécessaire.')
     new['revision']=old['revision']+1;new['updated_at']=stamp()
@@ -160,7 +189,7 @@ async def submit(member,answers,source,*,imported=False,submitted_at=None,import
             try:await db.verification_cases.insert_one(row)
             except DuplicateKeyError:continue
         if source in row.get('tombstones',[]):return {'ignored':'deleted_source'}
-        if any(form['id']==form_id for form in row['forms']):return public(row)
+        if any(form['id']==form_id for form in row['forms']):return await with_actor_names(public(row))
         if not imported and (row.get('staff_delivery') or {}).get('cleanup_status') in ('pending','failed'):
             raise HTTPException(409,'Le nettoyage du précédent formulaire Discord est en cours ou à reprendre. Réessaie après son traitement.')
         if any(job['status'] in ('pending','running','uncertain','retry') for job in row['jobs']):raise HTTPException(409,'Une action est en cours sur ce dossier. Réessaie après son traitement.')
@@ -209,13 +238,13 @@ async def get(member_id,actor_id):
             if not all(value.isascii() and value.isdigit() for value in (channel_id,message_id)):continue
             jobs_by_nonce[receipt['_id']]['welcome_delivery']={'channel_id':channel_id,'message_id':message_id,
                 'url':f'https://discord.com/channels/{guild()}/{channel_id}/{message_id}'}
-    return result
+    return await with_actor_names(result)
 
 async def listing(actor_id,*,archive=False,offset=0,limit=25):
     await authority(actor_id)
     query={'guild_id':guild(),'active':not archive,'forms.0':{'$exists':True}}
     rows=await db.verification_cases.find(query).sort('updated_at',-1).skip(offset).limit(limit).to_list(limit)
-    return {'items':[public(row,detail=False) for row in rows],'total':await db.verification_cases.count_documents(query)}
+    return await with_actor_names({'items':[public(row,detail=False) for row in rows],'total':await db.verification_cases.count_documents(query)})
 
 async def act(member_id,actor_id,payload,*,origin):
     payload=Action.model_validate(payload);roles=await authority(actor_id)
@@ -234,7 +263,7 @@ async def act(member_id,actor_id,payload,*,origin):
     if previous:
         if previous.get('actor_id')!=str(actor_id) or previous['kind']!='action.'+payload.action:
             raise HTTPException(409,'Cette référence appartient à une autre action.')
-        return public(row)
+        return await with_actor_names(public(row))
     if payload.action=='ticket' and ticket_requested(row):raise HTTPException(409,'Un ticket a déjà été demandé pour ce formulaire. Consulte son historique ; une nouvelle ouverture ne peut pas être demandée depuis ce bouton.')
     if payload.revision!=row['revision']:raise HTTPException(409,'Le dossier a changé. Actualise avant de continuer.')
     if not row['forms']:raise HTTPException(404,'Aucun formulaire conservé.')
@@ -265,7 +294,7 @@ async def act(member_id,actor_id,payload,*,origin):
             'steps':[{'name':step,'status':'pending'} for step in PLANS[payload.action]]})
         changed['status']='processing'
     changed['events'].append(event('action.'+payload.action,actor_id,current['id'],origin=origin,request_id=payload.request_id,rationale=payload.rationale,assignee_id=payload.assignee_id))
-    result=public(await save(row,changed))
+    result=await with_actor_names(public(await save(row,changed)))
     from services.migration_runtime import wake_verifications
     wake_verifications()
     return result
@@ -290,7 +319,7 @@ async def delete_form(member_id,form_id,actor_id,payload):
         last=changed['forms'][-1];changed.update(status=last['status'],active=last['status'] not in FINAL|{'historical_unknown'},claimed_by=None)
     saved=await save(row,changed)
     await db.verification_advisories.delete_many({'$or':[{'_id':key(member_id)},{'result.advisory.reference_ids':form_id}]})
-    return public(saved)
+    return await with_actor_names(public(saved))
 
 async def review_example(member_id,form_id,actor_id,payload):
     await authority(actor_id,responsable=True);payload=ExampleReview.model_validate(payload);row=await load(member_id)
@@ -308,4 +337,4 @@ async def review_example(member_id,form_id,actor_id,payload):
     form['reference']=payload.enabled
     form['reference_reason']=payload.reason if payload.enabled else None
     changed['events'].append(event('example.reviewed',actor_id,form_id,enabled=payload.enabled))
-    return public(await save(row,changed))
+    return await with_actor_names(public(await save(row,changed)))

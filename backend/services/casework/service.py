@@ -68,6 +68,14 @@ def public(row, detail=True):
     return result
 
 
+async def public_with_actor_names(row, detail=True):
+    result=public(row,detail)
+    if detail:
+        from services.identity_names import actor_fields
+        await actor_fields([*reversed(result.get('events') or []),*reversed(result.get('notes') or [])])
+    return result
+
+
 async def enroll(channel, opening, member, settings, *, assigned=None, initiator_id=None):
     """Trusted ingress only. Opening authentication is performed by the sync adapter."""
     kind = policy.detect(channel.get('name', ''))
@@ -128,7 +136,7 @@ async def get(case_id, actor_id, settings):
     row = await load(case_id, settings.guild_id)
     await policy.authorize(actor_id, row)
     row=await assignment_names(row)
-    return public(row)
+    return await public_with_actor_names(row)
 
 
 async def listing(actor_id, settings, *, kind, archived=False, offset=0, limit=25, attention=False):
@@ -177,7 +185,7 @@ async def change(case_id, actor_id, data, settings):
     if previous:
         if previous['actor_id'] != str(actor_id) or previous['action'] != data.action:
             raise HTTPException(409, 'Cette référence correspond déjà à une autre action.')
-        return public(row)
+        return await public_with_actor_names(row)
     if data.revision != row['revision']:
         raise HTTPException(409, 'Le dossier a changé. Actualise avant de continuer.')
     if (row.get('operation') or {}).get('status') in ('pending','running','uncertain'):
@@ -243,7 +251,7 @@ async def change(case_id, actor_id, data, settings):
     if saved['kind']=='support' and data.action in ('claim','assign'):
         await db.tickets.update_many({'channel_id':saved['channel_id']},{'$set':{'assigned_helper':saved['assigned']}})
         await db.case_tickets.update_one({'_id':saved['_id']},{'$set':{'sync.due':True}})
-    return public(saved)
+    return await public_with_actor_names(saved)
 
 
 async def mark_deleted(case_id, settings, *, expected=False):

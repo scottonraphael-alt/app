@@ -43,6 +43,17 @@ async def listing(status: str = Query('', pattern='^(open|approved|rejected)?$')
         row['votes'] = [{'member_id': member, **vote} for member, vote in votes.items()]
         for name in ('lease_token', 'lease_until'):
             row.pop(name, None)
+    from services.identity_names import resolve_names
+    actor_ids=[]
+    for row in rows:
+        actor_ids.extend([row.get('author_id') if not row.get('author_name') else None,
+                          row.get('decided_by') if not row.get('decided_by_name') else None])
+        actor_ids.extend(vote.get('member_id') if not vote.get('actor_name') else None for vote in row.get('votes',[]))
+    names=await resolve_names(actor_ids)
+    for row in rows:
+        row['author_name']=row.get('author_name') or names.get(str(row.get('author_id') or ''),'')
+        row['decided_by_name']=row.get('decided_by_name') or names.get(str(row.get('decided_by') or ''),'')
+        for vote in row.get('votes',[]):vote['voter_name']=vote.get('actor_name') or names.get(str(vote.get('member_id') or ''),'')
     return {'items': rows, 'total': await db.resolutions.count_documents(query), 'can_manage_counter': access[1]}
 
 

@@ -81,6 +81,7 @@ class ResolutionModal(discord.ui.Modal):
                     raise HTTPException(403, 'Tu ne peux pas demander ton propre bannissement.')
             row = await resolutions.create(source_kind=self.kind, source_id=str(interaction.id),
                 title=self.heading.value, explanation=self.explanation.value, author_id=self.owner_id,
+                author_name=getattr(interaction.user,'global_name',None) or getattr(interaction.user,'display_name',None) or interaction.user.name,
                 avatar_url=target['avatar_url'] if target else str(interaction.user.display_avatar.url), target=target)
             await interaction.followup.send(
                 f"Résolution **{row['number']}** enregistrée : **{KINDS[self.kind]}**. "

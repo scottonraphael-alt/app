@@ -33,7 +33,7 @@ async def request_action(case_id,actor_id,action,reason,request_id,*,revision,pa
     prior=next((e for e in row['events'] if e.get('request_id')==request_id),None)
     if prior:
         if prior.get('actor_id')!=str(actor_id) or prior.get('action')!=action:raise HTTPException(409,'Référence déjà utilisée.')
-        return service.public(row)
+        return await service.public_with_actor_names(row)
     if row['revision']!=revision:raise HTTPException(409,'Le dossier a changé.')
     if row['status'] in ('closing','archived','reopening'):raise HTTPException(409,'Le dossier est déjà en clôture ou archivé.')
     if len(reason.strip())<10:raise HTTPException(422,'Un motif de dix caractères est requis.')
@@ -57,7 +57,7 @@ async def request_action(case_id,actor_id,action,reason,request_id,*,revision,pa
     saved = await service.save(row, changed)
     from services.migration_runtime import wake_operations
     wake_operations()
-    return service.public(saved)
+    return await service.public_with_actor_names(saved)
 
 
 async def snapshot(channel,row):

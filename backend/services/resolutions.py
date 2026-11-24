@@ -79,7 +79,7 @@ def execution_text(row):
                 execution.get('status'), '⏳ Approbation enregistrée ; application du bannissement en attente.')
 
 
-async def create(*, source_kind, source_id, title, explanation, author_id, source_url='', avatar_url='', target=None):
+async def create(*, source_kind, source_id, title, explanation, author_id, author_name='', source_url='', avatar_url='', target=None):
     """Idempotent source registration. Discord delivery is retried by the worker."""
     if not source_kind or not source_id or not title.strip() or not explanation.strip():
         raise HTTPException(422, 'Source, titre et explication obligatoires.')
@@ -94,15 +94,23 @@ async def create(*, source_kind, source_id, title, explanation, author_id, sourc
     ident = key(source_kind, source_id)
     existing = await db.resolutions.find_one({'_id': ident})
     if existing:
+        if not existing.get('author_name'):
+            from services.identity_names import resolve_names
+            existing['author_name']=(await resolve_names([existing.get('author_id')])).get(str(existing.get('author_id') or ''),'')
+            if existing['author_name']:
+                await db.resolutions.update_one({'_id':ident},{'$set':{'author_name':existing['author_name']}})
         await audit(existing, 'created', existing['author_id'], 1)
         return existing
+    if not author_name:
+        from services.identity_names import resolve_names
+        author_name=(await resolve_names([author_id])).get(str(author_id),'')
     year = now().astimezone(ZoneInfo('Europe/Paris')).year
     counter = await db.resolution_counters.find_one_and_update(
         {'_id': f'{guild()}:{year}'}, {'$inc': {'value': 1}}, upsert=True, return_document=ReturnDocument.AFTER)
     stamp = now()
     row = {'_id': ident, 'guild_id': guild(), 'source_kind': source_kind, 'source_id': str(source_id),
            'number': f"{year}-{counter['value']:02d}", 'title': title.strip(), 'explanation': explanation.strip(),
-           'author_id': str(author_id), 'source_url': source_url, 'avatar_url': avatar_url,
+           'author_id': str(author_id), 'author_name': str(author_name or ''), 'source_url': source_url, 'avatar_url': avatar_url,
            'created_at': stamp.isoformat(), 'vote_until': (stamp + timedelta(days=3)).isoformat(),
            'status': 'open', 'votes': {}, 'revision': 1, 'channel_id': str(config.DISCORD_RESOLUTION_CHANNEL_ID)}
     if target is not None and source_kind == 'permanent_ban':
@@ -115,7 +123,7 @@ async def create(*, source_kind, source_id, title, explanation, author_id, sourc
     return row
 
 
-async def act(ident, actor_id, action):
+async def act(ident, actor_id, action, actor_name=''):
     if action not in ('yes', 'no', 'approve', 'reject'):
         raise HTTPException(422, 'Action inconnue.')
     roles = await fresh_roles(str(actor_id))
@@ -130,14 +138,14 @@ async def act(ident, actor_id, action):
         if not current:
             raise HTTPException(409, 'Résolution déjà décidée ou introuvable.')
         change = {'status': 'approved' if action == 'approve' else 'rejected',
-                  'decided_by': str(actor_id), 'decided_at': stamp}
+                  'decided_by': str(actor_id), 'decided_by_name': str(actor_name or ''), 'decided_at': stamp}
         if action == 'approve' and current['source_kind'] == 'permanent_ban':
             if str((current.get('target') or {}).get('id')) == str(actor_id):
                 raise HTTPException(403, 'Tu ne peux pas approuver ton propre bannissement.')
             change['execution'] = {'status': 'pending'}
     else:
         query['vote_until'] = {'$gt': stamp}
-        change = {f'votes.{actor_id}': {'choice': action, 'at': stamp}}
+        change = {f'votes.{actor_id}': {'choice': action, 'at': stamp, 'actor_name': str(actor_name or '')}}
     row = await db.resolutions.find_one_and_update(query, {'$set': change, '$inc': {'revision': 1}},
                                                   return_document=ReturnDocument.AFTER)
     if not row:
@@ -186,7 +194,7 @@ class Panel(discord.ui.LayoutView):
                         current = await db.resolutions.find_one({'_id': row['_id'], 'message_id': str(it.message.id)})
                         if not current:
                             raise HTTPException(404, 'Panneau de résolution introuvable.')
-                        await act(row['_id'], it.user.id, action)
+                        await act(row['_id'], it.user.id, action, getattr(it.user,'global_name',None) or getattr(it.user,'display_name',None) or it.user.name)
                         await it.followup.send('Décision enregistrée.' if action in ('approve', 'reject') else 'Ton avis consultatif a été enregistré.', ephemeral=True, allowed_mentions=NONE)
                     except Exception as exc:
                         await error(it, exc)

@@ -40,8 +40,13 @@ def require_native_workflows():
 async def audit(event, actor_id=None, **details):
     from uuid import uuid4
     from datetime import datetime, timezone
+    actor_name=''
+    if actor_id:
+        from services.identity_names import resolve_names
+        actor_name=(await resolve_names([actor_id])).get(str(actor_id),'')
     await db.auth_logs.insert_one({'id': uuid4().hex, 'created_at': datetime.now(timezone.utc),
-        'event_type': event, 'helper_id': actor_id, 'method': 'DISCORD', 'path': '/member-workflows',
+        'event_type': event, 'helper_id': actor_id, 'username': actor_name or None,
+        'display_name': actor_name or None, 'method': 'DISCORD', 'path': '/member-workflows',
         'status_code': 200, 'details': details})
 
 
