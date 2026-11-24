@@ -1,7 +1,7 @@
 /* Iris editorial direction, November 2026. Authenticated interface only.
    Features own their data, permissions, geometry and user-authored content. */
 .app-shell.iris-ui{--iris-editorial-surface:color-mix(in srgb,var(--iris-bg) 80%,var(--iris-border));--iris-editorial-radius:20px}
-.app-shell.iris-ui .tb-bar{min-height:88px;max-width:1500px;margin-inline:auto;background:var(--iris-bg);border-bottom:1px solid var(--iris-border);gap:28px}
+.app-shell.iris-ui .tb-bar{width:100%;min-height:88px;max-width:none;margin-inline:0;background:var(--iris-bg);border-bottom:1px solid var(--iris-border);gap:28px}
 .app-shell.iris-ui .tb-favorites{gap:12px}.app-shell.iris-ui .tb-chip{position:relative;padding:12px 9px;border-radius:0;font-size:13px;background:transparent}.app-shell.iris-ui .tb-chip.active{background:transparent;color:var(--iris-text);font-weight:600}.app-shell.iris-ui .tb-chip.active::after{content:'';position:absolute;width:5px;height:5px;bottom:3px;left:calc(50% - 2.5px);background:var(--iris-raspberry);border-radius:50%}.app-shell.iris-ui .tb-icon-btn{border-radius:50%}
 /* Header typography never targets headings within documents or editors. */
 .app-shell.iris-ui .app-main :is(.nd-page,.cz-page,.rl-page,.ag-page,.tm-page,.nt-page,.qt-page,.wb-page){max-width:1340px;margin-inline:auto}

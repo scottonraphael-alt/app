@@ -18,6 +18,8 @@ body.ticket-workspace-no-nav .app-shell > .app-main { margin:0 !important; paddi
 .tw-identity p.tw-intro { margin:12px 0 0; font-size:13px; letter-spacing:0; font-weight:400; line-height:1.7; }
 .tw-top-actions { display:flex; align-items:center; gap:12px; margin-left:auto; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end; }
 .tw-top-actions > .tw-button { min-height:44px; padding:11px 17px; border-radius:999px; font-size:13px!important; font-weight:600!important; white-space:nowrap; }
+.tw-top-actions > .iris-action-danger-group { display:flex; align-items:center; flex-wrap:nowrap; margin:0!important; padding:0!important; border:0!important; }
+.tw-top-actions > .iris-action-danger-group > .tw-button { min-height:44px; padding:11px 17px; border-radius:999px; font-size:13px!important; font-weight:600!important; white-space:nowrap; }
 .tw-save-state { display:flex; gap:5px; align-items:center; color:var(--tw-muted); font-size:11px; }
 .tw-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:34px; padding:7px 12px; border:1px solid var(--tw-line); border-radius:8px; background:var(--tw-paper); color:var(--tw-sage); font-size:12px!important; font-weight:500!important; line-height:1.4; box-shadow:none; }
 .tw-button:hover:not(:disabled) { border-color:#a8bcae; background:#f5f8f3; }
@@ -163,6 +165,10 @@ body.ticket-workspace-no-nav .app-shell > .app-main { margin:0 !important; paddi
 .tw-search-form input[type="date"] { width:100%; font-size:11px; }
 .tw-search-results { padding:15px 0; }
 .tw-search-result { display:block; width:100%; text-align:left; margin-top:12px; padding:13px; background:#f8faf5; color:#49634f; border:1px solid var(--tw-line); border-radius:9px; }
+@media(max-width:760px) {
+  .tw-top-actions > .iris-action-danger-group { min-width:0; }
+  .tw-top-actions > .iris-action-danger-group > .tw-button { width:100%; min-height:36px; padding:8px 11px; font-size:11px!important; }
+}
 .tw-search-result strong { font-size:12px; }
 .tw-search-result time { float:right; font-size:10px; color:#8a968b; }
 .tw-search-result p { font-size:12px; line-height:1.7; margin:8px 0!important; white-space:pre-wrap; overflow-wrap:anywhere; }
