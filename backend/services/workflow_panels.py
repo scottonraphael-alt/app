@@ -55,7 +55,10 @@ def values(row):
     fields=[('name','👤 Prénom / pseudo',80),('age','🎂 Tranche d’âge',24),('reason','🌱 Motif de venue',500),('psychiatry','💬 Avis sur la psychiatrie',1300)]
     response='\n'.join('### '+label+'\n```\n'+short(answers.get(key),limit).strip().replace('`','ˋ')+'\n```' for key,label,limit in fields)
     response+='\n-# '+('✅ Règlement accepté : Oui' if answers.get('rules') else '⚠️ Règlement accepté : Non renseigné')
-    username=discord.utils.escape_mentions(discord.utils.escape_markdown(str(row.get('member_username') or member.get('display_name') or member.get('username') or 'Pseudo indisponible').strip()))[:64]
+    username=discord.utils.escape_mentions(discord.utils.escape_markdown(str(row.get('member_username') or row.get('member_name') or member.get('display_name') or member.get('username') or 'Pseudo indisponible').strip()))[:64]
+    present=row.get('member_discord_present',member.get('discord_present'))
+    member_ref=(f'<@{member_id}> · **{username}**' if present is not False and str(member_id).isascii() and str(member_id).isdigit()
+                else f'**{username}**')
     return {'membre_id':str(member_id or 'ID indisponible'),'membre_username':username,
         'motif':short(row.get('reason'),1000),'triggers':short(row.get('triggers'),1000),
         'motif_refus':short(row.get('decision_reason') or row.get('reason'),1000),
@@ -65,7 +68,7 @@ def values(row):
         'avis_ia':str(row.get('advisory') or 'Préavis IA non généré. Une lecture humaine reste nécessaire.').encode('utf-16-le')[:2000].decode('utf-16-le','ignore'),
         # Preserve a real member mention; fall back to the submitted name if the
         # account has left and Discord would render the ID as an unknown user.
-        'membre':mention(member_id,username) if member.get('discord_present') is not False else username,
+        'membre':member_ref,
         'interlocuteur':mention(row.get('assigned_id'),'Non attribué'),
         'traite_par':mention(row.get('decision_by'),'Décision en attente'),
         'date_traitement':stamp,
@@ -196,9 +199,9 @@ def apply(box,key,*,replace=False,member_id=None,row=None):
 
 
 def revision(key):
-    layout = 8 if key in ('staff:verification', 'form:verification') else 7
+    layout = 10 if key in ('staff:verification', 'form:verification') else 8
     panel = _cache.get(key, {})
     # Refresh existing opening messages whose saved presentation still has the legacy token.
     if any(LEGACY_MEMBER_TOKEN.search(block.get('text', '')) for block in panel.get('blocks', [])):
-        layout = 9
+        layout = 11
     return hashlib.sha256(json.dumps({'layout':layout,'panel':panel},sort_keys=True).encode()).hexdigest()[:16]

@@ -175,7 +175,8 @@ async def create(request_id,client):
             await db.case_requests.update_one({'_id':request_id,'token':token},{'$set':{'channel_id':str(channel.id),'stage':'channel_ready'}})
         row['member_username']=member.name
         row['member_avatar_url']=str(member.display_avatar.url)
-        await db.case_requests.update_one({'_id':request_id},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username')}})
+        row['member_discord_present']=True
+        await db.case_requests.update_one({'_id':request_id},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username'),'member_discord_present':True}})
         from services.casework.commands import RoomPanel
         from services.verification_runtime import Adapter
         target_name=('🔒・｜cstaff-' if row['confidential'] else PREFIX[row['kind']])+member.name[:60]
@@ -270,15 +271,18 @@ async def process_request(client, server, row, *, maintain=True):
     from services.casework.commands import SupportDecision
     from services.workflow_panels import revision
     from services.verification_runtime import Adapter, message
-    if row['status'] not in ('pending', 'creating') and ('member_avatar_url' not in row or 'member_username' not in row):
+    if row['status'] not in ('pending', 'creating') and ('member_avatar_url' not in row or 'member_username' not in row or 'member_discord_present' not in row):
         try:
-            member=await server.fetch_member(int(row['member_id']))
+            member=server.get_member(int(row['member_id'])) or await server.fetch_member(int(row['member_id']))
             row['member_avatar_url']=str(member.display_avatar.url)
             row['member_username']=member.name
+            row['member_discord_present']=True
         except discord.NotFound:
             row['member_avatar_url']=None
-            row['member_username']=None
-        await db.case_requests.update_one({'_id':row['_id']},{'$set':{'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username')}})
+            row['member_discord_present']=False
+        await db.case_requests.update_one({'_id':row['_id']},{'$set':{
+            'member_avatar_url':row['member_avatar_url'],'member_username':row.get('member_username') or row.get('member_name'),
+            'member_discord_present':row.get('member_discord_present')}})
 
     if row['status'] in ('pending','creating'):
         try:
@@ -377,12 +381,23 @@ async def private_destination(channel,server,*,support=False):
             raise HTTPException(503,'Un accès individuel non autorisé existe dans le salon privé.')
 
 
+def member_reference(row):
+    member=row.get('member') if isinstance(row.get('member'),dict) else {}
+    member_id=str(row.get('member_id') or member.get('id') or '')
+    name=str(row.get('member_username') or row.get('member_name') or member.get('display_name') or member.get('username') or 'Membre').strip()
+    name=discord.utils.escape_mentions(discord.utils.escape_markdown(name))[:64]
+    present=row.get('member_discord_present',member.get('discord_present'))
+    if present is not False and member_id.isascii() and member_id.isdigit():
+        return f'<@{member_id}> · **{name}**'
+    return f'**{name}**'
+
+
 def support_receipt(row):
     from services.casework.commands import fenced
     accepted=row['status']=='open'
     title='✅ Demande de soutien acceptée' if accepted else '📋 Demande de soutien refusée'
     box=discord.ui.Container(discord.ui.TextDisplay('## '+title),
-        discord.ui.TextDisplay(f"### 👤 Demande de <@{row['member_id']}>"),
+        discord.ui.TextDisplay(f"### 👤 Demande de {member_reference(row)}"),
         discord.ui.Separator(),
         discord.ui.TextDisplay('### 📝 Motif de la demande\n'+fenced(row['reason'].encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))),
         discord.ui.TextDisplay('### 🌿 Repères sensibles\n'+fenced(row.get('triggers','').encode('utf-16-le')[:1400].decode('utf-16-le','ignore'))),
@@ -416,7 +431,7 @@ def member_notice(row,body):
         from services.verification_discord import message
         return message('🌸 Ta demande de soutien',body)
     box=discord.ui.Container(discord.ui.TextDisplay(f"## {emoji} Ton espace est prêt"),
-        discord.ui.TextDisplay(f"Bonjour <@{row['member_id']}>,\n\n"+purpose),
+        discord.ui.TextDisplay(f"Bonjour {member_reference(row)},\n\n"+purpose),
         discord.ui.Separator(),accent_colour=colour)
     if row.get('confidential'):
         box.add_item(discord.ui.TextDisplay('🔐 Cet échange est réservé à toi, aux Responsables et aux Administrateurs.'))

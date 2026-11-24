@@ -19,12 +19,13 @@ def command_sections(roles):
     sections = [('Pour tout le monde', public)]
     if roles & {str(config.DISCORD_HELPER_ROLE_ID or ''), str(config.DISCORD_HELPER_ROLE2_ID or ''),
                 str(config.DISCORD_STAFF_ROLE_ID or ''), str(config.DISCORD_OPERATEUR_ROLE_ID or ''),
-                str(config.DISCORD_OPERATEUR_ROLE2_ID or '')} - {''}:
+                str(config.DISCORD_OPERATEUR_ROLE2_ID or ''), str(config.SANCTION_REQUIRED_STAFF_ROLE_ID or '')} - {''}:
         sections.append(('Pour le Staff', [
             ('/dossier', 'Gérer le dossier lié au salon actuel.'),
             ('/convocation', 'Préparer un échange privé avec un membre; coche « formation » pour simuler.'),
             ('/bulle', 'Ouvrir un échange rassurant, sans motif disciplinaire; coche « formation » pour simuler.'),
             ('/purgatoire', 'Restreindre ou rétablir les accès, avec confirmation.'),
+            ('/lockdown verrouiller|ouvrir|ralentir', 'Verrouiller un salon, restaurer ses permissions ou régler le mode lent.'),
             ('/sanction', 'Consulter et gérer les actions de modération autorisées.'),
         ]))
     if policy.leadership(roles):

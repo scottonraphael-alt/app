@@ -101,6 +101,9 @@ dès la création d'un nouveau salon, sans attendre un redémarrage du bot.
 | `/bulle membre [formation]` | Échange privé rassurant, sans motif disciplinaire |
 | `/dossier` | Actions privées du dossier lié au salon |
 | `/purgatoire membre action` | Entrée/sortie avec motif et confirmation, tous les Staff |
+| `/lockdown verrouiller` | Bloquer les messages et les fils d’un salon ; sauvegarde des permissions précédentes, Staff requis |
+| `/lockdown ouvrir` | Restaurer les permissions de messages et de fils sauvegardées par OasisLink |
+| `/lockdown ralentir` | Régler le mode lent de 0 à 21 600 secondes ; Staff requis |
 
 Les boutons publics de Contact Staff et de demande de soutien sont ouverts aux membres.
 Les droits de gestion sont revérifiés à chaque interaction. Le mode formation n’applique

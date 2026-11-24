@@ -94,7 +94,7 @@ class SupportDecision(discord.ui.LayoutView):
     def __init__(self,row):
         super().__init__(timeout=None)
         box=discord.ui.Container(discord.ui.TextDisplay('## 🌸 Une demande de soutien\n'+ ' '.join('<@&'+str(role)+'>' for role in (config.DISCORD_HELPER_ROLE_ID,config.DISCORD_HELPER_ROLE2_ID) if role)),
-            discord.ui.TextDisplay(f'Membre : <@{row["member_id"]}>\n### Motif\n'+fenced(row['reason'])),
+            discord.ui.TextDisplay(f'Membre : {native.member_reference(row)}\n### Motif\n'+fenced(row['reason'])),
             discord.ui.TextDisplay('### Repères sensibles\n'+fenced(row['triggers'])),accent_colour=0x78618C)
         from services.workflow_panels import apply as apply_panel
         apply_panel(box,'request:support',row=row,replace=True)

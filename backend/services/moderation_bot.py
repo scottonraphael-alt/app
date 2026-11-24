@@ -133,9 +133,10 @@ async def install_member_commands(client):
     from services.suggestions import install as install_suggestions
     from services.iris_diagnostics import install as install_diagnostics
     from services.bot_help import install as install_help
+    from services.lockdown import install as install_lockdown
     from services.leveling_discord import install as install_leveling
     await workflow_settings.apply()
-    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered'),('anonyme',install_anonymous,'anonymous_registered'),('suggestion',install_suggestions,'suggestions_registered'),('règlement',install_rules,'rules_registered'),('resolutions',install_resolutions,'resolutions_registered'),('recrutement',install_recruitment,'recruitment_registered'),('aide',install_help,'bot_help_registered'),('diagnostic',install_diagnostics,'iris_diagnostics_registered'),('leveling',install_leveling,'leveling_registered')]:
+    for name, installer, registered in [('sanctions',install_sanctions,'sanction_registered'),('tickets',install_tickets,'member_workflows_registered'),('verifications',install_verifications,'verification_registered'),('anonyme',install_anonymous,'anonymous_registered'),('suggestion',install_suggestions,'suggestions_registered'),('règlement',install_rules,'rules_registered'),('resolutions',install_resolutions,'resolutions_registered'),('recrutement',install_recruitment,'recruitment_registered'),('aide',install_help,'bot_help_registered'),('lockdown',install_lockdown,'lockdown_registered'),('diagnostic',install_diagnostics,'iris_diagnostics_registered'),('leveling',install_leveling,'leveling_registered')]:
         if getattr(client,registered,False):continue
         try:await installer(client)
         except Exception:logger.exception('Enregistrement des commandes %s à reprendre.',name)
