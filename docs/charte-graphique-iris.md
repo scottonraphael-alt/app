@@ -1,6 +1,6 @@
 # Charte graphique et UX d’Iris
 
-Référence pour toute création ou mise à jour de l’interface Iris. Version du 22 novembre 2026, fondée sur le dashboard et l’harmonisation des pages métier validés. Toute évolution visuelle doit prolonger cette base et mettre ce document à jour si une règle commune change.
+Référence pour toute création ou mise à jour de l’interface Iris. Version du 22 novembre 2026, mise à jour après validation de la composition éditoriale, des compteurs et des illustrations contextuelles. Toute évolution visuelle doit prolonger cette base et mettre ce document à jour si une règle commune change.
 
 ## 1. Intention
 
@@ -23,6 +23,7 @@ Cette charte couvre les pages Iris, la connexion et leurs fenêtres. OasisGame e
 | [IrisPages.css](../frontend/src/IrisPages.css) | Harmonisation des pages métier et fenêtres |
 | [IrisEditorial.css](../frontend/src/IrisEditorial.css) | Composition éditoriale validée : titres, cartes, bibliothèque et vues des projets |
 | [IrisBrand.jsx](../frontend/src/components/brand/IrisBrand.jsx) et [IrisBrand.css](../frontend/src/components/brand/IrisBrand.css) | Logo floral et mot-symbole |
+| [IrisIllustration.jsx](../frontend/src/components/illustrations/IrisIllustration.jsx) | Objets décoratifs par contexte : dossier, calendrier et console |
 | [AppShell.jsx](../frontend/src/components/AppShell.jsx) | Structure commune et périmètre de l’interface |
 | [useMotionPreference.js](../frontend/src/hooks/useMotionPreference.js) | Préférence d’animation et synchronisation |
 | [Motion.jsx](../frontend/src/components/motion/Motion.jsx) | Primitives d’animation |
@@ -224,13 +225,60 @@ La composition reprend la seconde proposition visuelle : titres plus affirmés, 
 
 La composition mobile empile les colonnes de projets et conserve des cartes lisibles ; les titres longs peuvent revenir à la ligne. Les prototypes et réponses API fictives restent hors du code livré.
 
-### Cartes de compteurs, marges et illustrations
+### 14.1. Compteurs de travail
 
-Les compteurs de travail restent des cartes distinctes, avec icône, valeur dominante et libellé lisible : trois colonnes sur ordinateur, cartes empilées sur mobile. Employer les accents sauge et lavande ; un retard réel garde un traitement framboise. Ne pas remplacer ces repères par une simple ligne de chiffres.
+Les compteurs restent des cartes distinctes avec une icône, une valeur dominante et un libellé immédiatement visible. Ne pas les remplacer par une simple ligne de chiffres ni les réduire à une information secondaire.
 
-Une surface avec fond et coins arrondis doit toujours conserver ses marges intérieures. Le bloc Responsable utilise 28 px sur ordinateur et 21 px sur mobile ; son en-tête et sa grille ne rajoutent pas un second padding. Tous les descendants du périmètre Iris utilisent `border-box` et les liens restent à l’intérieur de leur groupe. Le contenu doit revenir à la ligne avant de toucher les coins.
+| Élément | Ordinateur | Mobile |
+| --- | --- | --- |
+| Disposition | Trois colonnes, écart de 18 px | Une colonne, écart de 12 px |
+| Carte | Rayon de 17 px, padding de 23 px | Padding de 19 px |
+| Valeur | Manrope 650, 36 px, chiffres tabulaires | 34 px |
+| Icône | Emplacement de 46 × 46 px, rayon de 13 px | Même emplacement réservé |
+| Libellé | 13 px, retour à la ligne autorisé | 13 px, à côté du chiffre |
 
-[IrisIllustration.jsx](../frontend/src/components/illustrations/IrisIllustration.jsx) apporte des objets distincts selon le contexte : dossier avec fiche pour les projets, calendrier de bureau pour la journée, console à curseurs et molette pour les outils. Le livre est réservé à la bibliothèque. Elles sont décoratives (`aria-hidden`), sans animation ni capture des clics. Utiliser les tokens de couleur et masquer une illustration si elle réduit l’espace d’un contrôle ou d’un titre. Ne pas multiplier les illustrations dans chaque carte ni y placer une information indispensable.
+Sauge pour les projets en cours, lavande pour les projets personnels, surface neutre pour les tâches sans retard. Un retard réel utilise le traitement framboise existant. La valeur, y compris zéro, et le libellé portent toujours l’information ; la couleur reste un renfort.
 
+### 14.2. Surfaces, padding et débordements
 
-Les illustrations occupent une cellule ou un élément flex dans le flux normal, avec un écart réel par rapport aux titres et contrôles. Ne jamais positionner leur conteneur en absolu au-dessus d’une carte. Seules les pièces internes d’un objet peuvent être superposées, dans les limites de son conteneur. Dans « Ma journée », une requête de conteneur masque le calendrier sous 440 px de largeur utile, même si l’écran est large et que le widget a été réduit. Le bouton Agenda conserve toujours son espace et son contour de focus.
+Une carte avec fond et coins arrondis doit conserver des marges intérieures explicites. Le bloc Responsable utilise 28 px sur ordinateur et 21 px sur mobile. Son en-tête et sa grille ne rajoutent pas un second padding ; les groupes internes possèdent leurs propres espacements.
+
+- Utiliser `border-box` dans le périmètre Iris pour que les dimensions incluent padding et bordures.
+- Donner `min-width: 0` aux enfants de grilles et de flex contenant du texte ; autoriser le retour à la ligne des titres et libellés longs.
+- Garder les liens et leurs fonds à l’intérieur de leur groupe. Corriger la largeur ou les marges à l’origine du débordement avant d’ajouter un masquage.
+- Conserver les contours de focus et les actions accessibles : ne pas les couper avec un `overflow: hidden` appliqué sans distinction à tous les éléments.
+
+### 14.3. Illustrations contextuelles
+
+Les illustrations sont de petits objets reconnaissables, adaptés à leur section. Varier leur silhouette ; changer uniquement l’icône d’une couverture de livre ne constitue pas une nouvelle illustration.
+
+| Contexte | Objet | Source ou variante |
+| --- | --- | --- |
+| Ressources | Livre avec tranche et couverture | `.rl-featured-cover` dans `IrisEditorial.css` |
+| Projets | Dossier ouvert avec fiche | `<IrisIllustration kind="projects" />` |
+| Ma journée | Calendrier de bureau avec anneaux et grille | `<IrisIllustration kind="calendar" />` |
+| Outils responsable | Console avec curseurs et molette | `<IrisIllustration kind="tools" />` |
+
+Le livre reste réservé à la bibliothèque. Pour un nouveau contexte, choisir un objet cohérent et une silhouette distincte avant d’ajouter une variante au composant partagé.
+
+Les illustrations utilisent les tokens de surface et d’accent des thèmes clair et sombre. Elles sont décoratives (`aria-hidden="true"`), sans texte indispensable, sans animation continue et sans capture des clics. Ne pas les répéter dans chaque carte. Le dessin reste réalisé dans le code, avec des formes CSS et les icônes du système existant si nécessaire.
+
+### 14.4. Placement sans superposition
+
+Le conteneur extérieur d’une illustration occupe une cellule de grille ou un élément flex dans le flux normal. Ne jamais le placer en absolu au-dessus d’un titre, d’un bouton ou du contenu d’une carte. Les pièces internes de l’objet peuvent être superposées, dans les limites de son conteneur décoratif.
+
+L’en-tête de « Ma journée » réserve trois emplacements : titre flexible, illustration de 64 × 70 px, lien Agenda. Un écart de 16 px sépare les éléments sur ordinateur. L’illustration est masquée lorsque la largeur utile du conteneur descend sous 440 px, et sur écran de 760 px ou moins. Le choix dépend donc aussi de la largeur du widget, même sur un grand écran. Le titre et le lien restent visibles.
+
+Si l’espace manque ailleurs, masquer la décoration ou la déplacer sur une ligne propre. Ne jamais réduire une cible tactile, tronquer un libellé ou recouvrir un contour de focus pour conserver une illustration.
+
+### 14.5. Vérification avant une évolution graphique
+
+Vérifier les pages avec leurs composants réels et des données de démonstration séparées du code livré :
+
+- Cartes aux largeurs Petite, Moyenne, Large et Pleine du dashboard, en plus des formats ordinateur et téléphone.
+- Titres et libellés longs, valeurs nulles ou importantes dans les compteurs, états vides et chargements.
+- Absence d’intersection entre illustrations, titres, boutons et contours de focus ; absence de débordement des fonds hors des cartes.
+- Thèmes clair et sombre, préférence d’animations réduites, navigation et focus clavier.
+- Conservation des accès par rôle, liens, filtres, pagination et disposition enregistrée.
+
+Ne pas considérer une capture du prototype comme une preuve du rendu intégré. Les règles de cette section complètent les protections de lecture, de saisie et de mouvement des sections précédentes.
