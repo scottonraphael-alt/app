@@ -642,6 +642,18 @@ def prepare(source, destination, args):
                 if getattr(args, 'aligner', 'whisper') == 'tifa':
                     from tifa_alignment import align_tifa
                     aligned = align_tifa(vocals, other_vocals, ctc_lines, language, source, destination, args)
+                    report_path = destination/(source.stem+'.tifa.json')
+                    tifa_report = json.loads(report_path.read_text(encoding='utf-8'))
+                    unresolved = tifa_report.get('needs_review', [])
+                    review_limit = max(3, math.ceil(len(ctc_lines)*.25))
+                    if len(unresolved) > review_limit and not getattr(args, 'allow_unverified_timing', False):
+                        numbers = ', '.join(str(item.get('line')) for item in unresolved[:20])
+                        raise ValueError(
+                            f'TIFA ne confirme pas assez les timestamps ({len(unresolved)}/{len(ctc_lines)} '
+                            f'lignes à vérifier ; seuil {review_limit}). Alignement refusé pour éviter '
+                            f'un export décalé. Lignes : {numbers}. Pour forcer, utiliser '
+                            '--allow-unverified-timing.'
+                        )
                 else:
                     aligned = align_mms(vocals, ctc_lines, language)
                 transcript = stable_whisper.WhisperResult(aligned)
@@ -665,6 +677,35 @@ def prepare(source, destination, args):
             result = transcript.to_dict()
             checkpoint['refined'] = result
             save_alignment()
+        hybrid_details = None
+        qwen_review = []
+        if getattr(args, 'hybrid', False):
+            hybrid_path = destination/(source.stem+'.hybrid.json')
+            hybrid_details = json.loads(hybrid_path.read_text(encoding='utf-8'))
+            anchors = hybrid_details.get('anchors', [])
+            for i, segment in enumerate(result.get('segments', [])):
+                if i >= len(anchors):
+                    break
+                anchor = anchors[i]
+                qstart, qend = anchor.get('qwen_start'), anchor.get('qwen_end')
+                if not isinstance(qstart, (int, float)) or not isinstance(qend, (int, float)):
+                    continue
+                start_delta = abs(float(segment['start'])-qstart)
+                end_delta = abs(float(segment['end'])-qend)
+                if max(start_delta, end_delta) > 1.5:
+                    qwen_review.append({'line': i+1, 'mms_or_tifa_start': segment['start'],
+                                        'qwen_start': qstart, 'start_delta': round(start_delta, 3),
+                                        'mms_or_tifa_end': segment['end'], 'qwen_end': qend,
+                                        'end_delta': round(end_delta, 3)})
+            review_limit = max(3, math.ceil(len(result.get('segments', []))*.25))
+            if len(qwen_review) > review_limit and not getattr(args, 'allow_unverified_timing', False):
+                numbers = ', '.join(str(item['line']) for item in qwen_review[:20])
+                raise ValueError(
+                    f'Le timing Qwen et MMS/TIFA diverge de plus de 1,5 s sur '
+                    f'{len(qwen_review)}/{len(result.get("segments", []))} lignes '
+                    f'(seuil {review_limit}). Export refusé. Lignes : {numbers}. '
+                    'Pour forcer, utiliser --allow-unverified-timing.'
+                )
         confidence_words = [word for segment in result.get('segments', []) for word in segment.get('words', [])
                             if isinstance(word.get('probability'), (int, float))]
         uncertain = int(sum(word['probability'] < .5 for word in confidence_words))
@@ -676,9 +717,9 @@ def prepare(source, destination, args):
             print(f'  À vérifier : {instant} blocs sans durée fiable sont conservés dans le texte.', flush=True)
         quality = alignment_quality(result, getattr(args, 'aligner', 'whisper'))
         if getattr(args, 'hybrid', False):
-            hybrid_details = json.loads((destination/(source.stem+'.hybrid.json')).read_text())
             quality['text_review'] = [i+1 for i, anchor in enumerate(hybrid_details['anchors'])
                                       if anchor['needs_review'] or anchor['stem_disagreement']]
+            quality['qwen_review'] = qwen_review
             if getattr(args, 'aligner', 'whisper') == 'tifa':
                 tifa_details = json.loads((destination/(source.stem+'.tifa.json')).read_text())
                 quality['tifa_review'] = tifa_details['needs_review']
@@ -686,7 +727,7 @@ def prepare(source, destination, args):
             else:
                 quality['tifa_review'] = []
                 quality['notes'] = ['TIFA non exécuté ; alignement MMS conservé sans validation TIFA.']
-            quality['needs_review'] |= bool(quality['text_review'] or quality['tifa_review'])
+            quality['needs_review'] |= bool(quality['text_review'] or quality['tifa_review'] or qwen_review)
         quality_path = destination/(source.stem+'.quality.json')
         quality_temp = quality_path.with_suffix('.json.tmp')
         quality_temp.write_text(json.dumps(quality, ensure_ascii=False, indent=2))
@@ -762,7 +803,11 @@ def main(argv=None):
     parser.add_argument('--device', choices=('auto', 'cpu', 'mps'), default='auto', help='Périphérique Demucs')
     parser.add_argument('--aligner', choices=('whisper', 'mms', 'tifa'), default='whisper',
                         help='MMS CTC expérimental sur CPU, ou alignement Whisper habituel')
-    parser.add_argument('--hybrid', action='store_true', help='Demucs + RoFormer, double Whisper, arbitrage IA sur IRIS, MMS + TIFA')
+    parser.add_argument('--hybrid', action='store_true', help='Demucs + RoFormer, Whisper + Qwen, arbitrage IRIS, MMS + TIFA')
+    parser.add_argument('--allow-unverified-lyrics', action='store_true',
+                        help='Forcer l’alignement malgré des lignes sans corroboration suffisante des trois reconnaissances')
+    parser.add_argument('--allow-unverified-timing', action='store_true',
+                        help='Forcer l’export malgré trop de désaccords Qwen/TIFA ou de phrases ignorées par TIFA')
     parser.add_argument('--refresh-arbitration', action='store_true', help='Redemander au relais IRIS ses décisions actualisées')
     parser.add_argument('--model', choices=('tiny', 'base', 'small', 'medium', 'large-v3'), default='large-v3')
     parser.add_argument('--demucs-model', choices=('htdemucs_ft', 'htdemucs'), default='htdemucs_ft')

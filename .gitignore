@@ -94,3 +94,4 @@ android-sdk/
 /.karaoke-tools/
 /.venv-karaoke-tifa/
 /.venv-karaoke-roformer/
+/.venv-karaoke-qwen/

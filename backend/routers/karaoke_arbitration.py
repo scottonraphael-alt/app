@@ -57,6 +57,7 @@ async def arbitrate(request: Request, authorization: str = Header('')):
         cached = await db.karaoke_preparation_arbitrations.find_one({'_id': key})
         if cached and cached.get('decisions'):
             return {'version': VERSION, 'model': model, 'decisions': cached['decisions']}
+        response = None
         try:
             async with asyncio.timeout(120):
                 async with AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY, max_retries=1, timeout=110) as client:
@@ -70,7 +71,17 @@ async def arbitrate(request: Request, authorization: str = Header('')):
             decisions = validate_decisions(data['rows'], blocks[0].input)
             log_response('karaoke_preparation_arbitration', model, response)
         except Exception as error:
-            logger.warning('Arbitrage karaoké interrompu (%s).', type(error).__name__)
+            usage = getattr(response, 'usage', None)
+            logger.warning(
+                'Arbitrage karaoké interrompu (type=%s, provider_status=%s, request_id=%s, '
+                'stop_reason=%s, output_tokens=%s, detail=%s).',
+                type(error).__name__,
+                getattr(error, 'status_code', None),
+                getattr(error, 'request_id', None),
+                getattr(response, 'stop_reason', None),
+                getattr(usage, 'output_tokens', None),
+                str(error)[:500] or '(aucun détail)',
+            )
             raise HTTPException(502, 'Arbitrage indisponible ou incomplet ; candidats conservés sur le Mac.')
         await db.karaoke_preparation_arbitrations.update_one({'_id': key}, {'$set': {
             'version': VERSION, 'model': model, 'candidates': data, 'decisions': decisions,

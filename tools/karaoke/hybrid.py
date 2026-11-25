@@ -22,6 +22,7 @@ def atomic_json(path, data):
 def paths():
     return {'roformer_python': ROOT/'.venv-karaoke-roformer/bin/python',
             'tifa_python': ROOT/'.venv-karaoke-tifa/bin/python',
+            'qwen_python': ROOT/'.venv-karaoke-qwen/bin/python',
             'tifa_repo': ROOT/'.karaoke-tools/TIFA',
             'tifa_model': ROOT/'.karaoke-tools/models/TIFA-1.0/model.pt'}
 
@@ -107,6 +108,37 @@ def transcribe(model, audio, language, source, destination, args, label, existin
     return result
 
 
+def qwen_transcribe(audio, language, source, destination):
+    """Independent multilingual song ASR plus its own forced word timestamps."""
+    from services.karaoke_assets import sha256
+    settings = {'source': sha256(audio), 'model': 'Qwen/Qwen3-ASR-0.6B',
+                'aligner': 'Qwen/Qwen3-ForcedAligner-0.6B',
+                'worker': sha256(ROOT/'tools/karaoke/qwen_worker.py'), 'language': language}
+    cache = destination/(source.stem+'.qwen-transcript.json')
+    signature = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
+    try:
+        saved = json.loads(cache.read_text(encoding='utf-8'))
+        if saved['signature'] == signature and saved.get('transcript', {}).get('segments'):
+            print('  Qwen ASR : transcription indépendante vérifiée reprise du cache.', flush=True)
+            return saved['transcript']
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    output = destination/(source.stem+'.qwen-transcript.pending.json')
+    print('  Qwen ASR : troisième lecture de la chanson + horodatage Qwen…', flush=True)
+    try:
+        subprocess.run([str(paths()['qwen_python']), str(ROOT/'tools/karaoke/qwen_worker.py'),
+                        str(audio), language or '', str(output)], check=True, timeout=7200)
+        transcript = json.loads(output.read_text(encoding='utf-8'))
+        output.unlink(missing_ok=True)
+    except Exception:
+        output.unlink(missing_ok=True)
+        raise
+    if not transcript.get('segments'):
+        raise ValueError('Qwen n’a produit aucun mot horodaté pour la chanson.')
+    atomic_json(cache, {'signature': signature, 'transcript': transcript})
+    return transcript
+
+
 def candidates(lines, result, language):
     from difflib import SequenceMatcher
     from prepare import lyric_units
@@ -179,20 +211,47 @@ def hybrid_text(model, primary, source, destination, args, metadata, seconds, ra
     lines = lyric_lines(raw) if raw else [''.join(w['word'] for w in s.get('words', [])).strip()
                                         for s in demucs['segments'] if s.get('words')]
     lines = [line for line in lines if line]
-    left, right = candidates(lines, demucs, language), candidates(lines, roformer, language)
+    qwen = qwen_transcribe(source, language, source, destination)
+    left, right, third = candidates(lines, demucs, language), candidates(lines, roformer, language), candidates(lines, qwen, language)
     locked = {''.join(line.split()) for line in (hints or {})}
     rows = [{'id': i, 'reference': text, 'demucs': left[i]['text'], 'roformer': right[i]['text'],
+             'qwen': third[i]['text'],
              'locked': ''.join(text.split()) in locked} for i, text in enumerate(lines)]
-    evidence = {'version': 1, 'language': language, 'rows': rows, 'demucs': left, 'roformer': right}
+    evidence = {'version': 2, 'language': language, 'rows': rows, 'demucs': left,
+                'roformer': right, 'qwen': third}
     atomic_json(destination/(source.stem+'.candidates.json'), evidence)
     choices = arbitrate(rows, language, destination, source, getattr(args, 'refresh_arbitration', False))
+    minimum_support = .5
+    unsupported = [
+        {'line': i+1, 'reference': lines[i], 'coverage': {
+            'demucs': left[i]['coverage'], 'roformer': right[i]['coverage'], 'qwen': third[i]['coverage']}}
+        for i, row in enumerate(rows)
+        if not row['locked'] and max(left[i]['coverage'], right[i]['coverage'], third[i]['coverage']) < minimum_support
+    ]
+    if unsupported and not getattr(args, 'allow_unverified_lyrics', False):
+        atomic_json(destination/(source.stem+'.hybrid.json'), {
+            'status': 'rejected_unverified_lyrics', 'anchors': [],
+            'unsupported_lines': unsupported, 'decisions': choices,
+        })
+        numbers = ', '.join(str(item['line']) for item in unsupported)
+        raise ValueError(
+            f'{len(unsupported)} ligne(s) de paroles avec moins de 50 % de correspondance dans les trois reconnaissances '
+            f'(lignes {numbers}). Alignement refusé ; vérifier .candidates.json ou corriger la LRC. '
+            'Pour forcer malgré l’incertitude, utiliser --allow-unverified-lyrics.'
+        )
+    for i, choice in enumerate(choices):
+        if not left[i]['text'] and not right[i]['text'] and third[i]['text']:
+            choice.update(source='qwen', text=third[i]['text'], needs_review=True,
+                          reason='Seul Qwen a reconnu cette ligne ; remplacer la référence sans autre corroboration.')
     aligner = getattr(args, 'aligner', 'whisper')
     if aligner in ('mms', 'tifa'):
         # Whisper timestamps here are only rough text-matching evidence. MMS
         # performs the actual line alignment below, and TIFA then checks those
         # timings against both stems. Do not let provisional Whisper anchors
         # reject a song before those independent aligners can run.
-        anchors = [{'start': None, 'end': None, 'needs_review': choice['needs_review'],
+        anchors = [{'start': None, 'end': None,
+                    'qwen_start': third[i]['start'], 'qwen_end': third[i]['end'],
+                    'needs_review': choice['needs_review'],
                     'timing_deferred_to': aligner,
                     'stem_disagreement': bool(left[i]['start'] is not None and right[i]['start'] is not None
                         and abs(left[i]['start']-right[i]['start']) > .5)}
@@ -225,7 +284,9 @@ def hybrid_text(model, primary, source, destination, args, metadata, seconds, ra
                     raise ValueError(f'Repères incohérents pour la phrase {i+1}, et l’horodatage des paroles ne répare pas la chronologie ; vérifier .candidates.json.')
             else:
                 raise ValueError(f'Repères incohérents pour la phrase {i+1} sans horodatage de secours ; vérifier .candidates.json.')
-        anchors.append({'start': start, 'end': end, 'needs_review': choice['needs_review'] or not heard or reference_fallback,
+        anchors.append({'start': start, 'end': end,
+                        'qwen_start': third[i]['start'], 'qwen_end': third[i]['end'],
+                        'needs_review': choice['needs_review'] or not heard or reference_fallback,
                         'reference_fallback': reference_fallback,
                         'stem_disagreement': bool(len(heard) == 2 and abs(heard[0]['start']-heard[1]['start']) > .5)})
         out.append(f"[{timestamp(start)}]{choice['text']}")

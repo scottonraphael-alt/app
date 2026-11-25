@@ -38,7 +38,7 @@ def main():
     head = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
     if head != COMMIT:
         raise ValueError('Le checkout TIFA diffère de la version validée ; conserver ses modifications avant de le réinstaller.')
-    for name in ('roformer', 'tifa'):
+    for name in ('roformer', 'tifa', 'qwen'):
         env = ROOT/f'.venv-karaoke-{name}'
         if not (env/'bin/python').is_file():
             run([sys.executable, '-m', 'venv', env])
@@ -70,6 +70,7 @@ def main():
         pass
     print('Installation terminée. Aucune chanson lancée.')
     print('Configuration privée conservée dans .env.karaoke-hybrid ; installer le même secret sur le VPS.')
+    print('Qwen ASR et son aligneur seront téléchargés dans le cache Hugging Face au premier morceau.')
 
 
 if __name__ == '__main__':
