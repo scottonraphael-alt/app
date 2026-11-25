@@ -1,10 +1,14 @@
-import { useMemo } from "react";
-import { BellRing, CalendarClock, CircleAlert, MapPin, RefreshCw, Settings2, TriangleAlert } from "lucide-react";
+import { useMemo, useState } from "react";
+import * as Collapsible from "@radix-ui/react-collapsible";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowUpRight, BellRing, CalendarClock, ChevronDown, CircleAlert, MapPin, RefreshCw, Settings2, TriangleAlert, Users } from "lucide-react";
 
 import "@/Agenda.css";
 
 import { settingsStatus } from "../agendaConstants";
-import { normalizeNextEvents } from "../calendarModel";
+import { normalizeByKind, normalizeNextEvents } from "../calendarModel";
+import { elementQuery } from "../agendaApi";
+import { peopleSummary } from "../HelperAvatar";
 import { dateBlockParts, formatTimeRange, relativeDayLabel } from "../dateUtils";
 import { typeClass } from "../TypeBadge";
 import { joinClasses } from "./calendarHelpers";
@@ -27,9 +31,26 @@ function PanelError({ message, onRetry }) {
   );
 }
 
-// « Prochains rendez-vous » : réunions et entrées à venir (upcoming.next_events), un clic ouvre le tiroir.
+function NextEventDetail({ item, open, onOpen }) {
+  const options = elementQuery(item);
+  const query = useQuery({ ...options, enabled: open && options.enabled !== false });
+  const details = normalizeByKind(item.kind, query.data);
+  const time = item.allDay ? "Journée entière" : formatTimeRange(item.startTime, details?.endTime);
+  const people = peopleSummary(details?.people);
+  return <div className="ag-cal-next-preview">
+    <p><CalendarClock size={14} aria-hidden="true" />{time}</p>
+    {options.enabled === false || query.isError ? <p>Participants indisponibles.</p>
+      : query.isPending ? <p role="status">Chargement des participants…</p>
+      : <p><Users size={14} aria-hidden="true" />{people || "Aucun participant indiqué"}</p>}
+    <button type="button" className="ag-link-button" onClick={() => onOpen(item)}>
+      Ouvrir le détail <ArrowUpRight size={14} aria-hidden="true" />
+    </button>
+  </div>;
+}
+
 export function NextEventsCard({ events, today, loading = false, error = false, onRetry, onOpen }) {
   const items = useMemo(() => normalizeNextEvents(events), [events]);
+  const [expanded, setExpanded] = useState(null);
   return (
     <section data-iris-reveal="card" className="ag-panel ag-cal-side-card" aria-labelledby="ag-cal-next-title" aria-busy={loading}>
       <div className="ag-panel-header">
@@ -57,8 +78,9 @@ export function NextEventsCard({ events, today, loading = false, error = false, 
             const relative = relativeDayLabel(item.start, today);
             const time = item.allDay ? "Journée" : formatTimeRange(item.startTime, item.endTime);
             return (
-              <li key={item.key}>
-                <button type="button" data-iris-reveal="agenda" className="ag-cal-next-item" onClick={() => onOpen(item)}>
+              <Collapsible.Root asChild key={item.key} open={expanded === item.key} onOpenChange={open => setExpanded(open ? item.key : null)}>
+                <li>
+                <Collapsible.Trigger type="button" data-iris-reveal="agenda" className="ag-cal-next-item">
                   <span className={joinClasses("ag-date-block ag-date-block--sm", typeClass(item.type))} aria-hidden="true">
                     <strong>{parts.dayNumber}</strong>
                     <small>{parts.weekday}</small>
@@ -75,8 +97,13 @@ export function NextEventsCard({ events, today, loading = false, error = false, 
                       </small>
                     ) : null}
                   </span>
-                </button>
-              </li>
+                  <ChevronDown className="ag-cal-next-chevron" size={15} aria-hidden="true" />
+                </Collapsible.Trigger>
+                <Collapsible.Content className="iris-disclosure-content" inert={expanded !== item.key || undefined}>
+                  <NextEventDetail item={item} open={expanded === item.key} onOpen={onOpen} />
+                </Collapsible.Content>
+                </li>
+              </Collapsible.Root>
             );
           })}
         </ul>

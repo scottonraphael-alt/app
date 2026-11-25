@@ -90,6 +90,12 @@ function ProjectWorkspace({helper,isResponsableGlobal,projectId}) {
     load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [projectId]);
   const taskParam = params.get('task');
+  const reviewParam = params.get('taches');
+  useEffect(() => {
+    if (reviewParam !== 'a-valider') return;
+    setTaskFilter('review');
+    setTab('tasks');
+  }, [reviewParam]);
   useEffect(() => {
     if (taskParam && tasks.some(t => t.id === taskParam)) {
       setSelectedId(taskParam);

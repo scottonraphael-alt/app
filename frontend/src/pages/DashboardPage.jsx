@@ -25,6 +25,8 @@ import useTicketTags from "../components/tickets/extras/useTicketTags";
 import "../TicketList.css";
 import { MotionRows } from "../components/motion/Motion";
 import TicketPreview from "../components/casework/TicketPreview";
+import PreviewAvatar from "../components/casework/PreviewAvatar";
+import ChangeCue from "../components/ux/ChangeCue";
 
 function displayName(member) {
   return (
@@ -69,7 +71,7 @@ function MemberAvatar({ member }) {
   }, [member?.avatar_url]);
 
   return (
-    <span className="tl-avatar">
+    <span className="tl-avatar" data-preview-avatar="" data-preview-fallback={displayName(member).slice(0, 1).toUpperCase()}>
       {member?.avatar_url && !failed ? (
         <img
           src={resolveAvatarUrl(member.avatar_url)}
@@ -137,6 +139,9 @@ export default function DashboardPage({
         ),
     [tickets]
   );
+
+  const unassignedCount = activeTickets.filter(ticket => !ticket.assigned_helper?.id).length;
+  const mineCount = helper?.id ? activeTickets.filter(ticket => String(ticket.assigned_helper?.id) === String(helper.id)).length : 0;
 
   const filteredTickets = useMemo(() => {
     const term = normalize(search.trim());
@@ -254,7 +259,7 @@ export default function DashboardPage({
       </header>
       <div className="cz-dialog-root"><WorkflowRequests kind="support"/></div>
 
-      {preview && <TicketPreview ticket={preview} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
+      {preview && <TicketPreview ticket={preview.ticket} source={preview.source} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
       <section data-iris-reveal="card" className="tl-panel" aria-labelledby="tl-list-title">
         <header className="tl-panel-header">
           <span className="tl-panel-icon">
@@ -329,7 +334,7 @@ export default function DashboardPage({
                 aria-pressed={assignmentFilter === "mine"}
                 onClick={() => { setAssignmentFilter("mine"); ticketEvent("list.filter_changed", null, "mine"); }}
               >
-                Mes suivis
+                Mes suivis <ChangeCue as="strong" value={mineCount}>{mineCount}</ChangeCue>
               </button>
             )}
 
@@ -343,7 +348,7 @@ export default function DashboardPage({
               aria-pressed={assignmentFilter === "unassigned"}
               onClick={() => { setAssignmentFilter("unassigned"); ticketEvent("list.filter_changed", null, "unassigned"); }}
             >
-              Sans interlocuteur
+              À attribuer <ChangeCue as="strong" value={unassignedCount}>{unassignedCount}</ChangeCue>
             </button>
 
             {crisisCount > 0 && (
@@ -438,7 +443,7 @@ export default function DashboardPage({
                   <MemberAvatar member={ticket.member} />
 
                   <span className="tl-ticket-copy">
-                    <strong>{displayName(ticket.member)}</strong>
+                    <strong data-preview-title="">{displayName(ticket.member)}</strong>
                     <TicketListSignals crisis={crisisById[ticket.id]} viewers={presenceById[ticket.id]} />
                   {assignmentFilter === "attention" && <span className="tl-attention-reasons">{(ticket.attention_reasons || []).map(reason => ATTENTION_LABELS[reason]).join(" · ")}</span>}
 
@@ -446,17 +451,13 @@ export default function DashboardPage({
                       {ticket.title || ticket.channel_name}
                     </small>
 
-                    <span
-                      className={`tl-interlocutor ${
-                        !ticket.assigned_helper ? "is-unassigned" : ""
-                      }`}
-                    >
-                      {ticket.assigned_helper
-                        ? `Interlocuteur : ${displayName(
-                            ticket.assigned_helper
-                          )}`
-                        : "Aucun interlocuteur attribué"}
-                    </span>
+                    <ChangeCue className={`tl-interlocutor iris-assigned-person ${!ticket.assigned_helper ? "is-unassigned" : ""}`}
+                      variant="assignment" value={ticket.assigned_helper?.id}>
+                      {ticket.assigned_helper ? <>
+                        <PreviewAvatar person={ticket.assigned_helper} label={displayName(ticket.assigned_helper)} />
+                        <span>Interlocuteur : {displayName(ticket.assigned_helper)}</span>
+                      </> : "Aucun interlocuteur attribué"}
+                    </ChangeCue>
                   </span>
 
                   <span className="tl-ticket-date">
@@ -477,7 +478,7 @@ export default function DashboardPage({
                     size={19}
                     aria-hidden="true"
                   />
-                </Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${displayName(ticket.member)}`} onClick={() => setPreview(ticket)}><PanelRightOpen size={17} aria-hidden="true" /></button></div>
+                </Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${displayName(ticket.member)}`} onClick={(event) => { event.currentTarget.focus(); setPreview({ ticket, source: event.currentTarget.closest(".iris-ticket-row") }); }}><PanelRightOpen size={17} aria-hidden="true" /></button></div>
               );
             })}
         </MotionRows>

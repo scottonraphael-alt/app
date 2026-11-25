@@ -61,7 +61,7 @@ function MemberAvatar({ member }) {
   }, [member?.avatar_url]);
 
   return (
-    <span className="tar-avatar">
+    <span className="tar-avatar" data-preview-avatar="" data-preview-fallback={displayName(member).slice(0, 1).toUpperCase()}>
       {member?.avatar_url && !failed ? (
         <img
           src={resolveAvatarUrl(member.avatar_url)}
@@ -167,7 +167,7 @@ export default function TicketArchivesPage({
         </Link>
       </header>
 
-      {preview && <TicketPreview ticket={preview} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
+      {preview && <TicketPreview ticket={preview.ticket} source={preview.source} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
       <section
         data-iris-reveal="card" className="tar-panel"
         aria-labelledby="tar-list-title"
@@ -274,7 +274,7 @@ export default function TicketArchivesPage({
                 <MemberAvatar member={ticket.member} />
 
                 <span className="tar-ticket-copy">
-                  <strong>{displayName(ticket.member)}</strong>
+                  <strong data-preview-title="">{displayName(ticket.member)}</strong>
                   <small>{ticket.title || ticket.channel_name}</small>
 
                   <span className="tar-ticket-helper">
@@ -297,7 +297,7 @@ export default function TicketArchivesPage({
                   size={19}
                   aria-hidden="true"
                 />
-              </Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${displayName(ticket.member)}`} onClick={() => setPreview(ticket)}><PanelRightOpen size={17} aria-hidden="true" /></button></div>
+              </Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${displayName(ticket.member)}`} onClick={(event) => { event.currentTarget.focus(); setPreview({ ticket, source: event.currentTarget.closest(".iris-ticket-row") }); }}><PanelRightOpen size={17} aria-hidden="true" /></button></div>
             ))}
         </MotionRows>
 

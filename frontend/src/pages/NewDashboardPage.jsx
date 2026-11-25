@@ -19,6 +19,7 @@ import AnimateurDashboardModule from "../components/AnimateurDashboardModule";
 import HomeGreeting from "../components/home/HomeGreeting";
 import ChangeCue from "../components/ux/ChangeCue";
 import MyDayWidget from "../components/home/MyDayWidget";
+import NextActionsWidget from "../components/home/NextActionsWidget";
 import TeamOnlineWidget from "../components/home/TeamOnlineWidget";
 import useMyDay from "../components/home/useMyDay";
 import { summaryFor } from "../components/home/homeUtils";
@@ -46,6 +47,8 @@ export default function NewDashboardPage({
   isAnimateur = false,
   isAdjoint = false,
   isServerAdmin = false,
+  onTicketUpdate,
+  onTicketDeleted,
 }) {
   useEffect(() => {
     document.body.classList.add("dashboard-no-nav");
@@ -185,6 +188,7 @@ const pills = [
   ].filter(Boolean);
 
   const widgets = [
+    {id:'next-actions',label:'À traiter maintenant',width:12,content:<NextActionsWidget tickets={tickets} helperId={helper?.id} canSeeTickets={canSeeHelperModule || isResponsable} canSeeProjects={canSeeAnimateur} canSeeAgenda={canSeeStaff} isResponsable={isResponsable}/>},
     canSeeStaff && {id:'day',label:'Ma journée',width:8,content:<MyDayWidget day={myDay}/>},
     canSeeStaff && {id:'team',label:'Équipe en ligne',width:4,content:<TeamOnlineWidget helperId={helper?.id} enabled={canSeeStaff}/>},
     (isStaff || isResponsable || isServerAdmin) && {id:'casework',label:'Dossiers des membres',width:12,content:<section className="nd-casework-module" aria-labelledby="member-casework-title"><p className="iris-section-kicker">CHAQUE ÉCHANGE À SA PLACE</p><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>},
@@ -219,7 +223,7 @@ const pills = [
           )}
         </nav>)},
     canSeeStaff && {id:'quarterly',label:'Engagements trimestriels',width:12,content:<QuarterlyDashboardModule helper={helper}/>},
-    canSeeHelperModule && {id:'helper',label:'Mon espace helper',width:12,content:<HelperDashboardModule tickets={tickets} helper={helper} isAdmin={isAdmin}/>},
+    canSeeHelperModule && {id:'helper',label:'Mon espace helper',width:12,content:<HelperDashboardModule tickets={tickets} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted}/>},
     canSeeAnimateur && {id:'animateur',label:'Mon espace animateur',width:12,content:<AnimateurDashboardModule helper={helper}/>},
   ].filter(Boolean);
 

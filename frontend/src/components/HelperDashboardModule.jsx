@@ -1,14 +1,18 @@
 import { resolveAvatarUrl } from "../utils/avatar";
+import { useState } from "react";
 import {
   ArrowRight,
   Archive,
   BookHeart,
   FolderOpen,
   HeartHandshake,
+  PanelRightOpen,
   Plus,
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import TicketPreview from "./casework/TicketPreview";
+import ChangeCue from "./ux/ChangeCue";
 
 function ticketDate(ticket) {
   const value = Date.parse(ticket.updated_at || ticket.created_at || "");
@@ -19,7 +23,13 @@ export default function HelperDashboardModule({
   tickets = [],
   helper,
   isAdmin = false,
+  onTicketUpdate,
+  onTicketDeleted,
 }) {
+  const [preview, setPreview] = useState(null);
+  const openTickets = tickets.filter(ticket => ticket.status === "active");
+  const unassignedCount = openTickets.filter(ticket => !ticket.assigned_helper?.id).length;
+  const mineCount = helper?.id ? openTickets.filter(ticket => String(ticket.assigned_helper?.id) === String(helper.id)).length : 0;
   const myTickets = helper?.id
     ? tickets
         .filter(
@@ -66,6 +76,10 @@ export default function HelperDashboardModule({
         </div>
 
         <div className="nd-helper-v2-actions">
+          <div className="iris-assignment-counts" aria-label="Attribution des suivis ouverts">
+            <span>À attribuer <ChangeCue as="strong" value={unassignedCount}>{unassignedCount}</ChangeCue></span>
+            <span>Mes suivis <ChangeCue as="strong" value={mineCount}>{mineCount}</ChangeCue></span>
+          </div>
           {isAdmin && (
             <Link to="/admin" className="nd-helper-v2-manage">
               <Users size={17} aria-hidden="true" />
@@ -108,14 +122,14 @@ export default function HelperDashboardModule({
                 const active = ticket.status === "active";
 
                 return (
+                  <div className="iris-ticket-row nd-helper-preview-row" key={ticket.id}>
                   <Link
-                    key={ticket.id}
                     to={`/tickets/${ticket.id}`}
                     className="nd-helper-v2-ticket"
                     data-iris-reveal="message"
                     data-iris-link=""
                   >
-                    <span className="nd-helper-v2-avatar" data-iris-link-icon="">
+                    <span className="nd-helper-v2-avatar" data-iris-link-icon="" data-preview-avatar="" data-preview-fallback={name.slice(0, 1).toUpperCase()}>
                       {member.avatar_url ? (
                         <img
                           src={resolveAvatarUrl(member.avatar_url)}
@@ -128,7 +142,7 @@ export default function HelperDashboardModule({
                     </span>
 
                     <span className="nd-helper-v2-ticket-copy">
-                      <strong>{name}</strong>
+                      <strong data-preview-title="">{name}</strong>
                       <small>{ticket.title || "Ticket d’aide"}</small>
                     </span>
 
@@ -146,6 +160,11 @@ export default function HelperDashboardModule({
                       aria-hidden="true"
                     />
                   </Link>
+                  <button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${name}`} onClick={event => {
+                    event.currentTarget.focus();
+                    setPreview({ ticket, source: event.currentTarget.closest(".iris-ticket-row") });
+                  }}><PanelRightOpen size={17} aria-hidden="true" /></button>
+                  </div>
                 );
               })}
             </div>
@@ -192,6 +211,8 @@ export default function HelperDashboardModule({
           ))}
         </nav>
       </div>
+      {preview && <TicketPreview ticket={preview.ticket} source={preview.source} helper={helper} isAdmin={isAdmin}
+        onClose={() => setPreview(null)} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
     </section>
   );
 }

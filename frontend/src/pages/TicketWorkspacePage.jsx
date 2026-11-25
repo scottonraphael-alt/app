@@ -15,6 +15,7 @@ import CrisisBanner from "../components/tickets/ai/CrisisBanner";
 import TicketSignals from "../components/tickets/ai/TicketSignals";
 import ReplyComposer from "../components/tickets/ai/ReplyComposer";
 import TicketExtrasPanel from "../components/tickets/extras/TicketExtrasPanel";
+import PreviewAvatar from "../components/casework/PreviewAvatar";
 import { useNewMessageMotion } from "../components/motion/Motion";
 import { ActionProgressButton, SlidingPanels } from "../components/casework/CaseMotion";
 import usePresence from "../components/tickets/ai/usePresence";
@@ -382,6 +383,9 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         </label>
         <div className="tw-context-control" data-testid="helper-assignment-panel">
           <label className="tw-context-label" htmlFor={isAdmin ? "tw-helper-assignment" : undefined}>Interlocuteur</label>
+          <ChangeCue value={ticket.assigned_helper?.id} variant="assignment" className="tw-assignee-avatar">
+            {ticket.assigned_helper && <PreviewAvatar person={ticket.assigned_helper} label={ticket.assigned_helper.display_name || ticket.assigned_helper.username} />}
+          </ChangeCue>
           {isAdmin ? <ChangeCue value={ticket.assigned_helper?.id} variant="assignment" className="tw-select-wrap"><UserRoundCheck size={17} aria-hidden="true" /><select id="tw-helper-assignment" disabled={ticket.status === "archived"} aria-label="Helper principal" value={ticket.assigned_helper?.id || ""} onChange={(event) => assignHelper(event.target.value)} data-testid="helper-assignment-select"><option value="">Non attribué</option>{helpers.map((person) => <option value={person.id} key={person.id}>{person.display_name || person.username}</option>)}</select><ChevronsUpDown className="tw-select-chevron" size={16} aria-hidden="true" /></ChangeCue> : <strong className="tw-context-person" data-testid="assigned-helper-readonly"><UserRoundCheck size={17} aria-hidden="true" />{ticket.assigned_helper?.display_name || ticket.assigned_helper?.username || "Non attribué"}</strong>}
         </div>
         <span className="tw-context-date"><CalendarDays size={16} aria-hidden="true" /> Ouvert le {ticket.created_at ? new Date(ticket.created_at).toLocaleDateString("fr-FR") : "—"}</span>
@@ -396,7 +400,18 @@ export default function TicketWorkspacePage({ onTicketUpdate, onTicketDeleted, i
         assigned={Boolean(ticket.assigned_helper)}
         archived={ticket.status !== "active"}
         crisisLevel={ticket.crisis?.level}
-        onAssigned={(assigned) => setTicket((current) => ({ ...current, assigned_helper: { id: assigned?.helper_id, display_name: assigned?.name, username: assigned?.name } }))}
+        onAssigned={async (assigned) => {
+          if (!assigned?.helper_id) return;
+          const assignedHelper = { id: assigned.helper_id, display_name: assigned.name, username: assigned.name };
+          let updated = { ...ticket, assigned_helper: assignedHelper };
+          try {
+            updated = (await api.get(`/tickets/${ticketId}`, { params: { include_transcript: false } })).data;
+          } catch {
+            // The attribution succeeded; the routing response still identifies the assignee.
+          }
+          setTicket(current => current?.id === ticketId ? { ...current, assigned_helper: updated.assigned_helper } : current);
+          openingUpdate.current?.(updated);
+        }}
       />
 
       <div className="tw-mobile-nav" aria-label="Vue du dossier"><button type="button" aria-pressed={mobileView === "messages"} onClick={() => { setMobileView("messages"); ticketEvent("workspace.mobile_view_changed", ticketId, "messages"); }}>Conversation <span>{ticket.message_count}</span></button><button type="button" aria-pressed={mobileView === "dossier"} onClick={() => { setMobileView("dossier"); ticketEvent("workspace.mobile_view_changed", ticketId, "dossier"); }}>Dossier et suivi</button></div>

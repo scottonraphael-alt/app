@@ -78,3 +78,60 @@
   [data-radix-portal] [data-state], [role="dialog"][data-state], [data-state].fixed.inset-0 { animation:none!important; transition:none!important; }
 }
 .iris-drawer-overlay .pj-modal > .cz-page { width:auto; min-height:0; }
+
+.iris-preview-heading, .iris-assigned-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.iris-preview-heading [data-preview-title] { min-width: 0; overflow-wrap: anywhere; }
+.iris-preview-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--iris-accent-soft);
+  color: var(--iris-accent);
+  font: 600 11px/1 Manrope, sans-serif;
+}
+.iris-preview-avatar img, .iris-preview-flight img { width: 100%; height: 100%; object-fit: cover; }
+.iris-preview-heading .iris-preview-avatar { width: 38px; height: 38px; font-size: 16px; }
+.tw-assignee-avatar:empty { display: none; }
+.iris-assignment-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+  color: var(--iris-text-muted);
+}
+.iris-assignment-counts strong { color: var(--iris-text); }
+.nd-page .nd-helper-preview-row .nd-helper-v2-ticket { padding-inline-end: 52px; }
+.nd-page .nd-helper-preview-row > .iris-preview-trigger {
+  position: absolute;
+  inset-inline-end: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.iris-preview-flight {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transform-origin: top left;
+}
+.iris-preview-flight[data-kind="avatar"] { display: grid; place-items: center; }
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion="reduced"]) .iris-drawer-overlay[data-shared-preview="true"]:not([data-closing="true"]) .pj-modal {
+    animation: iris-overlay-enter 200ms ease-out !important;
+  }
+  html:not([data-motion="reduced"]) .iris-drawer-overlay[data-shared-closing="true"] .pj-modal {
+    animation: iris-overlay-exit 200ms ease-in forwards !important;
+  }
+}

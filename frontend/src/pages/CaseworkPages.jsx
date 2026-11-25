@@ -12,6 +12,7 @@ import { Modal } from '../components/projects/ProjectUI';
 import { ActionProgressButton, CasePanelLoading, SlidingPanels } from '../components/casework/CaseMotion';
 import { MotionNav, MotionRows, useNewMessageMotion } from '../components/motion/Motion';
 import CasePreview from '../components/casework/CasePreview';
+import PreviewAvatar from '../components/casework/PreviewAvatar';
 import '../Casier.css';
 import '../Casework.css';
 
@@ -62,6 +63,14 @@ function State({ row }) {
   return <ChangeCue value={row.status} className={`cw-state cw-state-${row.status} case-status-feedback`}>{row.status === 'archived' && <Check size={13} aria-hidden="true" />}{STATES[row.status] || row.status}</ChangeCue>;
 }
 
+function CaseAssignee({ person, prefix = '' }) {
+  const name = person?.display_name || (person?.username ? '@' + person.username : 'Pseudo indisponible');
+  return <ChangeCue className="iris-assigned-person" variant="assignment" value={person?.id}>
+    {person && <PreviewAvatar person={person} label={name} url={mediaUrl(person.avatar_url) || undefined} />}
+    <span>{prefix}{person ? <><strong>{name}</strong><small className="wf-member-id">{person.id}</small></> : 'À attribuer'}</span>
+  </ChangeCue>;
+}
+
 function CaseList({ kind, canReassign, canSeeMember360 }) {
   const [preview, setPreview] = useState(null);
   const [archived, setArchived] = usePageMemoryState(`casework.${kind}.archived`, false), [attention, setAttention] = usePageMemoryState(`casework.${kind}.attention`, false), [offset, setOffset] = usePageMemoryState(`casework.${kind}.offset`, 0);
@@ -81,7 +90,16 @@ function CaseList({ kind, canReassign, canSeeMember360 }) {
     catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
   const activeView = views[archived];
-  const data = activeView?.offset === offset && activeView.attention === attention ? activeView.data : null;
+  const data = activeView?.data;
+  const changingFilter = Boolean(activeView && (activeView.offset !== offset || activeView.attention !== attention) && !error);
+  const updateAssignment = (updated) => {
+    setViews(current => Object.fromEntries(Object.entries(current).map(([view, snapshot]) => [
+      view, { ...snapshot, data: {
+        ...snapshot.data,
+        items: snapshot.data.items.map(item => item.id === updated.id ? { ...item, assigned: updated.assigned } : item),
+      } },
+    ])));
+  };
   return <Frame kind={kind} refresh={() => setRefresh(n => n + 1)}>
     <WorkflowRequests kind={kind}/>
     <section className="cw-guide"><FileText size={22} /><div><h2>Le suivi des échanges</h2><p>Retrouvez les conversations, leur intervenant et les actions à mener. Les échanges restent consultables après la clôture du salon.</p></div><span className="cw-guide-count"><strong>{data?.total ?? "—"}</strong>dossiers dans cette vue</span></section>
@@ -94,12 +112,12 @@ function CaseList({ kind, canReassign, canSeeMember360 }) {
     {error && <p role="alert" className="cw-alert">{error}</p>}<SlidingPanels active={Number(archived)}>
       {[false, true].map(view => {
         const panelData = view === archived ? data : views[view]?.data;
-        const panelOffset = view === archived ? offset : views[view]?.offset ?? 0;
+        const panelOffset = views[view]?.offset ?? 0;
         if (!panelData) return !error || view !== archived ? <section key={String(view)} className="cw-card"><CasePanelLoading /></section> : null;
-        return <section key={String(view)} className="cw-card"><ScrollEdges className="cw-table-wrap" label="Tableau des dossiers"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
-      <MotionRows>{panelData.items.map(row => <tr key={row.id}><td><Link className="cw-case-link" to={`${pathFor(kind)}/${row.id}`}>{row.member?.display_name || row.member?.username || row.member?.id}</Link><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${row.member?.display_name || row.member?.username || row.member?.id}`} onClick={() => setPreview(row)}><PanelRightOpen size={16} aria-hidden="true" /></button>
+        return <section key={String(view)} className="cw-card" aria-busy={view === archived && changingFilter} inert={view === archived && changingFilter || undefined}><ScrollEdges className="cw-table-wrap" label="Tableau des dossiers"><table className="cw-table"><thead><tr><th>Membre</th><th>Suivi</th><th>Intervenant</th><th>Conversation</th><th>Dernière actualisation</th></tr></thead>
+      <MotionRows>{panelData.items.map(row => <tr key={row.id}><td><span className="iris-preview-heading"><PreviewAvatar person={row.member} label={row.member?.display_name || row.member?.username} url={mediaUrl(row.member?.avatar_url) || undefined} /><Link className="cw-case-link" to={`${pathFor(kind)}/${row.id}`}><span data-preview-title="">{row.member?.display_name || row.member?.username || row.member?.id}</span></Link></span><button type="button" className="iris-preview-trigger" aria-label={`Aperçu du dossier de ${row.member?.display_name || row.member?.username || row.member?.id}`} onClick={(event) => { event.currentTarget.focus(); setPreview({ row, source: event.currentTarget.closest("tr") }); }}><PanelRightOpen size={16} aria-hidden="true" /></button>
         {row.visibility !== 'staff' && <small className="cw-private"><LockKeyhole size={12} /> {row.visibility === 'leadership' ? 'Administration et Responsables' : 'Accès restreint'}</small>}</td>
-        <td><State row={row} /></td><td>{row.assigned?<><strong>{row.assigned.display_name|| (row.assigned.username?'@'+row.assigned.username:'Pseudo indisponible')}</strong><small className="wf-member-id">{row.assigned.id}</small></>:'À attribuer'}</td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</MotionRows></table></ScrollEdges>
+        <td><State row={row} /></td><td><CaseAssignee person={row.assigned} /></td><td>{row.message_count || 0} messages</td><td>{date(row.sync?.at)}</td></tr>)}</MotionRows></table></ScrollEdges>
       {!panelData.items.length && <p className="cw-empty">Aucun dossier dans cette vue.</p>}
       <footer className="cw-toolbar"><button className="cw-button" disabled={!panelOffset} onClick={() => setOffset(n => Math.max(0, n - 25))}>Précédent</button>
         <span>Page {Math.floor(panelOffset / 25) + 1} sur {Math.max(1, Math.ceil(panelData.total / 25))} · {panelData.total} dossiers</span>
@@ -107,8 +125,8 @@ function CaseList({ kind, canReassign, canSeeMember360 }) {
     </section>;
       })}
     </SlidingPanels>
-    {preview && <CasePreview title={preview.member?.display_name || preview.member?.username || 'Dossier du membre'} href={`${pathFor(kind)}/${preview.id}`} onClose={() => { setPreview(null); setRefresh(n => n + 1); }}>
-      <CaseDetail key={preview.id} kind={kind} caseId={preview.id} embedded canReassign={canReassign} canSeeMember360={canSeeMember360} />
+    {preview && <CasePreview title={preview.row.member?.display_name || preview.row.member?.username || 'Dossier du membre'} member={preview.row.member} avatarUrl={mediaUrl(preview.row.member?.avatar_url) || undefined} source={preview.source} href={`${pathFor(kind)}/${preview.row.id}`} onClose={() => { setPreview(null); setRefresh(n => n + 1); }}>
+      <CaseDetail key={preview.row.id} kind={kind} caseId={preview.row.id} embedded canReassign={canReassign} canSeeMember360={canSeeMember360} onAssignmentChanged={updateAssignment} />
     </CasePreview>}
     {importing && <Modal title="Ajouter un salon existant" eyebrow="DOSSIERS IRIS" onClose={() => setImporting(false)} busy={busy}>
       <form className="cw-modal" onSubmit={importChannel}><p>Le salon doit appartenir aux catégories autorisées et posséder un panneau d’ouverture reconnu. Cette opération ne crée aucun salon Discord.</p>
@@ -118,7 +136,7 @@ function CaseList({ kind, canReassign, canSeeMember360 }) {
   </Frame>;
 }
 
-function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false, embedded = false }) {
+function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false, embedded = false, onAssignmentChanged }) {
   const [row, setRow] = useState(null), [error, setError] = useState(''), [refresh, setRefresh] = useState(0);
   const [messages, setMessages] = useState(null), [messageError, setMessageError] = useState(''), [offset, setOffset] = useState(0), [query, setQuery] = useState(''), [search, setSearch] = useState('');
   const [tab, setTab] = useState('notes'), [draftNote, setDraftNote] = useState(''), [assignee, setAssignee] = useState(''), [reason, setReason] = useState('');
@@ -158,12 +176,13 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
     try {
       const r = await api.post(`${BASE}/${caseId}/actions`, { ...data, request_id: request.current.id });
       setRow(r.data); setConfirm(null); request.current = null; if (data.action === 'note') setDraftNote('');
+      if (data.action === 'claim' || data.action === 'assign') onAssignmentChanged?.(r.data);
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }
   const action = (name, extra = {}) => setConfirm({ action: name, revision: row.revision, ...extra });
   return <Frame embedded={embedded} kind={kind} title={row?.member?.display_name || row?.member?.username || 'Dossier du membre'} back refresh={() => setRefresh(n => n + 1)}>
     {error && <p role="alert" className="cw-alert">{error}</p>}{!row && !error && <p role="status">Chargement du dossier…</p>}
-    {row && <><section className="cw-strip"><State row={row} /><ChangeCue value={row.assigned?.id} variant="assignment">Intervenant : {row.assigned?((row.assigned.display_name|| (row.assigned.username?'@'+row.assigned.username:'Pseudo indisponible'))+' · '+row.assigned.id):'À attribuer'}</ChangeCue><span>Ouvert le {date(row.created_at)}</span>
+    {row && <><section className="cw-strip"><State row={row} /><CaseAssignee person={row.assigned} prefix="Intervenant : " /><span>Ouvert le {date(row.created_at)}</span>
       {row.visibility !== 'staff' && <strong><LockKeyhole size={14} /> Accès confidentiel</strong>}</section>
       {row.discord_actions_enabled===false && <p className="cw-guide">La collecte et le suivi sont disponibles. La clôture Discord sera accessible après la bascule des commandes BotGhost vers Iris.</p>}
       {(row.closure?.error_type||row.closure?.cancel_error) && <p className="cw-alert">La clôture demande une vérification des accès, des fichiers ou des derniers messages. Le salon n’est pas annoncé comme supprimé. Un Responsable ou Administrateur peut reprendre l’action.</p>}

@@ -192,6 +192,8 @@ function AuthenticatedApp({
         isAnimateur={isAnimateur}
         isServerAdmin={isServerAdmin}
         isAdjoint={isAdjoint}
+        onTicketUpdate={updateTicket}
+        onTicketDeleted={deleteTicket}
       />
     ) : (
       <Navigate to={defaultRoute} replace />

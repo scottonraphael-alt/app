@@ -1,5 +1,6 @@
 import { usePageMemoryState } from '../components/ux/PageMemory';
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
+import { MotionRows } from '../components/motion/Motion';
 import {groupNotifications,isUrgentNotification} from "../utils/notificationGroups";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -57,6 +58,7 @@ export default function NotificationsPage() {
   const [onlyUnread, setOnlyUnread] = usePageMemoryState('notifications.onlyUnread', false);
   const [type, setType] = usePageMemoryState('notifications.type', "");
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -97,6 +99,7 @@ export default function NotificationsPage() {
         if (token !== requestRef.current) return;
         const data = response.data;
         setItems(data.items || []);
+        setHasLoaded(true);
         setUnreadCount(data.unread_count || 0);
         setHasMore(Boolean(data.has_more));
         setNextBefore(data.next_before || null);
@@ -204,7 +207,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const renderNotificationItem = (item) => {
+  const renderNotificationItem = (item, key = item.id) => {
               const unread = !item.read_at;
               const content = (
                 <>
@@ -223,7 +226,7 @@ export default function NotificationsPage() {
               );
 
               return (
-                <li key={item.id} data-iris-reveal="message" className={`nt-item ${unread ? "is-unread" : ""} ${isUrgentNotification(item)?"nt-urgent":""}`}>
+                <li key={key} className={`nt-item ${unread ? "is-unread" : ""} ${isUrgentNotification(item)?"nt-urgent":""}`}>
                   {unread && <span className="nt-dot" aria-hidden="true" />}
 
                   {item.link ? (
@@ -346,7 +349,7 @@ export default function NotificationsPage() {
       </div>
 
       <div className="nt-list-card" aria-busy={loading}>
-        {loading ? (
+        {loading && !hasLoaded ? (
           <LoadingSkeleton label="Chargement des notifications…" count={4}/>
         ) : error ? (
           <div className="nt-error" role="alert">
@@ -356,7 +359,21 @@ export default function NotificationsPage() {
               Réessayer
             </button>
           </div>
-        ) : items.length === 0 ? (
+        ) : null}
+        {hasLoaded && !error && <MotionRows as="ul" className="nt-list" inert={loading || undefined}>
+          {groupNotifications(items).map(group => group.items.length === 1
+            ? renderNotificationItem(group.items[0], group.key)
+            : <li key={group.key} className="nt-group">
+                <details>
+                  <summary>
+                    <span><strong>{group.latest.title}</strong><small>{group.items.length} activités sur le même dossier · {group.unread} non lue(s)</small></span>
+                    <span>Voir les activités</span>
+                  </summary>
+                  <MotionRows as="ul">{group.items.map(item => renderNotificationItem(item))}</MotionRows>
+                </details>
+              </li>)}
+        </MotionRows>}
+        {hasLoaded && !loading && !error && items.length === 0 && (
           <div className="nt-state nt-empty">
             <Bell size={26} aria-hidden="true" />
             <p>
@@ -365,10 +382,6 @@ export default function NotificationsPage() {
                 : "Rien de nouveau pour le moment."}
             </p>
           </div>
-        ) : (
-          <ul className="nt-list">
-            {groupNotifications(items).map(group=>group.items.length===1?renderNotificationItem(group.items[0]):<li key={group.key} data-iris-reveal="message" className="nt-group"><details><summary><span><strong>{group.latest.title}</strong><small>{group.items.length} activités sur le même dossier · {group.unread} non lue(s)</small></span><span>Voir les activités</span></summary><ul>{group.items.map(renderNotificationItem)}</ul></details></li>)}
-          </ul>
         )}
 
         {!loading && !error && hasMore && (

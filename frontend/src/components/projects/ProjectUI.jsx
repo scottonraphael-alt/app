@@ -5,7 +5,8 @@ import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, X } fro
 import { useProjectAudit } from './projectAudit';
 import { personName, PRIORITY } from './projectUtils';
 import { usePageMemoryState } from '../ux/PageMemory';
-import { motionAllowed } from '../motion/Motion';
+import { motionAllowed, useReducedMotion } from '../motion/Motion';
+import { flyPreviewIdentity, PREVIEW_DURATION } from '../motion/sharedPreview';
 import IconHint from '../ux/IconHint';
 import '../ux/StateMotion.css';
 import '../../Casier.css';
@@ -36,12 +37,16 @@ export function Modal({
   eyebrow = 'ATELIER DES PROJETS',
   className = '',
   variant = 'modal',
-  size = 'md'
+  size = 'md',
+  sharedFrom,
 }) {
   const root = useRef(null);
   const titleId = useId();
   const opener = useRef(null);
+  const flight = useRef(null);
+  const reduced = useReducedMotion();
   const [closing, setClosing] = useState(false);
+  const [sharedClosing, setSharedClosing] = useState(false);
   useLayoutEffect(() => {
     opener.current = document.activeElement;
     const trigger = opener.current?.getBoundingClientRect?.();
@@ -51,15 +56,23 @@ export function Modal({
       root.current.style.setProperty('--iris-origin-y', `${trigger.top + trigger.height / 2 - rect.top}px`);
     }
   }, []);
+  useLayoutEffect(() => {
+    if (!reduced && sharedFrom) flight.current = flyPreviewIdentity(sharedFrom, root.current);
+    return () => { flight.current?.(); flight.current = null; };
+  }, [sharedFrom, reduced]);
   useEffect(() => {
     if (!closing) return;
-    const timer = window.setTimeout(() => close.current(), 160);
+    const timer = window.setTimeout(() => close.current(), reduced ? 0 : sharedClosing ? PREVIEW_DURATION : 160);
     return () => window.clearTimeout(timer);
-  }, [closing]);
+  }, [closing, reduced, sharedClosing]);
   const dismiss = () => {
     if (busy || closing) return;
     if (!motionAllowed()) close.current();
     else {
+      flight.current?.();
+      flight.current = sharedFrom?.isConnected && !sharedFrom.closest('[inert]')
+        ? flyPreviewIdentity(root.current, sharedFrom) : null;
+      setSharedClosing(Boolean(flight.current));
       const rect = root.current?.getBoundingClientRect();
       const trigger = opener.current?.isConnected && opener.current.getBoundingClientRect?.();
       const usable = rect && trigger && rect.width < window.innerWidth * .95;
@@ -74,7 +87,7 @@ export function Modal({
   close.current = onClose;
   useEffect(() => {
     const previous = document.activeElement;
-    const previousScope = previous?.closest?.('.cz-page,.tl-page,.tar-page');
+    const previousScope = previous?.closest?.('.cz-page,.tl-page,.tar-page,.nd-page');
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const initial = root.current?.querySelector('input:not(:disabled),textarea:not(:disabled),select:not(:disabled),[contenteditable="true"]') || root.current?.querySelector('button:not(:disabled)');
@@ -85,7 +98,7 @@ export function Modal({
       else if (previousScope?.isConnected) previousScope.querySelector('button:not(:disabled),a[href]')?.focus();
     };
   }, []);
-  return createPortal(<div className={`pj-overlay cz-dialog-root iris-modal-overlay ${variant === 'drawer' ? 'iris-drawer-overlay' : ''}`} data-closing={closing || undefined} onMouseDown={e => {
+  return createPortal(<div className={`pj-overlay cz-dialog-root iris-modal-overlay ${variant === 'drawer' ? 'iris-drawer-overlay' : ''}`} data-closing={closing || undefined} data-shared-preview={Boolean(sharedFrom) || undefined} data-shared-closing={sharedClosing || undefined} onMouseDown={e => {
     if (e.target === e.currentTarget) dismiss();
   }} onKeyDown={e => {
     if (e.key === 'Escape' && !busy) {

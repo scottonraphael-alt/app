@@ -675,6 +675,32 @@ body.dashboard-no-nav .app-shell > .app-main {
   background: #f5f8f5;
 }
 
+.hm-next-list { list-style: none; padding: 0; margin: 0; }
+.hm-next-list li + li { border-top: 1px solid var(--iris-border); }
+.hm-next-list a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  color: var(--iris-text);
+  text-decoration: none;
+}
+.hm-next-list a:is(:hover, :focus-visible) { background: var(--iris-surface-2); }
+.hm-next-list strong, .hm-next-list small { display: block; overflow-wrap: anywhere; }
+.hm-next-list strong { font-size: 13px; font-weight: 600; }
+.hm-next-list small { font-size: 11px; color: var(--iris-text-muted); }
+.hm-next-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--iris-accent-soft);
+  color: var(--iris-accent);
+}
+
 .nd-page .nd-helper-v2-avatar {
   display: inline-flex;
   align-items: center;
