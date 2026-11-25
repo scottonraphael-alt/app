@@ -38,7 +38,7 @@ export default function NewTicketPage({ onCreated }) {
         <aside className="nt-guide">
           <p className="nt-eyebrow">UN DOSSIER, TROIS ÉTAPES</p>
           <h2>Les bons repères pour commencer.</h2>
-          <div className="nt-steps">
+          <div data-iris-reveal="agenda" className="nt-steps">
             {steps.map(({ Icon, title, text }, index) => (
               <div className="nt-step" key={title}>
                 <span className="nt-step-icon"><Icon size={21} aria-hidden="true" /></span>
@@ -48,7 +48,7 @@ export default function NewTicketPage({ onCreated }) {
           </div>
           <p className="nt-tip">Pour récupérer un identifiant Discord, activez le mode développeur dans Discord, puis utilisez « Copier l’identifiant » sur le membre ou le salon.</p>
         </aside>
-        <section className="nt-form-card" aria-labelledby="nt-form-title">
+        <section data-iris-reveal="card" className="nt-form-card" aria-labelledby="nt-form-title">
           <header><span className="nt-form-icon"><NotebookPen size={23} aria-hidden="true" /></span><div><p className="nt-eyebrow">IMPORTER UN SALON</p><h2 id="nt-form-title">Informations du suivi</h2></div></header>
           <div className="nt-form-wrap"><NewTicketForm onCreated={created} /></div>
         </section>

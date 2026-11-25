@@ -255,7 +255,7 @@ export default function DashboardPage({
       <div className="cz-dialog-root"><WorkflowRequests kind="support"/></div>
 
       {preview && <TicketPreview ticket={preview} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
-      <section className="tl-panel" aria-labelledby="tl-list-title">
+      <section data-iris-reveal="card" className="tl-panel" aria-labelledby="tl-list-title">
         <header className="tl-panel-header">
           <span className="tl-panel-icon">
             <HeartHandshake size={23} aria-hidden="true" />

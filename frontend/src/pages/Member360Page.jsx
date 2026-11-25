@@ -220,7 +220,7 @@ function MemberView({ discordId }) {
     <div className="m3-layout">
       <section className="cz-card m3-identity" aria-labelledby="m3-name">
         <MemberAvatar member={member} size={64} shape="square" />
-        <div className="m3-identity-copy">
+        <div data-iris-reveal="card" className="m3-identity-copy">
           <h2 id="m3-name">{memberName(member)}</h2>
           {handle && <p className="m3-handle">{handle}</p>}
           <p className="m3-id">
@@ -250,7 +250,7 @@ function MemberView({ discordId }) {
       </section>
 
       <section className="cz-card m3-timeline" aria-labelledby="m3-timeline-title">
-        <div className="m3-timeline-head">
+        <div data-iris-reveal="agenda" className="m3-timeline-head">
           <h2 id="m3-timeline-title">Frise chronologique</h2>
           <div className="m3-filters" role="group" aria-label="Filtrer la frise par type">
             {filters.map((item) => (

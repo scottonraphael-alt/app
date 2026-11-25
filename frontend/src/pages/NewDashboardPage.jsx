@@ -17,6 +17,7 @@ import QuarterlyDashboardModule from "../components/QuarterlyDashboardModule";
 import HelperDashboardModule from "../components/HelperDashboardModule";
 import AnimateurDashboardModule from "../components/AnimateurDashboardModule";
 import HomeGreeting from "../components/home/HomeGreeting";
+import ChangeCue from "../components/ux/ChangeCue";
 import MyDayWidget from "../components/home/MyDayWidget";
 import TeamOnlineWidget from "../components/home/TeamOnlineWidget";
 import useMyDay from "../components/home/useMyDay";
@@ -187,7 +188,7 @@ const pills = [
     canSeeStaff && {id:'day',label:'Ma journée',width:8,content:<MyDayWidget day={myDay}/>},
     canSeeStaff && {id:'team',label:'Équipe en ligne',width:4,content:<TeamOnlineWidget helperId={helper?.id} enabled={canSeeStaff}/>},
     (isStaff || isResponsable || isServerAdmin) && {id:'casework',label:'Dossiers des membres',width:12,content:<section className="nd-casework-module" aria-labelledby="member-casework-title"><p className="iris-section-kicker">CHAQUE ÉCHANGE À SA PLACE</p><h2 id="member-casework-title">Dossiers des membres</h2><p>Retrouvez les échanges privés et les formulaires, de leur ouverture à leur archivage.</p><CaseworkDashboardLinks isStaff={isStaff} isResponsable={isResponsable} isServerAdmin={isServerAdmin}/></section>},
-    {id:'music',label:'Karaoké & blind test',width:12,content:<nav className="nd-helper-v2-shortcuts" aria-label="Animations musicales"><Link to="/karaoke" className="nd-helper-v2-shortcut nd-helper-v2-shortcut--clay"><span className="nd-helper-v2-shortcut-copy"><strong>🎤 Karaoké & blind test</strong><small>Chanter ensemble, réserver une chanson et jouer avec OasisLink.</small></span><ArrowRight size={18}/></Link></nav>},
+    {id:'music',label:'Karaoké & blind test',width:12,content:<nav className="nd-helper-v2-shortcuts" aria-label="Animations musicales"><Link to="/karaoke" className="nd-helper-v2-shortcut nd-helper-v2-shortcut--clay" data-iris-reveal="message" data-iris-link=""><span className="nd-helper-v2-shortcut-copy"><strong>🎤 Karaoké & blind test</strong><small>Chanter ensemble, réserver une chanson et jouer avec OasisLink.</small></span><ArrowRight size={18}/></Link></nav>},
     isResponsable && {id:'responsable',label:'Outils responsable',width:12,content:<ResponsableToolsModule/>},
     quickCards.length>0 && {id:'shortcuts',label:'Accès principaux',width:12,content:(        <nav
           className="nd-shortcuts"
@@ -199,8 +200,10 @@ const pills = [
                 key={to}
                 to={to}
                 className={`nd-shortcut nd-shortcut--${tone}`}
+                data-iris-reveal="card"
+                data-iris-link=""
               >
-                <span className="nd-shortcut-icon">
+                <span className="nd-shortcut-icon" data-iris-link-icon="">
                   <Icon size={23} aria-hidden="true" />
                 </span>
 
@@ -209,7 +212,7 @@ const pills = [
 
                 <span className="nd-shortcut-footer">
                   Ouvrir
-                  <ArrowRight size={18} aria-hidden="true" />
+                  <ArrowRight size={18} aria-hidden="true" data-iris-link-arrow="" />
                 </span>
               </Link>
             )
@@ -240,6 +243,7 @@ const pills = [
               {pills.map((pill) => (
                 <span
                   key={pill.label}
+                  data-iris-reveal="badge"
                   className={`nd-pill nd-pill--${pill.tone}`}
                 >
                   {pill.label}
@@ -249,21 +253,22 @@ const pills = [
           )}
         </div>
 
-        <div className="nd-account-actions">
+        <div className="nd-account-actions" data-iris-reveal="card">
           {canSeeStaff ? (
             <Link
               to="/staff/calendrier"
               className={`nd-presence nd-presence--${presenceState}`}
               title="Ouvrir le calendrier des absences"
             >
-              <span
+              <ChangeCue
+                value={presenceState}
                 className="nd-presence-dot"
                 aria-hidden="true"
               />
 
-              <span aria-live="polite">
+              <ChangeCue value={presenceState} aria-live="polite">
                 {presenceLabel}
-              </span>
+              </ChangeCue>
 
               <CalendarDays size={17} aria-hidden="true" />
             </Link>
@@ -276,6 +281,7 @@ const pills = [
           <Link
             to="/profile"
             className="nd-profile-button"
+            data-iris-link=""
           >
             Modifier mon profil
             <ArrowRight size={17} aria-hidden="true" />

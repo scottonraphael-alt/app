@@ -62,7 +62,7 @@ function ImportProgress({ archive, onRetry }) {
         </div>
 
         <div className="rca-progress-track">
-          <span style={{ width: `${percent}%` }} />
+          <span data-iris-reveal="meter" style={{ width: `${percent}%` }} />
         </div>
       </div>
     );
@@ -287,22 +287,22 @@ export default function ResponsableChannelArchivesPage() {
       </section>
 
       <div className="rca-metrics">
-        <div className="rca-metric">
+        <div data-iris-reveal="badge" className="rca-metric">
           <span>Archives</span>
           <strong>{archives.length}</strong>
         </div>
 
-        <div className="rca-metric">
+        <div data-iris-reveal="badge" className="rca-metric">
           <span>Messages</span>
           <strong>{totalMessages}</strong>
         </div>
 
-        <div className="rca-metric">
+        <div data-iris-reveal="badge" className="rca-metric">
           <span>Fichiers</span>
           <strong>{totalFiles}</strong>
         </div>
 
-        <div className="rca-metric rca-metric--amber">
+        <div data-iris-reveal="badge" className="rca-metric rca-metric--amber">
           <span>Imports en cours</span>
           <strong>{importingCount}</strong>
         </div>
@@ -345,7 +345,7 @@ export default function ResponsableChannelArchivesPage() {
               {archives.map((archive) => (
                 <article
                   key={archive.id}
-                  className="rca-card"
+                  data-iris-reveal="card" className="rca-card"
                   data-testid={`channel-archive-${archive.id}`}
                 >
                   <span className="rca-card-icon">

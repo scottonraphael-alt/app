@@ -59,7 +59,7 @@ function RoutingCard() {
   };
 
   return (
-    <article className="rs-card">
+    <article data-iris-reveal="card" className="rs-card">
       <h2>Attribution et délais de réponse</h2>
       <p className="rs-card-hint">Attribution automatique des tickets et seuils du délai de première réponse (SLA).</p>
       {!form && !error && <p className="rs-muted" role="status">Chargement…</p>}
@@ -151,7 +151,7 @@ function AgendaCard() {
   };
 
   return (
-    <article className="rs-card">
+    <article data-iris-reveal="card" className="rs-card">
       <h2>
         Rappels de l’agenda
         {info && (
@@ -223,7 +223,7 @@ function IntegrationsCard() {
   );
 
   return (
-    <article className="rs-card">
+    <article data-iris-reveal="card" className="rs-card">
       <h2>Notifications push et IA</h2>
       <p className="rs-card-hint">Ces intégrations dépendent des variables d’environnement du serveur ; seul leur état est affiché.</p>
       {error && <p className="rs-error" role="alert">{error}</p>}
@@ -321,7 +321,7 @@ function AnnouncementsCard() {
   };
 
   return (
-    <article className="rs-card rs-card-wide">
+    <article data-iris-reveal="card" className="rs-card rs-card-wide">
       <h2>Bandeau d’annonce interne</h2>
       <p className="rs-card-hint">
         Message affiché en haut d’Iris pour le staff ciblé, fermable par chaque personne. Sans rôle coché, tout le monde le voit.

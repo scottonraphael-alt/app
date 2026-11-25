@@ -13,8 +13,8 @@ export default function CaseworkDashboardLinks({ isStaff = false, isResponsable 
     ['/staff/verifications','Formulaires d’admission','Prendre en charge les candidatures et consulter leurs archives.',ClipboardList,'clay'],
   ];
   return <nav aria-label="Dossiers des membres" className="nd-helper-v2-shortcuts nd-casework-shortcuts">
-    {links.map(([to,title,description,Icon,tone])=><Link key={to} to={to} className={'nd-helper-v2-shortcut nd-helper-v2-shortcut--'+tone}>
-      <span className="nd-helper-v2-shortcut-icon"><Icon size={22} aria-hidden="true"/></span>
+    {links.map(([to,title,description,Icon,tone])=><Link key={to} to={to} data-iris-reveal="card" data-iris-link="" className={'nd-helper-v2-shortcut nd-helper-v2-shortcut--'+tone}>
+      <span className="nd-helper-v2-shortcut-icon" data-iris-link-icon=""><Icon size={22} aria-hidden="true"/></span>
       <span className="nd-helper-v2-shortcut-copy"><strong>{title}</strong><small>{description}</small></span>
       <ArrowRight size={18} aria-hidden="true"/>
     </Link>)}

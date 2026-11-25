@@ -11,7 +11,7 @@ function Section({ icon: Icon, title, items, empty, to, renderTail }) {
       ) : (
         <ul>
           {items.slice(0, 4).map((item) => (
-            <li key={item.id}>
+            <li key={item.id} data-iris-reveal="agenda">
               <Link to={item.to || to}>
                 {item.time && <span className="hm-time">{item.time}</span>}
                 <span className="hm-item-title">{item.title}</span>
@@ -29,7 +29,7 @@ function Section({ icon: Icon, title, items, empty, to, renderTail }) {
 export default function MyDayWidget({ day }) {
   const { meetings, entries, tasks, unreadNotifications, isLoading, isError } = day;
   return (
-    <section className="hm-card hm-day" aria-labelledby="hm-day-title" data-testid="my-day-widget">
+    <section className="hm-card hm-day" data-iris-reveal="card" aria-labelledby="hm-day-title" data-testid="my-day-widget">
       <div className="hm-card-head">
         <h2 id="hm-day-title">Ma journée</h2>
         <IrisIllustration kind="calendar"/>
@@ -51,7 +51,7 @@ export default function MyDayWidget({ day }) {
         </div>
       )}
       {unreadNotifications > 0 && (
-        <Link to="/notifications" className="hm-notif">
+        <Link to="/notifications" className="hm-notif" data-iris-reveal="message">
           <Bell size={15} aria-hidden="true" />
           {unreadNotifications} notification{unreadNotifications > 1 ? "s" : ""} non lue{unreadNotifications > 1 ? "s" : ""}
         </Link>

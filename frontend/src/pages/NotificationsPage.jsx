@@ -223,7 +223,7 @@ export default function NotificationsPage() {
               );
 
               return (
-                <li key={item.id} className={`nt-item ${unread ? "is-unread" : ""} ${isUrgentNotification(item)?"nt-urgent":""}`}>
+                <li key={item.id} data-iris-reveal="message" className={`nt-item ${unread ? "is-unread" : ""} ${isUrgentNotification(item)?"nt-urgent":""}`}>
                   {unread && <span className="nt-dot" aria-hidden="true" />}
 
                   {item.link ? (
@@ -367,7 +367,7 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <ul className="nt-list">
-            {groupNotifications(items).map(group=>group.items.length===1?renderNotificationItem(group.items[0]):<li key={group.key} className="nt-group"><details><summary><span><strong>{group.latest.title}</strong><small>{group.items.length} activités sur le même dossier · {group.unread} non lue(s)</small></span><span>Voir les activités</span></summary><ul>{group.items.map(renderNotificationItem)}</ul></details></li>)}
+            {groupNotifications(items).map(group=>group.items.length===1?renderNotificationItem(group.items[0]):<li key={group.key} data-iris-reveal="message" className="nt-group"><details><summary><span><strong>{group.latest.title}</strong><small>{group.items.length} activités sur le même dossier · {group.unread} non lue(s)</small></span><span>Voir les activités</span></summary><ul>{group.items.map(renderNotificationItem)}</ul></details></li>)}
           </ul>
         )}
 

@@ -86,7 +86,7 @@ export default function HelperDashboardModule({
           aria-labelledby="helper-recent-title"
         >
           <div className="nd-helper-v2-panel-heading">
-            <span className="nd-helper-v2-symbol">
+            <span className="nd-helper-v2-symbol" data-iris-reveal="badge">
               <HeartHandshake size={21} aria-hidden="true" />
             </span>
 
@@ -112,8 +112,10 @@ export default function HelperDashboardModule({
                     key={ticket.id}
                     to={`/tickets/${ticket.id}`}
                     className="nd-helper-v2-ticket"
+                    data-iris-reveal="message"
+                    data-iris-link=""
                   >
-                    <span className="nd-helper-v2-avatar">
+                    <span className="nd-helper-v2-avatar" data-iris-link-icon="">
                       {member.avatar_url ? (
                         <img
                           src={resolveAvatarUrl(member.avatar_url)}
@@ -173,8 +175,10 @@ export default function HelperDashboardModule({
               key={to}
               to={to}
               className={`nd-helper-v2-shortcut nd-helper-v2-shortcut--${tone}`}
+              data-iris-reveal="card"
+              data-iris-link=""
             >
-              <span className="nd-helper-v2-shortcut-icon">
+              <span className="nd-helper-v2-shortcut-icon" data-iris-link-icon="">
                 <Icon size={22} aria-hidden="true" />
               </span>
 

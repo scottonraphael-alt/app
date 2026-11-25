@@ -699,7 +699,7 @@ function MeetingWorkspace({ meetingId, seed, isResponsable }) {
       <div className="ag-meeting-grid">
         <div className="ag-meeting-main">
           {hasAgendaPanel ? (
-            <section className="ag-panel ag-meeting-agenda-panel" id="ordre-du-jour" aria-labelledby="ag-meeting-agenda-title">
+            <section data-iris-reveal="card" className="ag-panel ag-meeting-agenda-panel" id="ordre-du-jour" aria-labelledby="ag-meeting-agenda-title">
               <div className="ag-panel-header">
                 <span className="ag-panel-icon">
                   <ListChecks size={20} aria-hidden="true" />

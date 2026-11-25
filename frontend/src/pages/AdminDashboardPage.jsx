@@ -345,17 +345,17 @@ export default function AdminDashboardPage() {
         <>
           <TicketReminderTestPanel />
           <div className="ta-summary">
-            <div className="ta-summary-item ta-summary-item--orange">
+            <div data-iris-reveal="badge" className="ta-summary-item ta-summary-item--orange">
               <span>À attribuer</span>
               <strong>{unassignedCount}</strong>
             </div>
 
-            <div className="ta-summary-item">
+            <div data-iris-reveal="badge" className="ta-summary-item">
               <span>Tickets ouverts chargés</span>
               <strong>{tickets.length}</strong>
             </div>
 
-            <div className="ta-summary-item">
+            <div data-iris-reveal="badge" className="ta-summary-item">
               <span>Helpers disponibles à l’attribution</span>
               <strong>{helperEntries.length}</strong>
             </div>
@@ -508,7 +508,7 @@ export default function AdminDashboardPage() {
             </section>
 
             <aside
-              className="ta-assignment-panel"
+              data-iris-reveal="card" className="ta-assignment-panel"
               aria-labelledby="ta-assignment-title"
             >
               {!selectedTicket ? (

@@ -701,7 +701,7 @@ export default function KaraokeStage({ session }) {
           <button className="kc-badge kc-icon" aria-label="Ouvrir les classements" onClick={()=>setRankingsOpen(true)}><Trophy size={17}/></button>
           <button className={'kc-badge '+(plays?'kc-selected':'')} aria-pressed={plays} onClick={()=>setPlays(v=>!v)}><Users size={16}/>{plays?'Je participe ✓':'Je participe'}</button>
         </div>
-        <div className="kc-track" title={track?`${track.title} — ${track.artist||''}`:''}>{track&&<><strong>{track.title}</strong><span>{track.artist}</span></>}</div>
+        <div className="kc-track" data-iris-reveal="message" title={track?`${track.title} — ${track.artist||''}`:''}>{track&&<><strong>{track.title}</strong><span>{track.artist}</span></>}</div>
         <div className="kc-actions">
           <div className="kc-volume" onFocus={()=>setVolumeOpen(true)} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setVolumeOpen(false);}} onMouseEnter={()=>setVolumeOpen(true)} onMouseLeave={()=>setVolumeOpen(false)}>
             <button className="kc-badge kc-icon" aria-label="Régler les volumes" aria-expanded={volumeOpen} onClick={()=>setVolumeOpen(true)}><Volume2 size={19}/></button>
@@ -715,7 +715,7 @@ export default function KaraokeStage({ session }) {
           {mode==='karaoke'&&showNotes&&<label className="kc-badge kc-octave"><Music2 size={15}/><select aria-label="Tessiture" value={octave} onChange={e=>{const v=Number(e.target.value);setOctave(v);savePref('karaoke.octave',v);}}>{[[-2,'Très grave'],[-1,'Grave'],[0,'Neutre'],[1,'Aigu'],[2,'Très aigu']].map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
           <div className="kc-theme">
             <button className="kc-badge kc-icon" aria-label="Choisir le thème" aria-expanded={themeOpen} onClick={()=>setThemeOpen(v=>!v)}><Palette size={19}/></button>
-            {themeOpen&&<div className="kc-theme-panel" role="group" aria-label="Thème et affichage">
+            {themeOpen&&<div className="kc-theme-panel" data-iris-reveal="card" role="group" aria-label="Thème et affichage">
               <strong>Ambiance</strong>{[['neon','Néon'],['ocean','Océan'],['aurora','Aurore']].map(([id,label])=><button key={id} disabled={!canControl} aria-pressed={state.theme===id} onClick={()=>{send({type:'theme',value:id});setThemeOpen(false);}}>{label}</button>)}
             </div>}
           </div>

@@ -64,7 +64,7 @@ function Panel({ id, icon: Icon, tone, title, sub, wide, children }) {
           {sub && <p className="mr-sub">{sub}</p>}
         </div>
       </header>
-      <div className="cz-panel-body mr-panel-body">{children}</div>
+      <div data-iris-reveal="card" className="cz-panel-body mr-panel-body">{children}</div>
     </section>
   );
 }

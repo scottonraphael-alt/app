@@ -469,8 +469,8 @@ export default function ModerationCasierPage() {
         >
           {seen.casiers && (
             <div ref={layoutRef} className={`cz-layout${casierParam ? " has-selection" : ""}`}>
-              <div className="cz-list-col">
-                <section className="cz-panel" aria-labelledby="cz-list-title">
+              <div data-iris-reveal="card" className="cz-list-col">
+                <section data-iris-reveal="card" className="cz-panel" aria-labelledby="cz-list-title">
                   <header className="cz-panel-header cz-panel-header--red">
                     <span className="cz-panel-icon" aria-hidden="true">
                       <ShieldCheck size={23} />

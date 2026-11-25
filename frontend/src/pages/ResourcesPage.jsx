@@ -435,7 +435,7 @@ export default function ResourcesPage({ isAdmin = false }) {
             {visibleResources.map((resource) => (
               <article
                 key={resource.id}
-                className="rl-card"
+                data-iris-reveal="card" className="rl-card"
                 data-testid={`resource-card-${resource.id}`}
               >
                 <span

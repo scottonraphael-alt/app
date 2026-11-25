@@ -23,7 +23,7 @@ function SheetView({ sheet }) {
           <h3>Numéros utiles</h3>
           <ul className="wb-resources" aria-label="Numéros utiles">
             {sheet.resources.map((r) => (
-              <li key={`${r.phone}-${r.label}`} className="wb-row">
+              <li key={`${r.phone}-${r.label}`} data-iris-reveal="agenda" className="wb-row">
                 <a className="wb-phone" href={telHref(r.phone)}><Phone size={14} aria-hidden="true" /> {r.phone}</a>
                 <span>{r.label}</span>
               </li>
@@ -59,7 +59,7 @@ function SheetEditor({ sheet, onSaved, onCancel }) {
       <label className="wb-stack"><span className="wb-label">Étapes (une par ligne)</span><textarea className="wb-textarea" rows={7} value={steps} onChange={(e) => setSteps(e.target.value)} required /></label>
       <label className="wb-stack"><span className="wb-label">À éviter (une par ligne)</span><textarea className="wb-textarea" rows={3} value={doNot} onChange={(e) => setDoNot(e.target.value)} /></label>
       <label className="wb-stack"><span className="wb-label">Numéros (« numéro | libellé », un par ligne)</span><textarea className="wb-textarea" rows={4} value={resources} onChange={(e) => setResources(e.target.value)} /></label>
-      <div className="wb-row">
+      <div data-iris-reveal="agenda" className="wb-row">
         <button type="submit" className="wb-btn wb-btn--primary" disabled={save.isPending}>Enregistrer</button>
         <button type="button" className="wb-btn" onClick={onCancel}>Annuler</button>
       </div>
@@ -108,7 +108,7 @@ export default function ReflexSheetsPage() {
               <div className="wb-stack" style={{ marginTop: 14 }}>
                 <button type="button" className="wb-btn" onClick={() => setCreating((v) => !v)}>Nouvelle fiche</button>
                 {creating && (
-                  <div className="wb-subcard">
+                  <div data-iris-reveal="card" className="wb-subcard">
                     <label className="wb-stack"><span className="wb-label">Identifiant (minuscules, tirets)</span>
                       <input className="wb-input" value={newSlug} maxLength={40} onChange={(e) => setNewSlug(e.target.value.toLowerCase())} /></label>
                   </div>
@@ -126,7 +126,7 @@ export default function ReflexSheetsPage() {
                 : (<>
                     <SheetView sheet={selected} />
                     {canManage && (
-                      <div className="wb-row" style={{ marginTop: 18 }}>
+                      <div data-iris-reveal="agenda" className="wb-row" style={{ marginTop: 18 }}>
                         <button type="button" className="wb-btn" onClick={() => setEditing(true)}>Modifier</button>
                         {(selected.customized || !selected.builtin) && (
                           <button type="button" className="wb-btn wb-btn--danger" disabled={reset.isPending} onClick={() => reset.mutate()}>

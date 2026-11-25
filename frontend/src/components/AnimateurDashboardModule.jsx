@@ -50,6 +50,8 @@ function UpcomingProject({ project }) {
     <Link
       to={`/animateur/projects/${project.id}`}
       className="nd-anim-upcoming-row"
+      data-iris-reveal="agenda"
+      data-iris-link=""
     >
       <span className="nd-anim-date" aria-hidden="true">
         <strong>{date?.getDate()}</strong>
@@ -115,7 +117,7 @@ function CompactProject({ project, helperId }) {
       : `${tasks.length} tâche${tasks.length > 1 ? "s" : ""} à faire`;
 
   return (
-    <details className="nd-anim-project">
+    <details className="nd-anim-project" data-iris-reveal="card">
       <summary className="nd-anim-project-summary">
         <span className="nd-anim-project-icon">
           <FolderKanban size={20} aria-hidden="true" />
@@ -162,6 +164,7 @@ function CompactProject({ project, helperId }) {
                 key={task.id}
                 to={`/animateur/projects/${project.id}?task=${encodeURIComponent(task.id)}`}
                 className="nd-anim-task-row"
+                data-iris-reveal="message"
               >
                 <span className="nd-anim-task-dot" aria-hidden="true" />
 
@@ -274,7 +277,7 @@ export default function AnimateurDashboardModule({ helper }) {
             aria-labelledby="nd-anim-current-title"
           >
             <header className="nd-anim-panel-heading">
-              <span className="nd-anim-heading-icon">
+              <span className="nd-anim-heading-icon" data-iris-reveal="badge">
                 <FolderKanban size={20} aria-hidden="true" />
               </span>
 
@@ -306,7 +309,7 @@ export default function AnimateurDashboardModule({ helper }) {
             aria-labelledby="nd-anim-upcoming-title"
           >
             <header className="nd-anim-panel-heading">
-              <span className="nd-anim-heading-icon">
+              <span className="nd-anim-heading-icon" data-iris-reveal="badge">
                 <CalendarDays size={20} aria-hidden="true" />
               </span>
 

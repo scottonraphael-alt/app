@@ -166,7 +166,7 @@ export default function AiReviewQueuePage() {
           </ul>
 
           {current && (
-            <article className="cz-card cz-rq-card" aria-live="polite">
+            <article data-iris-reveal="card" className="cz-card cz-rq-card" aria-live="polite">
               <h2>{memberName(author)}</h2>
               <p className="cz-meta">
                 {current.channel?.name ? `#${current.channel.name} · ` : ""}

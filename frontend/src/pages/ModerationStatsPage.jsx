@@ -102,7 +102,7 @@ export default function ModerationStatsPage() {
               {data.by_type.map((t) => (
                 <li key={t.type}>
                   <span className="cz-bars-label">{typeLabel(t.type)}</span>
-                  <span className="cz-bars-track" aria-hidden="true"><span style={{ width: `${(t.count / maxType) * 100}%` }} /></span>
+                  <span className="cz-bars-track"><span data-iris-reveal="meter" aria-hidden="true" style={{ width: `${(t.count / maxType) * 100}%` }} /></span>
                   <span className="cz-bars-value">{t.count}</span>
                 </li>
               ))}
@@ -134,7 +134,7 @@ export default function ModerationStatsPage() {
                     <tr key={m.id}>
                       <th scope="row">
                         {m.name}
-                        <span className="cz-bars-track" aria-hidden="true"><span style={{ width: `${(m.total / maxMod) * 100}%` }} /></span>
+                        <span className="cz-bars-track"><span data-iris-reveal="meter" aria-hidden="true" style={{ width: `${(m.total / maxMod) * 100}%` }} /></span>
                       </th>
                       {types.map((t) => <td key={t}>{m.by_type[t] || 0}</td>)}
                       <td><strong>{m.total}</strong></td>

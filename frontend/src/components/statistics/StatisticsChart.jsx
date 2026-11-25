@@ -3,6 +3,7 @@ import { init, use } from "echarts/core";
 import { LineChart, BarChart, HeatmapChart } from "echarts/charts";
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, VisualMapComponent, AriaComponent } from "echarts/components";
 import { SVGRenderer } from "echarts/renderers";
+import { useReducedMotion } from "../motion/Motion";
 
 use([LineChart, BarChart, HeatmapChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, VisualMapComponent, AriaComponent, SVGRenderer]);
 
@@ -42,6 +43,7 @@ export default function StatisticsChart({ option, label, onSelect, height=300 })
   const node = useRef(null);
   const chart = useRef(null);
   const [dark, setDark] = useState(isDark);
+  const reduced = useReducedMotion();
   const selection = useRef(onSelect);
   selection.current = onSelect;
   useEffect(() => {
@@ -61,8 +63,7 @@ export default function StatisticsChart({ option, label, onSelect, height=300 })
     return () => window.removeEventListener("iris-theme-change", sync);
   }, []);
   useEffect(() => {
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    chart.current?.setOption({ ...(dark ? darkChartOption(option) : option), animation: !reducedMotion, animationDuration:350, animationDurationUpdate:250, aria:{enabled:true,label:{description:label}} }, { notMerge:true });
-  }, [option,label,dark]);
+    chart.current?.setOption({ ...(dark ? darkChartOption(option) : option), animation: !reduced, animationDuration:350, animationDurationUpdate:250, aria:{enabled:true,label:{description:label}} }, { notMerge:true });
+  }, [option,label,dark,reduced]);
   return <div ref={node} className="ss-chart" style={{height}} role="img" aria-label={label} />;
 }

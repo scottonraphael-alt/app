@@ -2,6 +2,7 @@
 .iris-route { display: contents; }
 
 .iris-success-check { flex: none; }
+[data-iris-reveal="meter"] { transform-origin: left center; }
 
 html[data-motion="reduced"] :is(.ag-dialog-overlay, .ag-dialog) {
   animation: none !important;
@@ -53,31 +54,25 @@ html[data-motion="reduced"] :is(.ag-dialog-overlay, .ag-dialog) {
   }
 
   :root[data-motion="auto"] :is(
-    .db-grid > .db-widget:nth-child(-n+5) > .db-content > .iris-collapse-inner,
-    .rl-grid > .rl-card:nth-child(-n+5),
     .pj-project-list > .pj-project-row:nth-child(-n+6),
-    .pj-team-grid > .pj-team-card:nth-child(-n+5)
+    .tai-composer-body
   ) {
     animation: iris-surface-rise 280ms var(--iris-ease) var(--iris-arrival-delay, 0ms) backwards;
   }
 
   :root[data-motion="auto"] :is(
-    .hm-day-grid > .hm-day-block,
-    .ag-cal-next-list > li,
     .ag-cal-drawer-body .ag-cal-drawer-section
   ):nth-child(-n+5) {
     animation: iris-line-arrive 260ms var(--iris-ease) var(--iris-arrival-delay, 0ms) backwards;
   }
 
-  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
-    > :nth-child(1) { --iris-arrival-delay: 0ms; }
-  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+  :where(.pj-project-list, .ag-cal-drawer-body)
     > :nth-child(2) { --iris-arrival-delay: 34ms; }
-  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+  :where(.pj-project-list, .ag-cal-drawer-body)
     > :nth-child(3) { --iris-arrival-delay: 68ms; }
-  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+  :where(.pj-project-list, .ag-cal-drawer-body)
     > :nth-child(4) { --iris-arrival-delay: 102ms; }
-  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+  :where(.pj-project-list, .ag-cal-drawer-body)
     > :nth-child(5) { --iris-arrival-delay: 136ms; }
 
   html[data-motion="auto"] :is(.hm-day .iris-illustration, .hm-notif > svg, .lg-logo) {
@@ -111,5 +106,49 @@ html[data-motion="reduced"] :is(.ag-dialog-overlay, .ag-dialog) {
   html[data-motion="auto"] .iris-success-check path {
     stroke-dasharray: 1;
     animation: iris-check-draw 360ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] :is(.cz-bars-track, .rca-progress-track) > span:not(.is-indeterminate) {
+    transition: width 300ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] :is(.nd-anim-chevron, .qt-archive-toggle > svg, .nd-presence-dot) {
+    transition: rotate 220ms var(--iris-ease), background-color 220ms ease;
+  }
+
+  html[data-motion="auto"] :is(.nt-group summary, .nd-anim-project-summary, .qt-archive-toggle) {
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  html[data-motion="auto"] .nd-anim-project[open] .nd-anim-project-body,
+  html[data-motion="auto"] .qt-archive:has(.qt-archive-toggle[aria-expanded="true"]) .qt-task-grid {
+    animation: iris-surface-rise 300ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] [data-iris-link] :is([data-iris-link-icon], [data-iris-link-arrow]),
+  html[data-motion="auto"] [data-iris-link] > svg:last-child {
+    transition: translate 240ms var(--iris-ease), scale 240ms var(--iris-ease), rotate 240ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] [data-iris-link]:focus-visible [data-iris-link-icon] {
+    scale: 1.08;
+    rotate: -5deg;
+  }
+
+  html[data-motion="auto"] [data-iris-link]:focus-visible [data-iris-link-arrow],
+  html[data-motion="auto"] [data-iris-link]:focus-visible > svg:last-child {
+    translate: 4px 0;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  html[data-motion="auto"] [data-iris-link]:hover [data-iris-link-icon] {
+    scale: 1.08;
+    rotate: -5deg;
+  }
+
+  html[data-motion="auto"] [data-iris-link]:hover [data-iris-link-arrow],
+  html[data-motion="auto"] [data-iris-link]:hover > svg:last-child {
+    translate: 4px 0;
   }
 }

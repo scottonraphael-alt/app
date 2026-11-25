@@ -183,7 +183,7 @@ export default function ChannelArchiveWorkspacePage() {
         </div>
       </header>
 
-      <div className="ticket-meta" data-testid="channel-archive-metadata">
+      <div data-iris-reveal="card" className="ticket-meta" data-testid="channel-archive-metadata">
         <span>SALON · {archive.channel_id}</span>
         <span>{archive.message_count} MESSAGES</span>
         <span>{archive.local_attachment_count} FICHIER{archive.local_attachment_count > 1 ? "S" : ""} COPIÉ{archive.local_attachment_count > 1 ? "S" : ""} LOCALEMENT</span>
@@ -339,6 +339,7 @@ export default function ChannelArchiveWorkspacePage() {
             {(archive.transcript || []).map((message) => (
               <article
                 className="transcript-message member-message"
+                data-iris-reveal="message"
                 key={message.id}
                 id={`transcript-message-${message.id}`}
                 data-testid={`channel-archive-message-${message.id}`}

@@ -162,7 +162,7 @@ export default function TrainingsPage() {
       {query.data && query.data.items.length === 0 && <p className="wb-state">Aucune formation pour le moment.</p>}
       <ul className="wb-cards">
         {(query.data?.items ?? []).map((t) => (
-          <li key={t.id} className="wb-card">
+          <li key={t.id} data-iris-reveal="card" className="wb-card">
             <div className="wb-row">
               {t.completed ? <span className="wb-pill wb-pill--ok">Validée</span> : t.outdated ? <span className="wb-pill wb-pill--warn">Mise à jour</span> : <span className="wb-pill">À faire</span>}
               {!t.published && <span className="wb-pill wb-pill--warn">Brouillon</span>}

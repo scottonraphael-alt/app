@@ -91,7 +91,7 @@ function NewPollForm({ onCreated, onCancel }) {
       <fieldset className="ag-poll-slots" style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 10 }}>
         <legend className="ag-label">Créneaux proposés ({slots.length}/{MAX_SLOTS})</legend>
         {slots.map((slot, index) => (
-          <div className="ag-poll-slot-row" key={index}>
+          <div data-iris-reveal="agenda" className="ag-poll-slot-row" key={index}>
             <div className="ag-field">
               <label className="ag-label" htmlFor={`poll-date-${index}`}>Date</label>
               <input id={`poll-date-${index}`} type="date" className="ag-input" value={slot.date} onChange={(e) => update(index, "date", e.target.value)} />

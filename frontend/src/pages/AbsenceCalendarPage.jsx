@@ -597,7 +597,7 @@ export default function AbsenceCalendarPage({ isResponsable = false, currentHelp
             ) : (
               <div className="ag-panel-body ag-cal-absences">
                 {groups.map((group) => (
-                  <div key={group.key} className="ag-cal-abs-group">
+                  <div key={group.key} data-iris-reveal="agenda" className="ag-cal-abs-group">
                     <h3 className="ag-cal-abs-heading">
                       {group.title}
                       <span className="ag-count">{group.total}</span>

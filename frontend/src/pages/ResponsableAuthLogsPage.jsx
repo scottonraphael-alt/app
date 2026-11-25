@@ -1116,7 +1116,7 @@ export default function ResponsableAuthLogsPage() {
           <small>{todayLabel}</small>
         </h2>
 
-        <div className="ral-summary-grid">
+        <div data-iris-reveal="card" className="ral-summary-grid">
           {SUMMARY_ITEMS.map((item) => {
             const value = summary ? summary[item.key] : null;
             const alert = item.alert && value > 0;

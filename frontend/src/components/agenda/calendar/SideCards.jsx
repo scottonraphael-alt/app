@@ -31,7 +31,7 @@ function PanelError({ message, onRetry }) {
 export function NextEventsCard({ events, today, loading = false, error = false, onRetry, onOpen }) {
   const items = useMemo(() => normalizeNextEvents(events), [events]);
   return (
-    <section className="ag-panel ag-cal-side-card" aria-labelledby="ag-cal-next-title" aria-busy={loading}>
+    <section data-iris-reveal="card" className="ag-panel ag-cal-side-card" aria-labelledby="ag-cal-next-title" aria-busy={loading}>
       <div className="ag-panel-header">
         <span className="ag-panel-icon">
           <CalendarClock size={20} aria-hidden="true" />
@@ -58,7 +58,7 @@ export function NextEventsCard({ events, today, loading = false, error = false, 
             const time = item.allDay ? "Journée" : formatTimeRange(item.startTime, item.endTime);
             return (
               <li key={item.key}>
-                <button type="button" className="ag-cal-next-item" onClick={() => onOpen(item)}>
+                <button type="button" data-iris-reveal="agenda" className="ag-cal-next-item" onClick={() => onOpen(item)}>
                   <span className={joinClasses("ag-date-block ag-date-block--sm", typeClass(item.type))} aria-hidden="true">
                     <strong>{parts.dayNumber}</strong>
                     <small>{parts.weekday}</small>
@@ -97,7 +97,7 @@ export function RemindersCard({ settings, loading = false, error = false, isResp
   const StatusIcon = status?.icon || BellRing;
   const isPublic = settings?.channel_visibility === "public";
   return (
-    <section className="ag-panel ag-cal-side-card" aria-labelledby="ag-cal-reminders-title" aria-busy={loading}>
+    <section data-iris-reveal="card" className="ag-panel ag-cal-side-card" aria-labelledby="ag-cal-reminders-title" aria-busy={loading}>
       <div className="ag-panel-header">
         <span className="ag-panel-icon">
           <BellRing size={20} aria-hidden="true" />

@@ -100,7 +100,7 @@ function NotificationPrefsSection() {
   };
 
   return (
-    <section className="hp-extra-card" aria-labelledby="hp-notif-title" data-testid="helper-notifications-prefs">
+    <section data-iris-reveal="card" className="hp-extra-card" aria-labelledby="hp-notif-title" data-testid="helper-notifications-prefs">
       <header className="hp-extra-header">
         <span className="hp-card-icon">
           <BellRing size={22} aria-hidden="true" />
@@ -359,7 +359,7 @@ function DevicePushSection() {
   }
 
   return (
-    <section className="hp-extra-card" aria-labelledby="hp-device-title" data-testid="helper-push-device">
+    <section data-iris-reveal="card" className="hp-extra-card" aria-labelledby="hp-device-title" data-testid="helper-push-device">
       <header className="hp-extra-header">
         <span className="hp-card-icon">
           <Smartphone size={22} aria-hidden="true" />
@@ -456,7 +456,7 @@ function AgendaIcsSection() {
   const webcal = feedUrl.replace(/^https?:/i, "webcal:");
 
   return (
-    <section className="hp-extra-card" aria-labelledby="hp-ics-title" data-testid="helper-agenda-ics">
+    <section data-iris-reveal="card" className="hp-extra-card" aria-labelledby="hp-ics-title" data-testid="helper-agenda-ics">
       <header className="hp-extra-header">
         <span className="hp-card-icon">
           <CalendarDays size={22} aria-hidden="true" />
@@ -675,7 +675,7 @@ export default function HelperProfilePage({ helper }) {
       </header>
 
       <div className="hp-layout">
-        <aside className="hp-identity-card">
+        <aside data-iris-reveal="card" className="hp-identity-card">
           <span className="hp-avatar">
             {helper?.avatar_url && !avatarError ? (
               <img
@@ -707,7 +707,7 @@ export default function HelperProfilePage({ helper }) {
         </aside>
 
         <section
-          className="hp-preferences-card"
+          data-iris-reveal="card" className="hp-preferences-card"
           data-testid="helper-triggers-card"
           aria-labelledby="hp-triggers-title"
         >

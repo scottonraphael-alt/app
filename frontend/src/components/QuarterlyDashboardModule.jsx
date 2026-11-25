@@ -1,6 +1,7 @@
+import { SuccessCheck } from "./motion/Motion";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
+import { ArrowRight, Circle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, getErrorMessage } from "../api/client";
 
@@ -166,14 +167,14 @@ export default function QuarterlyDashboardModule({ helper }) {
         ) : (
           <div className="nd-work-list">
             {visibleTasks.map((task) => (
-              <div className="nd-work-row" key={task.id}>
+              <div className="nd-work-row" key={task.id} data-iris-reveal="message">
                 <span
                   className={`nd-work-task-icon ${
                     task.completed ? "is-completed" : ""
                   }`}
                 >
                   {task.completed ? (
-                    <CheckCircle2 size={21} aria-hidden="true" />
+                    <SuccessCheck size={21} />
                   ) : (
                     <Circle size={21} aria-hidden="true" />
                   )}

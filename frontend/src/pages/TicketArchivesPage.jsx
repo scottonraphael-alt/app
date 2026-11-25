@@ -169,7 +169,7 @@ export default function TicketArchivesPage({
 
       {preview && <TicketPreview ticket={preview} onClose={() => setPreview(null)} helper={helper} isAdmin={isAdmin} onTicketUpdate={onTicketUpdate} onTicketDeleted={onTicketDeleted} />}
       <section
-        className="tar-panel"
+        data-iris-reveal="card" className="tar-panel"
         aria-labelledby="tar-list-title"
       >
         <header className="tar-panel-header">

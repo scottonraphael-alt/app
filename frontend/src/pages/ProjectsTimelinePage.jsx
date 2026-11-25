@@ -38,9 +38,9 @@ export default function ProjectsTimelinePage() {
       <p className="pj-help">Du {dateLabel(data.range.start)} au {dateLabel(data.range.end)} · {view.days} jours · repère vertical : aujourd’hui</p>
       {data.projects.map(p => <section key={p.id} role="listitem" className="pj-tl-project">
         <header><Link to={`/animateur/projects/${p.id}`}>{p.title}</Link><span>{p.progress.percent} % · {p.progress.done}/{p.progress.total} tâches</span></header>
-        <div className="pj-tl-track"><span className="pj-tl-today" style={{ left: view.today }} aria-hidden="true" /><span className="pj-tl-bar pj-tl-project-bar" style={view.pos(p.start, p.end)} title={`${dateLabel(p.start)} → ${dateLabel(p.end)}`}><i style={{ width: `${p.progress.percent}%` }} /></span></div>
+        <div className="pj-tl-track"><span className="pj-tl-today" style={{ left: view.today }} aria-hidden="true" /><span className="pj-tl-bar pj-tl-project-bar" data-iris-reveal="meter" style={view.pos(p.start, p.end)} title={`${dateLabel(p.start)} → ${dateLabel(p.end)}`}><i style={{ width: `${p.progress.percent}%` }} /></span></div>
         {p.tasks.map(k => <div key={k.id} className="pj-tl-row"><span className="pj-tl-label" title={k.title}>{k.title}{k.subtasks.total ? ` (${k.subtasks.done}/${k.subtasks.total})` : ''}</span>
-          <div className="pj-tl-track"><span className="pj-tl-today" style={{ left: view.today }} aria-hidden="true" /><span className={`pj-tl-bar pj-tl-${k.status}`} style={view.pos(k.start, k.end)} title={`${dateLabel(k.start)} → ${dateLabel(k.end)}`}><i style={{ width: `${k.subtasks.percent}%` }} /></span></div></div>)}
+          <div className="pj-tl-track"><span className="pj-tl-today" style={{ left: view.today }} aria-hidden="true" /><span className={`pj-tl-bar pj-tl-${k.status}`} data-iris-reveal="meter" style={view.pos(k.start, k.end)} title={`${dateLabel(k.start)} → ${dateLabel(k.end)}`}><i style={{ width: `${k.subtasks.percent}%` }} /></span></div></div>)}
       </section>)}
     </div>}
   </ProjectPage>;

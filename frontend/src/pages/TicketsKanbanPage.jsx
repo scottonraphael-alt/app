@@ -4,6 +4,8 @@ import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, getErrorMessage } from "../api/client";
+import { MotionBoard } from "../components/motion/Motion";
+import ChangeCue from "../components/ux/ChangeCue";
 import TagFilter from "../components/tickets/extras/TagFilter";
 import useTicketTags from "../components/tickets/extras/useTicketTags";
 import "../components/tickets/extras/extras.css";
@@ -47,6 +49,7 @@ export default function TicketsKanbanPage({ isAdmin = false, helper, tickets: in
       .forEach((t) => (out[columnOf(t)] || out["en attente de réponse"]).push(t));
     return out;
   }, [tickets, tag, assignments]);
+  const boardRevision = JSON.stringify(COLUMNS.map(({ key }) => grouped[key].map(ticket => ticket.id)));
 
   // Une colonne n'accepte un dépôt que si l'action existe pour ce rôle ; sinon elle est en lecture seule.
   const canDropTo = useCallback((ticket, target) => {
@@ -94,7 +97,7 @@ export default function TicketsKanbanPage({ isAdmin = false, helper, tickets: in
       <TagFilter tags={tags} value={tag} onChange={setTag} />
       {error && <p className="tx-k-error" role="alert">{error}</p>}
       {loading ? <p role="status">Chargement…</p> : (
-        <div className="tx-k-board">
+        <MotionBoard className="tx-k-board" revision={boardRevision}>
           {COLUMNS.map((col) => {
             const dragging = tickets.find((t) => t.id === dragId);
             const droppable = dragging ? canDropTo(dragging, col.key) : false;
@@ -103,10 +106,10 @@ export default function TicketsKanbanPage({ isAdmin = false, helper, tickets: in
                 onDragOver={(e) => { if (droppable) { e.preventDefault(); setOverCol(col.key); } }}
                 onDragLeave={() => setOverCol(null)}
                 onDrop={(e) => { e.preventDefault(); setOverCol(null); if (dragging) move(dragging, col.key); setDragId(null); }}>
-                <h2>{col.label} <span>{grouped[col.key].length}</span></h2>
+                <h2>{col.label} <ChangeCue value={grouped[col.key].length}>{grouped[col.key].length}</ChangeCue></h2>
                 {col.key === "unassigned" && !isAdmin && <p className="tx-k-readonly">Lecture seule : l'attribution est réservée aux coordinateurs.</p>}
                 {grouped[col.key].map((t) => (
-                  <Link key={t.id} to={`/tickets/${t.id}`} draggable className={`tx-k-card${dragId === t.id ? " is-dragging" : ""}`}
+                  <Link key={t.id} data-motion-card={t.id} to={`/tickets/${t.id}`} draggable className={`tx-k-card${dragId === t.id ? " is-dragging" : ""}`}
                     onDragStart={(e) => { setDragId(t.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", t.id); }}
                     onDragEnd={() => { setDragId(null); setOverCol(null); }}>
                     <strong>{displayName(t.member)}</strong>
@@ -117,7 +120,7 @@ export default function TicketsKanbanPage({ isAdmin = false, helper, tickets: in
               </section>
             );
           })}
-        </div>
+        </MotionBoard>
       )}
     </section>
   );

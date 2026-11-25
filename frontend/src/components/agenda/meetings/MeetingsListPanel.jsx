@@ -35,7 +35,7 @@ export function MeetingRow({ meeting }) {
     <li>
       <Link
         to={`/staff/meetings/${encodeURIComponent(meeting.id)}`}
-        className={`ag-meet-row${cancelled ? " is-cancelled" : ""}`}
+        data-iris-reveal="agenda" className={`ag-meet-row${cancelled ? " is-cancelled" : ""}`}
       >
         <span
           className={`ag-date-block ${upcoming ? typeClass("reunion") : "ag-date-block--muted"}`}

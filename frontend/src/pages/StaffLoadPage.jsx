@@ -82,7 +82,7 @@ function PersonCard({ person, weeks }) {
   const score = Math.max(0, Math.min(100, person.load_score || 0));
   const nightPct = Math.round((person.night_activity_ratio || 0) * 100);
   return (
-    <li className={"sl-card sl-card--" + level}>
+    <li data-iris-reveal="card" className={"sl-card sl-card--" + level}>
       <article aria-label={person.name + " : " + info.label}>
         <header className="sl-card-head">
           {person.avatar_url ? <img className="sl-avatar" src={person.avatar_url} alt="" width="40" height="40" loading="lazy" /> : <span className="sl-avatar sl-avatar--empty" aria-hidden="true"><User size={18} /></span>}

@@ -4,8 +4,8 @@ export default function KaraokeWelcome({value,players=[],plays,setPlays,onCatalo
  useEffect(()=>{const timer=setInterval(()=>setNow(Date.now()/1000),250);return()=>clearInterval(timer);},[]);
  if(!value)return null;
  const remaining=Math.max(0,Math.ceil(value.deadline-now)),joined=players.filter(player=>player.plays);
- return <div className="ki-scrim kw-scrim"><section className="ki-card kw-card" aria-label="Accueil du karaoké">
-  <span>LE SALON MUSICAL</span><div className="kw-symbol" aria-hidden="true">♫</div><h2>À vous de chanter</h2>
+ return <div className="ki-scrim kw-scrim"><section data-iris-reveal="card" className="ki-card kw-card" aria-label="Accueil du karaoké">
+  <span>LE SALON MUSICAL</span><div data-iris-reveal="badge" className="kw-symbol" aria-hidden="true">♫</div><h2>À vous de chanter</h2>
   <p>Rejoins la scène. Le premier morceau démarre dans quelques instants.</p>
   <div className="kw-countdown">{remaining}<small>secondes</small></div>
   <button className={'kc-badge ki-next '+(plays?'kc-selected':'')} aria-pressed={plays} onClick={()=>setPlays(v=>!v)}>{plays?'✓ Je participe':'Je participe'}</button>

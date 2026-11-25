@@ -71,12 +71,12 @@ export default function ActivityVideoAdminPage(){
     </header>
     {error&&<div className="av-alert" role="alert">{error}</div>}{notice&&<div className="av-notice" role="status">{notice}</div>}
     <section className="av-storage-grid" aria-label="Espace disque">
-      <article className="av-card av-space-card"><span className="av-icon"><HardDrive size={20}/></span><div><p>Espace libre sur le serveur</p><strong>{loading?'Chargement…':formatBytes(storage?.free_bytes)}</strong><small>Capacité totale : {formatBytes(storage?.total_bytes)} · utilisée : {formatBytes(storage?.used_bytes)}</small></div></article>
-      <article className="av-card av-space-card"><span className="av-icon"><Upload size={20}/></span><div><p>Disponible pour un nouvel envoi</p><strong>{loading?'Chargement…':formatBytes(safeBytes)}</strong><small>Une réserve de {formatBytes(storage?.reserve_bytes)} est conservée pour le serveur.</small></div></article>
-      <article className="av-card av-space-card"><span className="av-icon"><Film size={20}/></span><div><p>Catalogue CinéStream</p><strong>{loading?'…':`${storage?.video_count??0} vidéo(s)`}</strong><small>{formatBytes(storage?.video_bytes)} occupés par les films.</small></div></article>
+      <article data-iris-reveal="card" className="av-card av-space-card"><span className="av-icon"><HardDrive size={20}/></span><div><p>Espace libre sur le serveur</p><strong>{loading?'Chargement…':formatBytes(storage?.free_bytes)}</strong><small>Capacité totale : {formatBytes(storage?.total_bytes)} · utilisée : {formatBytes(storage?.used_bytes)}</small></div></article>
+      <article data-iris-reveal="card" className="av-card av-space-card"><span className="av-icon"><Upload size={20}/></span><div><p>Disponible pour un nouvel envoi</p><strong>{loading?'Chargement…':formatBytes(safeBytes)}</strong><small>Une réserve de {formatBytes(storage?.reserve_bytes)} est conservée pour le serveur.</small></div></article>
+      <article data-iris-reveal="card" className="av-card av-space-card"><span className="av-icon"><Film size={20}/></span><div><p>Catalogue CinéStream</p><strong>{loading?'…':`${storage?.video_count??0} vidéo(s)`}</strong><small>{formatBytes(storage?.video_bytes)} occupés par les films.</small></div></article>
     </section>
 
-    <section className="av-card av-upload-card">
+    <section data-iris-reveal="card" className="av-card av-upload-card">
       <div className="av-section-heading"><span className="av-icon"><Video size={20}/></span><div><h2>Ajouter un film</h2><p>Formats MP4 et WebM. L’envoi se fait par blocs pour accepter les gros fichiers sans saturer la mémoire du serveur.</p></div></div>
       <label className="av-file-picker">Fichier vidéo<input ref={input} type="file" accept="video/mp4,video/webm,.mp4,.webm" disabled={uploading} onChange={event=>{setSelected(event.target.files?.[0]||null);setError('');setNotice('');setProgress(0);}}/></label>
       {selected&&<div className="av-selected"><span>{selected.name}</span><small>{formatBytes(selected.size)}</small></div>}
@@ -85,7 +85,7 @@ export default function ActivityVideoAdminPage(){
       <button className="av-button av-primary" onClick={upload} disabled={!selected||uploading||loading||selected.size>safeBytes}><Upload size={16}/>{uploading?'Envoi…':'Téléverser la vidéo'}</button>
     </section>
 
-    <section className="av-card av-library">
+    <section data-iris-reveal="card" className="av-card av-library">
       <div className="av-section-heading"><span className="av-icon"><Film size={20}/></span><div><h2>Vidéos disponibles</h2><p>Ces fichiers apparaissent dans le sélecteur de films de CinéStream.</p></div></div>
       {loading?<p className="av-empty">Lecture du catalogue…</p>:storage?.videos?.length?<ul>{storage.videos.map(video=><li key={video.name}><span className="av-film-title">{video.title}{storage.current_video===video.name&&<small className="av-current">En lecture</small>}</span><small>{formatBytes(video.size)}</small><button className="av-delete" type="button" aria-label={`Supprimer ${video.title}`} title="Supprimer le film" disabled={Boolean(deleting)||uploading} onClick={()=>removeVideo(video)}><Trash2 size={16}/>{deleting===video.name?'Suppression…':'Supprimer'}</button></li>)}</ul>:<p className="av-empty">Aucun film vidéo dans le catalogue.</p>}
     </section>

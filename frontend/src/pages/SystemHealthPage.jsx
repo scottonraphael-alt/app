@@ -81,7 +81,7 @@ export default function SystemHealthPage() {
 
       {data && (
         <div className="rs-grid">
-          <article className="rs-card">
+          <article data-iris-reveal="card" className="rs-card">
             <h2>
               Base de données
               <span className={`rs-pill ${data.mongo.ok ? "rs-pill-ok" : "rs-pill-bad"}`}>
@@ -94,7 +94,7 @@ export default function SystemHealthPage() {
             <p className="rs-muted">Vérifié le {fmt(data.checked_at)}</p>
           </article>
 
-          <article className="rs-card">
+          <article data-iris-reveal="card" className="rs-card">
             <h2>File des rappels</h2>
             {!reminders.available ? (
               <p className="rs-error">File illisible.</p>
@@ -133,7 +133,7 @@ export default function SystemHealthPage() {
             )}
           </article>
 
-          <article className="rs-card rs-card-wide">
+          <article data-iris-reveal="card" className="rs-card rs-card-wide">
             <h2>Tâches de fond</h2>
             <p className="rs-card-hint">
               Mises à jour par les boucles qui enregistrent leurs passages. Une tâche absente n’a pas encore tourné depuis le démarrage.

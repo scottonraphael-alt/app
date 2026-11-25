@@ -106,7 +106,7 @@ export default function NextMeetingCard({ meeting, today, loading = false, error
         ) : null}
       </ul>
 
-      <div className="ag-meet-hero-agenda">
+      <div data-iris-reveal="agenda" className="ag-meet-hero-agenda">
         <p className="ag-meet-hero-label">
           <ListChecks size={14} aria-hidden="true" />
           Ordre du jour

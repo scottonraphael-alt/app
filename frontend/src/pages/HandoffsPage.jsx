@@ -171,7 +171,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
       </header>
 
       <div className="ho-layout">
-        <aside className="ho-panel ho-compose-panel">
+        <aside data-iris-reveal="card" className="ho-panel ho-compose-panel">
           <h2>Nouvelle transmission</h2>
           <HandoffComposer
             textareaRef={composerRef}

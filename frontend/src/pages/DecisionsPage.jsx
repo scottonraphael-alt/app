@@ -117,7 +117,7 @@ export default function DecisionsPage() {
               </p>
               <ul className="ag-mx-list">
                 {items.map((item) => (
-                  <li key={item.id} className="ag-mx-row ag-mx-decision">
+                  <li key={item.id} data-iris-reveal="agenda" className="ag-mx-row ag-mx-decision">
                     <div className="ag-mx-row-main">
                       <p className="ag-mx-decision-text">{item.text}</p>
                       <span className="ag-mx-row-meta">

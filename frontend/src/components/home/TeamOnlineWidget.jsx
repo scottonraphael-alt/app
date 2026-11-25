@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../../api/client";
+import ChangeCue from "../ux/ChangeCue";
 import { agoLabel } from "./homeUtils";
 
 export default function TeamOnlineWidget({ helperId, enabled = true }) {
@@ -17,11 +18,11 @@ export default function TeamOnlineWidget({ helperId, enabled = true }) {
   const active = query.data?.active_count || 0;
 
   return (
-    <section className="hm-card hm-team" aria-labelledby="hm-team-title" data-testid="team-online-widget">
+    <section className="hm-card hm-team" data-iris-reveal="card" aria-labelledby="hm-team-title" data-testid="team-online-widget">
       <div className="hm-card-head">
         <h2 id="hm-team-title">Équipe en ligne</h2>
         {query.isSuccess && (
-          <span className="hm-count" aria-label={`${active} en ligne`}>{active}</span>
+          <ChangeCue value={active} className="hm-count" data-iris-reveal="badge" aria-label={`${active} en ligne`}>{active}</ChangeCue>
         )}
       </div>
       {query.isPending ? (
@@ -33,8 +34,8 @@ export default function TeamOnlineWidget({ helperId, enabled = true }) {
       ) : (
         <ul className="hm-team-list">
           {members.map((m) => (
-            <li key={m.user_id}>
-              <span className={`hm-dot hm-dot--${m.status}`} aria-hidden="true" />
+            <li key={m.user_id} data-iris-reveal="message">
+              <ChangeCue value={m.status} className={`hm-dot hm-dot--${m.status}`} aria-hidden="true" />
               {m.avatar_url ? (
                 <img className="hm-avatar" src={m.avatar_url} alt="" width="28" height="28" loading="lazy" />
               ) : (
