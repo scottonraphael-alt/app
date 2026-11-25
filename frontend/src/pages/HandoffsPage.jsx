@@ -106,6 +106,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
       return { snap };
     },
     onError: (err, _v, ctx) => { restore(ctx?.snap); toast.error(errorMessage(err)); },
+    onSuccess: (_data, { resolved }) => toast.success(resolved ? "Transmission résolue." : "Transmission rouverte."),
     onSettled: refresh,
   });
 
@@ -207,7 +208,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
             <p className="ho-state">Aucune transmission {status === "resolved" ? "résolue" : status === "open" ? "ouverte" : ""} pour le moment.</p>
           )}
 
-          <MotionRows as="ul" className="ho-list" aria-live="polite">
+          <MotionRows key={status} as="ul" className="ho-list" aria-live="polite">
             {items.map((item) => (
               <HandoffCard
                 key={item.id}

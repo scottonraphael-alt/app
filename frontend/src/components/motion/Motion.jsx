@@ -17,6 +17,13 @@ export function useReducedMotion() {
   return reduced;
 }
 
+export function SuccessCheck({ size = 16 }) {
+  return <svg className="iris-success-check" width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="10" cy="10" r="8" />
+    <path pathLength="1" d="m6.5 10 2.5 2.5 4.5-5" />
+  </svg>;
+}
+
 // Keep departing rows inert briefly, then move the surviving rows to their new positions.
 export function MotionRows({ children, as: Container = 'tbody', ...props }) {
   const rows = Children.toArray(children);
@@ -92,6 +99,51 @@ export function MotionNav({ children, className = '', as: Container = 'nav', ...
   </Container>;
 }
 
+// Measure across the entire board so a card can move between different column containers.
+export function MotionBoard({ children, className, revision }) {
+  const root = useRef(null);
+  const positions = useRef(new Map());
+  const reduced = useReducedMotion();
+
+  useLayoutEffect(() => {
+    const board = root.current;
+    const origin = board.getBoundingClientRect();
+    const next = new Map();
+    const animations = [];
+    let entering = 0;
+
+    for (const card of board.querySelectorAll('[data-motion-card]')) {
+      const { left, top } = card.getBoundingClientRect();
+      const position = { x: left - origin.left, y: top - origin.top };
+      const key = card.dataset.motionCard;
+      const old = positions.current.get(key);
+      next.set(key, position);
+      if (reduced || !card.animate) continue;
+
+      if (old) {
+        const dx = old.x - position.x;
+        const dy = old.y - position.y;
+        if (dx || dy) {
+          animations.push(card.animate(
+            [{ translate: `${dx}px ${dy}px` }, { translate: '0 0' }],
+            { duration: 340, easing: 'cubic-bezier(.22,1,.36,1)' },
+          ));
+        }
+      } else if (entering < 5) {
+        animations.push(card.animate(
+          [{ opacity: .65, translate: '0 8px' }, { opacity: 1, translate: '0 0' }],
+          { duration: 280, delay: entering++ * 34, fill: 'backwards', easing: 'cubic-bezier(.22,1,.36,1)' },
+        ));
+      }
+    }
+
+    positions.current = next;
+    return () => animations.forEach(animation => animation.cancel());
+  }, [revision, reduced]);
+
+  return <div ref={root} className={className}>{children}</div>;
+}
+
 export function useNewMessageMotion(ref, revision, items, visible = true) {
   const seen = useRef(new Set());
   const context = useRef(revision);
@@ -104,8 +156,12 @@ export function useNewMessageMotion(ref, revision, items, visible = true) {
     const animations = [];
     for (const message of messages) {
       const key = message.dataset.messageKey;
-      if (sameContext && seen.current.size && !seen.current.has(key) && !reduced && message.animate) {
-        animations.push(message.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 240 }));
+      if (sameContext && seen.current.size && !seen.current.has(key) && !reduced && message.animate && animations.length < 5) {
+        const offset = message.dataset.messageSide === 'outgoing' ? 10 : -10;
+        animations.push(message.animate(
+          [{ opacity: .55, translate: `${offset}px 5px` }, { opacity: 1, translate: '0 0' }],
+          { duration: 280, delay: animations.length * 30, fill: 'backwards', easing: 'cubic-bezier(.22,1,.36,1)' },
+        ));
       }
     }
     // Preserve seen IDs during temporary loading states.

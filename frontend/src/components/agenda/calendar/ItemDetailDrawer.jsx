@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -55,15 +55,16 @@ function DrawerSkeleton() {
 // Description tronquée avec « Lire la suite » (texte brut, retours à la ligne conservés).
 function Description({ text }) {
   const [expanded, setExpanded] = useState(false);
+  const descriptionId = useId();
   if (!text) return null;
   const long = text.length > DESCRIPTION_PREVIEW;
   const shown = long && !expanded ? `${text.slice(0, DESCRIPTION_PREVIEW).trimEnd()}…` : text;
   return (
     <section className="ag-cal-drawer-section">
       <SectionTitle icon={FileText}>Description</SectionTitle>
-      <p className="ag-cal-drawer-text">{shown}</p>
+      <p id={descriptionId} className="ag-cal-drawer-text" data-expanded={long && expanded}>{shown}</p>
       {long ? (
-        <button type="button" className="ag-link-button" onClick={() => setExpanded((old) => !old)}>
+        <button type="button" className="ag-link-button" aria-expanded={expanded} aria-controls={descriptionId} onClick={() => setExpanded((old) => !old)}>
           {expanded ? "Réduire" : "Lire la suite"}
         </button>
       ) : null}

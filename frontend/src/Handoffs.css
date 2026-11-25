@@ -121,6 +121,7 @@ body.handoffs-no-nav .app-shell > .app-main {
 .ho-prio--important { background: var(--iris-warn-soft); color: var(--iris-warn); }
 .ho-prio--urgent { background: var(--iris-danger-soft); color: var(--iris-danger); }
 .ho-flag { background: var(--ho-surface-2); color: var(--ho-muted); }
+.ho-flag[hidden] { display: none; }
 .ho-flag--new { background: var(--iris-info-soft); color: var(--iris-info); }
 .ho-meta { margin-left: auto; font-size: 12px; color: var(--ho-muted); }
 .ho-meta strong { color: var(--ho-ink); }

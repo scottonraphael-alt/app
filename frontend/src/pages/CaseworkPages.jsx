@@ -10,7 +10,7 @@ import { ArrowLeft, ArrowRight, RefreshCw, Search, FileText, LockKeyhole, PanelR
 import { api, getErrorMessage } from '../api/client';
 import { Modal } from '../components/projects/ProjectUI';
 import { ActionProgressButton, CasePanelLoading, SlidingPanels } from '../components/casework/CaseMotion';
-import { MotionNav, MotionRows } from '../components/motion/Motion';
+import { MotionNav, MotionRows, useNewMessageMotion } from '../components/motion/Motion';
 import CasePreview from '../components/casework/CasePreview';
 import '../Casier.css';
 import '../Casework.css';
@@ -125,6 +125,8 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
   const [confirm, setConfirm] = useState(null), [busy, setBusy] = useState(false);
   const [opAction,setOpAction]=useState('suspend'),[opReason,setOpReason]=useState(''),[participant,setParticipant]=useState('');
   const request = useRef(null);
+  const transcript = useRef(null);
+  useNewMessageMotion(transcript, JSON.stringify([caseId, offset, search]), messages, Boolean(messages) && !messageError);
   useEffect(() => {
     let live = true; setError('');
     api.get(`${BASE}/${caseId}`).then(r => {
@@ -161,7 +163,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
   const action = (name, extra = {}) => setConfirm({ action: name, revision: row.revision, ...extra });
   return <Frame embedded={embedded} kind={kind} title={row?.member?.display_name || row?.member?.username || 'Dossier du membre'} back refresh={() => setRefresh(n => n + 1)}>
     {error && <p role="alert" className="cw-alert">{error}</p>}{!row && !error && <p role="status">Chargement du dossier…</p>}
-    {row && <><section className="cw-strip"><State row={row} /><span>Intervenant : {row.assigned?((row.assigned.display_name|| (row.assigned.username?'@'+row.assigned.username:'Pseudo indisponible'))+' · '+row.assigned.id):'À attribuer'}</span><span>Ouvert le {date(row.created_at)}</span>
+    {row && <><section className="cw-strip"><State row={row} /><ChangeCue value={row.assigned?.id} variant="assignment">Intervenant : {row.assigned?((row.assigned.display_name|| (row.assigned.username?'@'+row.assigned.username:'Pseudo indisponible'))+' · '+row.assigned.id):'À attribuer'}</ChangeCue><span>Ouvert le {date(row.created_at)}</span>
       {row.visibility !== 'staff' && <strong><LockKeyhole size={14} /> Accès confidentiel</strong>}</section>
       {row.discord_actions_enabled===false && <p className="cw-guide">La collecte et le suivi sont disponibles. La clôture Discord sera accessible après la bascule des commandes BotGhost vers Iris.</p>}
       {(row.closure?.error_type||row.closure?.cancel_error) && <p className="cw-alert">La clôture demande une vérification des accès, des fichiers ou des derniers messages. Le salon n’est pas annoncé comme supprimé. Un Responsable ou Administrateur peut reprendre l’action.</p>}
@@ -171,7 +173,7 @@ function CaseDetail({ kind, caseId, canReassign = false, canSeeMember360 = false
       <div className="cw-layout"><section className="cw-card cw-conversation"><header className="cw-section-head"><div><p className="cz-eyebrow">CONVERSATION</p><h2>Les échanges</h2></div><span>{messages?.total ?? row.message_count} messages</span></header>
         <form className="cw-search" onSubmit={e => { e.preventDefault(); setSearch(query); setOffset(0); }}><Search size={17} /><input aria-label="Rechercher dans toute la conversation" maxLength={200} placeholder="Un mot, un auteur… dans toute la conversation" value={query} onChange={e => setQuery(e.target.value)} /><button className="cw-button">Rechercher</button></form>
         {messageError && <p role="alert" className="cw-alert">{messageError}</p>}{!messages && !messageError && <p role="status">Chargement des échanges…</p>}
-        <div className="cw-messages">{messages?.items.map(item => <article className="cw-message" key={item.id}><div className="cw-avatar">{mediaUrl(item.author?.avatar_url) ? <img src={mediaUrl(item.author.avatar_url)} alt="" onError={e => { e.currentTarget.hidden = true; }} /> : <span>{(item.author?.display_name || item.author?.username || '?').slice(0, 1)}</span>}</div>
+        <div className="cw-messages" ref={transcript}>{messages?.items.map(item => <article className="cw-message" key={item.id} data-message-key={item.id} data-message-side={item.author?.id === row.member?.id ? "incoming" : "outgoing"}><div className="cw-avatar">{mediaUrl(item.author?.avatar_url) ? <img src={mediaUrl(item.author.avatar_url)} alt="" onError={e => { e.currentTarget.hidden = true; }} /> : <span>{(item.author?.display_name || item.author?.username || '?').slice(0, 1)}</span>}</div>
           <div><header><strong>{item.author?.display_name || item.author?.username}</strong><time>{date(item.timestamp)}</time></header><p>{item.content}</p>
             {item.attachments?.map(file => <div className="cw-file" key={file.id}>{mediaUrl(file.url) ? <a href={mediaUrl(file.url)}>{file.filename} · Télécharger</a> : <span>{file.filename} · Fichier non conservé</span>}</div>)}</div></article>)}</div>
         {messages && !messages.items.length && <p className="cw-empty">{search ? 'Aucun message ne correspond à cette recherche.' : 'Aucun échange à afficher. Le panneau d’ouverture est conservé dans l’archive et masqué ici.'}</p>}

@@ -4,12 +4,15 @@ import "./MentalHealth.css";
 import "./IrisRefresh.css";
 import "./IrisPages.css";
 import "./IrisEditorial.css";
+import "./components/motion/InteractionMotion.css";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "./api/client";
 import AppShell from "./components/AppShell";
+import { SuccessCheck } from "./components/motion/Motion";
+import useMotionPreference from "./hooks/useMotionPreference";
 import DiscordActivityEntry from "./pages/DiscordActivityEntry";
 const CommandDescriptionsPage=lazy(()=>import("./pages/CommandDescriptionsPage"));
 const KaraokePage=lazy(()=>import("./pages/KaraokePage"));
@@ -473,6 +476,7 @@ export default function App() {
 }
 
 function MainApp() {
+  useMotionPreference();
   const sessionQuery = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
@@ -537,7 +541,7 @@ function MainApp() {
           </Suspense>
         )}
       </BrowserRouter>
-      <Toaster theme="light" position="bottom-right" />
+      <Toaster theme="light" position="bottom-right" icons={{ success: <SuccessCheck /> }} />
     </div>
   );
 }

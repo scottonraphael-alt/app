@@ -1,0 +1,115 @@
+/* Keep routed pages in the shell's existing layout. */
+.iris-route { display: contents; }
+
+.iris-success-check { flex: none; }
+
+html[data-motion="reduced"] :is(.ag-dialog-overlay, .ag-dialog) {
+  animation: none !important;
+}
+
+@keyframes iris-route-reveal {
+  from { opacity: .72; }
+  to { opacity: 1; }
+}
+
+@keyframes iris-surface-rise {
+  from { opacity: .7; translate: 0 9px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes iris-line-arrive {
+  from { opacity: .55; translate: -6px 3px; }
+  to { opacity: 1; translate: 0 0; }
+}
+
+@keyframes iris-symbol-settle {
+  from { scale: .88; rotate: -7deg; }
+  70% { scale: 1.04; rotate: 1deg; }
+  to { scale: 1; rotate: 0deg; }
+}
+
+@keyframes iris-fill-enter {
+  from { scale: 0 1; }
+  to { scale: 1 1; }
+}
+
+@keyframes iris-check-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) and (screen) {
+  html[data-motion="auto"] .iris-route > :not(.app-loading) {
+    animation: iris-route-reveal 220ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] :is(.iris-route h1, .lg-card) {
+    animation: iris-surface-rise 280ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] :is(.iris-route, .lg-page, .tb-bar, .pj-modal, .ag-dialog, .cz-dialog-root)
+    :is(button, summary, a[class*="-button"]):active:not(:disabled, [aria-disabled="true"]) {
+    scale: .98;
+  }
+
+  :root[data-motion="auto"] :is(
+    .db-grid > .db-widget:nth-child(-n+5) > .db-content > .iris-collapse-inner,
+    .rl-grid > .rl-card:nth-child(-n+5),
+    .pj-project-list > .pj-project-row:nth-child(-n+6),
+    .pj-team-grid > .pj-team-card:nth-child(-n+5)
+  ) {
+    animation: iris-surface-rise 280ms var(--iris-ease) var(--iris-arrival-delay, 0ms) backwards;
+  }
+
+  :root[data-motion="auto"] :is(
+    .hm-day-grid > .hm-day-block,
+    .ag-cal-next-list > li,
+    .ag-cal-drawer-body .ag-cal-drawer-section
+  ):nth-child(-n+5) {
+    animation: iris-line-arrive 260ms var(--iris-ease) var(--iris-arrival-delay, 0ms) backwards;
+  }
+
+  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+    > :nth-child(1) { --iris-arrival-delay: 0ms; }
+  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+    > :nth-child(2) { --iris-arrival-delay: 34ms; }
+  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+    > :nth-child(3) { --iris-arrival-delay: 68ms; }
+  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+    > :nth-child(4) { --iris-arrival-delay: 102ms; }
+  :where(.db-grid, .rl-grid, .pj-project-list, .pj-team-grid, .hm-day-grid, .ag-cal-next-list, .ag-cal-drawer-body)
+    > :nth-child(5) { --iris-arrival-delay: 136ms; }
+
+  html[data-motion="auto"] :is(.hm-day .iris-illustration, .hm-notif > svg, .lg-logo) {
+    animation: iris-symbol-settle 400ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] :is(.iris-route, .pj-modal, .ag-dialog) details[open] > :not(summary) {
+    animation: iris-route-reveal 200ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] .ag-cal-drawer-text[data-expanded="true"] {
+    animation: iris-line-arrive 240ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] :is(.rl-upload-progress, .pj-progress-bar) > span {
+    transform-origin: left center;
+    animation: iris-fill-enter 420ms var(--iris-ease);
+    transition: width 260ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] .pj-page progress::-webkit-progress-value {
+    transform-origin: left center;
+    animation: iris-fill-enter 420ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] .pj-page progress::-moz-progress-bar {
+    transform-origin: left center;
+    animation: iris-fill-enter 420ms var(--iris-ease);
+  }
+
+  html[data-motion="auto"] .iris-success-check path {
+    stroke-dasharray: 1;
+    animation: iris-check-draw 360ms var(--iris-ease);
+  }
+}

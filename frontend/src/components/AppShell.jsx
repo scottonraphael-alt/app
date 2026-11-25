@@ -43,7 +43,7 @@ export default function AppShell({
       <main className="app-main">
         <Topbar helper={helper} roleLabel={roleLabel} onLogout={onLogout} />
         <AnnouncementBanner />
-        {children}
+        <div className="iris-route">{children}</div>
         <CommandPalette onLogout={onLogout} />
         <UxLayer />
       </main>

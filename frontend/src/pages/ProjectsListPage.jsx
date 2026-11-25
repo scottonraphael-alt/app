@@ -1,6 +1,6 @@
 import IrisIllustration from '../components/illustrations/IrisIllustration';
 import ChangeCue from '../components/ux/ChangeCue';
-import { MotionNav, MotionRows } from '../components/motion/Motion';
+import { MotionBoard, MotionNav } from '../components/motion/Motion';
 import { usePageMemoryState } from '../components/ux/PageMemory';
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import { Children, useEffect, useState } from 'react';
@@ -18,8 +18,19 @@ function ProjectCollection({ view, status, children }) {
   if (view !== 'board') return <div className="pj-project-list">{children}</div>;
   const cards = items.filter(item => item.props?.['data-project-status']);
   const footer = items.filter(item => !item.props?.['data-project-status'] && item.props?.className !== 'pj-project-list-head');
+  const revision = JSON.stringify(cards.map(card => [card.key, card.props['data-project-status']]));
   return <div className="pj-project-collection">
-    {status === 'tous' ? <div className="pj-kanban">{Object.entries(PROJECT_STATUS).map(([value,label])=><section className={`pj-kanban-column pj-kanban-${value}`} key={value} aria-label={label}><header><span className="pj-column-dot"/><h3>{label}</h3><span>{cards.filter(item=>item.props['data-project-status']===value).length} sur cette page</span></header><MotionRows as="div" className="pj-kanban-cards">{cards.filter(item=>item.props['data-project-status']===value)}</MotionRows></section>)}</div> : <MotionRows as="div" className="pj-project-board">{cards}</MotionRows>}
+    {status === 'tous' ? (
+      <MotionBoard key="columns" className="pj-kanban" revision={revision}>
+        {Object.entries(PROJECT_STATUS).map(([value, label]) => {
+          const columnCards = cards.filter(card => card.props['data-project-status'] === value);
+          return <section className={`pj-kanban-column pj-kanban-${value}`} key={value} aria-label={label}>
+            <header><span className="pj-column-dot"/><h3>{label}</h3><span>{columnCards.length} sur cette page</span></header>
+            <div>{columnCards}</div>
+          </section>;
+        })}
+      </MotionBoard>
+    ) : <MotionBoard key={status} className="pj-project-board" revision={revision}>{cards}</MotionBoard>}
     {footer}
   </div>;
 }
@@ -92,7 +103,7 @@ export default function ProjectsListPage({
           <div className="pj-project-list-head" aria-hidden="true"><span>Projet</span><span>Avancement</span><span>Équipe</span><span>Échéance</span><span/></div>
           {projectPages.items.map(project => {
             const p = progress(project.task_counts);
-            return <Link className={`pj-project-row ${view==='board'?'pj-board-card':''}`} key={project.id} data-project-status={project.status} to={`/animateur/projects/${project.id}`}>
+            return <Link className={`pj-project-row ${view==='board'?'pj-board-card':''}`} key={project.id} data-motion-card={project.id} data-project-status={project.status} to={`/animateur/projects/${project.id}`}>
               <div className="pj-row-copy"><div className="pj-row-title"><strong title={project.title}>{project.title}</strong><ChangeCue value={project.status} className={`pj-badge pj-status-${project.status}`}>{PROJECT_STATUS[project.status]}</ChangeCue>{project.priority === 'haute' && <Priority value={project.priority}/>}</div><p title={project.description}>{project.description || 'Le brief reste à construire.'}</p>{!!project.tags?.length && <span className="pj-row-tags">{project.tags.map(tag => `#${tag}`).join(' · ')}</span>}</div>
               <div className="pj-row-progress"><span>{p.done} / {p.total} validées <strong>{p.percent}%</strong></span><progress value={p.percent} max="100" aria-label={`Avancement de ${project.title}`}/></div>
               <div className="pj-member-stack" aria-label={`${project.members?.length || 0} membres`}>{project.members?.slice(0,3).map(m => <Avatar key={m.id} member={m}/>)}{project.members?.length > 3 && <span>+{project.members.length - 3}</span>}</div>
