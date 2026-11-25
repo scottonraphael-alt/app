@@ -4,11 +4,12 @@ import { CheckCircle2, Pencil, Pin, PinOff, RotateCcw, Trash2 } from "lucide-rea
 
 import HandoffComposer from "./HandoffComposer";
 import { PRIORITIES, formatDate } from "./handoffsApi";
+import ChangeCue from "../ux/ChangeCue";
 
 const READ_DELAY_MS = 1200;
 
 /** Carte d'une transmission ; se marque lue après 1,2 s dans le viewport ou au clic. */
-export default function HandoffCard({ item, canManage, onRead, onResolve, onPin, onSave, onDelete, saving, saveError }) {
+export default function HandoffCard({ item, canManage, onRead, onResolve, onPin, onSave, onDelete, saving, saveError, ...motionProps }) {
   const ref = useRef(null);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -38,7 +39,7 @@ export default function HandoffCard({ item, canManage, onRead, onResolve, onPin,
 
   if (editing) {
     return (
-      <li className="ho-card is-editing">
+      <li className="ho-card is-editing" {...motionProps}>
         <HandoffComposer
           initial={item}
           submitLabel="Enregistrer"
@@ -58,6 +59,7 @@ export default function HandoffCard({ item, canManage, onRead, onResolve, onPin,
 
   return (
     <li
+      {...motionProps}
       ref={ref}
       className={cls.join(" ")}
       onClick={() => unread && onRead(item.id)}
@@ -67,7 +69,7 @@ export default function HandoffCard({ item, canManage, onRead, onResolve, onPin,
         <span className={`ho-prio ho-prio--${item.priority}`}>{prio}</span>
         {item.pinned && <span className="ho-flag"><Pin size={12} aria-hidden="true" /> Épinglée</span>}
         {unread && <span className="ho-flag ho-flag--new">Nouveau</span>}
-        {item.resolved && <span className="ho-flag"><CheckCircle2 size={12} aria-hidden="true" /> Résolue</span>}
+        <ChangeCue value={item.resolved} hidden={!item.resolved} className="ho-flag">{item.resolved && <><CheckCircle2 size={12} aria-hidden="true" /> Résolue</>}</ChangeCue>
         <span className="ho-meta">
           <strong>{item.author_name || "Membre du staff"}</strong>
           <time dateTime={item.created_at}> · {formatDate(item.created_at)}</time>

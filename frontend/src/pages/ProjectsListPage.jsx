@@ -1,6 +1,6 @@
 import IrisIllustration from '../components/illustrations/IrisIllustration';
 import ChangeCue from '../components/ux/ChangeCue';
-import { MotionNav } from '../components/motion/Motion';
+import { MotionNav, MotionRows } from '../components/motion/Motion';
 import { usePageMemoryState } from '../components/ux/PageMemory';
 import LoadingSkeleton from '../components/ux/LoadingSkeleton';
 import { Children, useEffect, useState } from 'react';
@@ -19,7 +19,7 @@ function ProjectCollection({ view, status, children }) {
   const cards = items.filter(item => item.props?.['data-project-status']);
   const footer = items.filter(item => !item.props?.['data-project-status'] && item.props?.className !== 'pj-project-list-head');
   return <div className="pj-project-collection">
-    {status === 'tous' ? <div className="pj-kanban">{Object.entries(PROJECT_STATUS).map(([value,label])=><section className={`pj-kanban-column pj-kanban-${value}`} key={value} aria-label={label}><header><span className="pj-column-dot"/><h3>{label}</h3><span>{cards.filter(item=>item.props['data-project-status']===value).length} sur cette page</span></header><div>{cards.filter(item=>item.props['data-project-status']===value)}</div></section>)}</div> : <div className="pj-project-board">{cards}</div>}
+    {status === 'tous' ? <div className="pj-kanban">{Object.entries(PROJECT_STATUS).map(([value,label])=><section className={`pj-kanban-column pj-kanban-${value}`} key={value} aria-label={label}><header><span className="pj-column-dot"/><h3>{label}</h3><span>{cards.filter(item=>item.props['data-project-status']===value).length} sur cette page</span></header><MotionRows as="div" className="pj-kanban-cards">{cards.filter(item=>item.props['data-project-status']===value)}</MotionRows></section>)}</div> : <MotionRows as="div" className="pj-project-board">{cards}</MotionRows>}
     {footer}
   </div>;
 }

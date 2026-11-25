@@ -96,6 +96,7 @@ body.handoffs-no-nav .app-shell > .app-main {
   background: var(--ho-surface); font-size: 13px; font-weight: 600; color: var(--ho-muted); cursor: pointer;
 }
 .ho-filter.is-on { background: var(--ho-accent-soft); border-color: var(--ho-accent); color: var(--ho-accent); }
+.iris-motion-nav.ho-toolbar .ho-filter.is-on { background: transparent; border-color: transparent; }
 
 .ho-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .ho-card {

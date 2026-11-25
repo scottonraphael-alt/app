@@ -8,6 +8,7 @@ import { ArrowRight } from "lucide-react";
 
 import HandoffCard from "../components/handoffs/HandoffCard";
 import HandoffComposer from "../components/handoffs/HandoffComposer";
+import { MotionNav, MotionRows } from "../components/motion/Motion";
 import {
   PAGE_SIZE,
   STATUS_FILTERS,
@@ -180,7 +181,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
         </aside>
 
         <div className="ho-feed">
-          <div className="ho-toolbar" role="tablist" aria-label="Filtrer les transmissions">
+          <MotionNav as="div" className="ho-toolbar" role="tablist" aria-label="Filtrer les transmissions">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f.value}
@@ -193,7 +194,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
                 {f.label}
               </button>
             ))}
-          </div>
+          </MotionNav>
 
           {query.isLoading && <p className="ho-state" role="status">Chargement…</p>}
           {query.isError && (
@@ -206,7 +207,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
             <p className="ho-state">Aucune transmission {status === "resolved" ? "résolue" : status === "open" ? "ouverte" : ""} pour le moment.</p>
           )}
 
-          <ul className="ho-list" aria-live="polite">
+          <MotionRows as="ul" className="ho-list" aria-live="polite">
             {items.map((item) => (
               <HandoffCard
                 key={item.id}
@@ -221,7 +222,7 @@ export default function HandoffsPage({ isResponsable = false, currentHelperId, h
                 saveError={editError}
               />
             ))}
-          </ul>
+          </MotionRows>
 
           {query.hasNextPage && (
             <button
